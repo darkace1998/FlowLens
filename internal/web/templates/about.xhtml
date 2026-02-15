@@ -1,0 +1,65 @@
+{{define "title"}}About{{end}}
+{{define "content"}}
+<h1>About FlowLens</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Version</div>
+    <div class="stat-value">{{.Version}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Uptime</div>
+    <div class="stat-value">{{.Uptime}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Go Version</div>
+    <div class="stat-value">{{.GoVersion}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Flows in Memory</div>
+    <div class="stat-value">{{.FlowCount}}</div>
+  </div>
+</div>
+
+<h2>System Resources</h2>
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Goroutines</div>
+    <div class="stat-value">{{.NumGoroutines}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Memory (Alloc)</div>
+    <div class="stat-value">{{printf "%.1f MB" .MemAllocMB}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Memory (Sys)</div>
+    <div class="stat-value">{{printf "%.1f MB" .MemSysMB}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">CPU Cores</div>
+    <div class="stat-value">{{.NumCPU}}</div>
+  </div>
+</div>
+
+<h2>Configuration</h2>
+<div class="panel">
+  <table>
+    <tbody>
+      <tr><th>Setting</th><th>Value</th></tr>
+      <tr><td>NetFlow Port</td><td>{{.NetFlowPort}}</td></tr>
+      <tr><td>IPFIX Port</td><td>{{.IPFIXPort}}</td></tr>
+      <tr><td>UDP Buffer Size</td><td>{{.BufferSize}} bytes</td></tr>
+      <tr><td>Ring Buffer Duration</td><td>{{.RingBufferDur}}</td></tr>
+      <tr><td>SQLite Path</td><td>{{.SQLitePath}}</td></tr>
+      <tr><td>SQLite Retention</td><td>{{.SQLiteRetention}}</td></tr>
+      <tr><td>Prune Interval</td><td>{{.PruneInterval}}</td></tr>
+      <tr><td>Analysis Interval</td><td>{{.AnalysisInterval}}</td></tr>
+      <tr><td>Top Talkers Count</td><td>{{.TopTalkersCount}}</td></tr>
+      <tr><td>Anomaly Baseline Window</td><td>{{.BaselineWindow}}</td></tr>
+      <tr><td>Scan Threshold</td><td>{{.ScanThreshold}} unique ports</td></tr>
+      <tr><td>Web Listen</td><td>{{.WebListen}}</td></tr>
+      <tr><td>Page Size</td><td>{{.PageSize}}</td></tr>
+    </tbody>
+  </table>
+</div>
+{{end}}

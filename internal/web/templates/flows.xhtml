@@ -1,0 +1,70 @@
+{{define "title"}}Flow Explorer{{end}}
+{{define "content"}}
+<h1>Flow Explorer</h1>
+
+<form class="filter-bar" method="get" action="/flows">
+  <label>Src IP <input type="text" name="src_ip" value="{{.FilterSrcIP}}" placeholder="e.g. 10.0.1" /></label>
+  <label>Dst IP <input type="text" name="dst_ip" value="{{.FilterDstIP}}" placeholder="e.g. 192.168" /></label>
+  <label>Port <input type="text" name="port" value="{{.FilterPort}}" placeholder="e.g. 443" /></label>
+  <label>Protocol <input type="text" name="protocol" value="{{.FilterProtocol}}" placeholder="tcp/udp/6/17" /></label>
+  <button type="submit">Filter</button>
+  <a href="/flows" class="btn-clear">Clear</a>
+</form>
+
+<p class="flow-summary">Showing page {{.Page}} of {{.TotalPages}} ({{.TotalFlows}} flows)</p>
+
+{{if .Flows}}
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Source</th>
+      <th>Src Port</th>
+      <th>Destination</th>
+      <th>Dst Port</th>
+      <th>Protocol</th>
+      <th>Bytes</th>
+      <th>Packets</th>
+      <th>Duration</th>
+      <th>Age</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Flows}}
+    <tr>
+      <td>{{.Timestamp}}</td>
+      <td>{{.SrcAddr}}</td>
+      <td>{{.SrcPort}}</td>
+      <td>{{.DstAddr}}</td>
+      <td>{{.DstPort}}</td>
+      <td>{{.Protocol}}</td>
+      <td>{{.Bytes}}</td>
+      <td>{{.Packets}}</td>
+      <td>{{.Duration}}</td>
+      <td>{{.TimeAgo}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<div class="pagination">
+  {{if .HasPrev}}
+  <a href="/flows?page={{sub .Page 1}}{{if .FilterSrcIP}}&amp;src_ip={{.FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{.FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{.FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{.FilterProtocol}}{{end}}">&laquo; Prev</a>
+  {{end}}
+
+  {{range seq 1 .TotalPages}}
+    {{if eq . $.Page}}
+      <span class="page-current">{{.}}</span>
+    {{else}}
+      <a href="/flows?page={{.}}{{if $.FilterSrcIP}}&amp;src_ip={{$.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{$.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{$.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{$.FilterProtocol}}{{end}}">{{.}}</a>
+    {{end}}
+  {{end}}
+
+  {{if .HasNext}}
+  <a href="/flows?page={{add .Page 1}}{{if .FilterSrcIP}}&amp;src_ip={{.FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{.FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{.FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{.FilterProtocol}}{{end}}">Next &raquo;</a>
+  {{end}}
+</div>
+{{else}}
+<p class="empty">No flows match the current filters.</p>
+{{end}}
+{{end}}

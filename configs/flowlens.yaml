@@ -1,0 +1,20 @@
+collector:
+  netflow_port: 2055          # UDP port for NetFlow v5/v9
+  ipfix_port: 4739            # UDP port for IPFIX
+  buffer_size: 65535          # UDP read buffer size in bytes
+
+storage:
+  ring_buffer_duration: 10m   # how long to keep flows in memory
+  sqlite_path: "./flowlens.db"
+  sqlite_retention: 72h       # auto-prune flows older than this
+  prune_interval: 15m         # how often to run TTL cleanup
+
+analysis:
+  interval: 60s               # how often to run analyzers
+  top_talkers_count: 10       # number of top talkers to track
+  anomaly_baseline_window: 168h # baseline period for anomaly detection (7 days)
+  scan_threshold: 500         # unique ports in 60s = scan
+
+web:
+  listen: ":8080"             # HTTP listen address
+  page_size: 50               # rows per page in flow explorer
