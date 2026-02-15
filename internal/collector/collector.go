@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
@@ -18,7 +19,7 @@ type FlowHandler func(flows []model.Flow)
 type Collector struct {
 	cfg        config.CollectorConfig
 	handler    FlowHandler
-	conn       *net.UDPConn
+	conns      []*net.UDPConn
 	nfv9Cache  *NFV9TemplateCache
 	ipfixCache *IPFIXTemplateCache
 }
@@ -33,27 +34,60 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 	}
 }
 
-// Start begins listening for NetFlow packets on the configured UDP port.
-// It blocks until the connection is closed or an unrecoverable error occurs.
+// Start begins listening for NetFlow/IPFIX packets on the configured UDP ports.
+// It listens on both NetFlowPort and IPFIXPort (if configured and different).
+// It blocks until all connections are closed or an unrecoverable error occurs.
 func (c *Collector) Start() error {
-	addr := &net.UDPAddr{Port: c.cfg.NetFlowPort}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
+	ports := []int{c.cfg.NetFlowPort}
+	if c.cfg.IPFIXPort > 0 && c.cfg.IPFIXPort != c.cfg.NetFlowPort {
+		ports = append(ports, c.cfg.IPFIXPort)
+	}
+
+	for _, port := range ports {
+		conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
+		if err != nil {
+			// Close any already-opened connections on failure.
+			for _, prev := range c.conns {
+				prev.Close()
+			}
+			c.conns = nil
+			return err
+		}
+		if err := conn.SetReadBuffer(c.cfg.BufferSize); err != nil {
+			logging.Default().Warn("Failed to set UDP read buffer to %d on port %d: %v", c.cfg.BufferSize, port, err)
+		}
+		c.conns = append(c.conns, conn)
+		logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", port)
+	}
+
+	// Run a read loop for each connection; block until all finish.
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(c.conns))
+	for _, conn := range c.conns {
+		wg.Add(1)
+		go func(conn *net.UDPConn) {
+			defer wg.Done()
+			if err := c.readLoop(conn); err != nil {
+				errCh <- err
+			}
+		}(conn)
+	}
+	wg.Wait()
+	close(errCh)
+
+	// Return the first error, if any.
+	for err := range errCh {
 		return err
 	}
-	c.conn = conn
+	return nil
+}
 
-	if err := conn.SetReadBuffer(c.cfg.BufferSize); err != nil {
-		logging.Default().Warn("Failed to set UDP read buffer to %d: %v", c.cfg.BufferSize, err)
-	}
-
-	logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", c.cfg.NetFlowPort)
-
+// readLoop reads and processes packets from a single UDP connection.
+func (c *Collector) readLoop(conn *net.UDPConn) error {
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			// Check if the connection was closed intentionally.
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
@@ -99,18 +133,27 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 	}
 }
 
-// Stop closes the UDP connection, causing Start to return.
+// Stop closes all UDP connections, causing Start to return.
 func (c *Collector) Stop() {
-	if c.conn != nil {
-		c.conn.Close()
+	for _, conn := range c.conns {
+		conn.Close()
 	}
 }
 
-// Addr returns the local address the collector is listening on,
+// Addr returns the local address of the first listener,
 // or nil if the collector has not been started.
 func (c *Collector) Addr() net.Addr {
-	if c.conn != nil {
-		return c.conn.LocalAddr()
+	if len(c.conns) > 0 {
+		return c.conns[0].LocalAddr()
 	}
 	return nil
+}
+
+// Addrs returns the local addresses of all listeners.
+func (c *Collector) Addrs() []net.Addr {
+	addrs := make([]net.Addr, len(c.conns))
+	for i, conn := range c.conns {
+		addrs[i] = conn.LocalAddr()
+	}
+	return addrs
 }
