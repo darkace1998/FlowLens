@@ -1,7 +1,9 @@
 package collector
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 
@@ -14,16 +16,20 @@ type FlowHandler func(flows []model.Flow)
 
 // Collector listens for NetFlow/IPFIX packets on UDP and decodes them.
 type Collector struct {
-	cfg     config.CollectorConfig
-	handler FlowHandler
-	conn    *net.UDPConn
+	cfg        config.CollectorConfig
+	handler    FlowHandler
+	conn       *net.UDPConn
+	nfv9Cache  *NFV9TemplateCache
+	ipfixCache *IPFIXTemplateCache
 }
 
 // New creates a new Collector with the given config and flow handler.
 func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 	return &Collector{
-		cfg:     cfg,
-		handler: handler,
+		cfg:        cfg,
+		handler:    handler,
+		nfv9Cache:  NewNFV9TemplateCache(),
+		ipfixCache: NewIPFIXTemplateCache(),
 	}
 }
 
@@ -41,7 +47,7 @@ func (c *Collector) Start() error {
 		log.Printf("warning: failed to set UDP read buffer to %d: %v", c.cfg.BufferSize, err)
 	}
 
-	log.Printf("Collector listening on UDP :%d (NetFlow v5)", c.cfg.NetFlowPort)
+	log.Printf("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", c.cfg.NetFlowPort)
 
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
@@ -61,15 +67,35 @@ func (c *Collector) Start() error {
 
 		exporterIP := remoteAddr.IP
 
-		flows, err := DecodeNetFlowV5(data, exporterIP)
+		flows, err := c.decodePacket(data, exporterIP)
 		if err != nil {
-			log.Printf("Failed to decode NetFlow v5 from %s: %v", remoteAddr, err)
+			log.Printf("Failed to decode flow from %s: %v", remoteAddr, err)
 			continue
 		}
 
 		if c.handler != nil && len(flows) > 0 {
 			c.handler(flows)
 		}
+	}
+}
+
+// decodePacket auto-detects the NetFlow/IPFIX version and dispatches to the appropriate decoder.
+func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, error) {
+	if len(data) < 2 {
+		return nil, fmt.Errorf("packet too short: %d bytes", len(data))
+	}
+
+	version := binary.BigEndian.Uint16(data[0:2])
+
+	switch version {
+	case 5:
+		return DecodeNetFlowV5(data, exporterIP)
+	case 9:
+		return DecodeNetFlowV9(data, exporterIP, c.nfv9Cache)
+	case 10:
+		return DecodeIPFIX(data, exporterIP, c.ipfixCache)
+	default:
+		return nil, fmt.Errorf("unsupported NetFlow/IPFIX version: %d", version)
 	}
 }
 

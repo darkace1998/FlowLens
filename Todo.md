@@ -89,10 +89,10 @@
 
 ## Phase 7 — Extended Protocol Support
 
-- [ ] Implement NetFlow v9 decoder with template handling (`netflowv9.go`)
-- [ ] Implement IPFIX (v10) decoder with template handling (`ipfix.go`)
-- [ ] Unit tests for v9 and IPFIX decoding
-- [ ] Verify collector handles mixed v5/v9/IPFIX traffic
+- [x] Implement NetFlow v9 decoder with template handling (`netflowv9.go`)
+- [x] Implement IPFIX (v10) decoder with template handling (`ipfix.go`)
+- [x] Unit tests for v9 and IPFIX decoding
+- [x] Verify collector handles mixed v5/v9/IPFIX traffic
 
 ---
 
