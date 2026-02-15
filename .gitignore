@@ -1,0 +1,22 @@
+# Binary
+flowlens
+flowlens.exe
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test / build artifacts
+coverage.out

@@ -6,12 +6,12 @@
 
 ## Phase 1 — Project Setup & Core Infrastructure
 
-- [ ] Initialize Go module (`go.mod`)
-- [ ] Create project directory structure (`cmd/`, `internal/`, `configs/`, `static/`)
-- [ ] Define the unified `Flow` struct in `internal/model/flow.go`
-- [ ] Create YAML config struct and loader in `internal/config/config.go`
-- [ ] Write default `configs/flowlens.yaml` with all config options
-- [ ] Write `cmd/flowlens/main.go` entry point that loads config and wires components
+- [x] Initialize Go module (`go.mod`)
+- [x] Create project directory structure (`cmd/`, `internal/`, `configs/`, `static/`)
+- [x] Define the unified `Flow` struct in `internal/model/flow.go`
+- [x] Create YAML config struct and loader in `internal/config/config.go`
+- [x] Write default `configs/flowlens.yaml` with all config options
+- [x] Write `cmd/flowlens/main.go` entry point that loads config and wires components
 
 ---
 
