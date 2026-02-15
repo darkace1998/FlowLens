@@ -17,10 +17,10 @@
 
 ## Phase 2 — Collector (NetFlow v5)
 
-- [ ] Implement UDP listener in `internal/collector/collector.go`
-- [ ] Decode NetFlow v5 packets into unified `Flow` records (`netflowv5.go`)
-- [ ] Unit tests for NetFlow v5 decoding
-- [ ] Verify collector receives and parses live NetFlow v5 data
+- [x] Implement UDP listener in `internal/collector/collector.go`
+- [x] Decode NetFlow v5 packets into unified `Flow` records (`netflowv5.go`)
+- [x] Unit tests for NetFlow v5 decoding
+- [x] Verify collector receives and parses live NetFlow v5 data
 
 ---
 
