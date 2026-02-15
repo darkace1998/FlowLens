@@ -356,3 +356,321 @@ func TestFormatCountShort(t *testing.T) {
 		}
 	}
 }
+
+// --- Anomaly Detection tests ---
+
+func TestAnomalyDetector_NoData(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := AnomalyDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestAnomalyDetector_Spike(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// Create baseline buckets with consistent ~1000 bytes each.
+	for i := 2; i <= 9; i++ {
+		for j := 0; j < 10; j++ {
+			f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 100, 1)
+			f.Timestamp = now.Add(-time.Duration(i) * time.Minute).Add(time.Duration(j) * time.Second)
+			rb.Insert([]model.Flow{f})
+		}
+	}
+
+	// Current window: massive spike (100x baseline).
+	for j := 0; j < 100; j++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 10000, 100)
+		f.Timestamp = now.Add(-time.Duration(j) * time.Second)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := AnomalyDetector{}.Analyze(rb, cfg)
+	hasSpike := false
+	for _, a := range advisories {
+		if a.Title == "Traffic Spike Detected" {
+			hasSpike = true
+		}
+	}
+	if !hasSpike {
+		t.Error("should detect traffic spike when current >> baseline")
+	}
+}
+
+func TestAnomalyDetector_Drop(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// Create baseline with substantial traffic.
+	for i := 2; i <= 9; i++ {
+		for j := 0; j < 20; j++ {
+			f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
+			f.Timestamp = now.Add(-time.Duration(i) * time.Minute).Add(time.Duration(j) * time.Second)
+			rb.Insert([]model.Flow{f})
+		}
+	}
+
+	// Current window: almost no traffic (< 25% of baseline).
+	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 10, 1)
+	f.Timestamp = now.Add(-5 * time.Second)
+	rb.Insert([]model.Flow{f})
+
+	advisories := AnomalyDetector{}.Analyze(rb, cfg)
+	hasDrop := false
+	for _, a := range advisories {
+		if a.Title == "Traffic Drop Detected" {
+			hasDrop = true
+		}
+	}
+	if !hasDrop {
+		t.Error("should detect traffic drop when current << baseline")
+	}
+}
+
+func TestAnomalyDetector_NormalTraffic(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// All buckets have similar traffic — current and baseline all ~10K bytes.
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 10; j++ {
+			f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 1000, 10)
+			// Place flows at distinct past times: 10s, 20s, ... into each minute.
+			f.Timestamp = now.Add(-time.Duration(i)*time.Minute - time.Duration(j+1)*5*time.Second)
+			rb.Insert([]model.Flow{f})
+		}
+	}
+
+	advisories := AnomalyDetector{}.Analyze(rb, cfg)
+	if len(advisories) != 0 {
+		for _, a := range advisories {
+			t.Logf("  advisory: %s — %s", a.Title, a.Description)
+		}
+		t.Errorf("normal traffic should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+// --- DNS Volume tests ---
+
+func TestDNSVolume_NoData(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestDNSVolume_NoDNS(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 5000, 50),
+		makeFlow("10.0.1.2", "192.168.1.1", 1235, 443, 6, 3000, 30),
+	})
+
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("no DNS flows should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestDNSVolume_HighRate(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+
+	// Insert 2000 DNS flows over 10 minutes = 200/min (above 100/min threshold).
+	for i := 0; i < 2000; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i%10000), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+	// Some non-DNS traffic.
+	for i := 0; i < 100; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	hasRateAdvisory := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Query Rate" {
+			hasRateAdvisory = true
+		}
+	}
+	if !hasRateAdvisory {
+		t.Error("2000 DNS flows in 10min should trigger High DNS Query Rate")
+	}
+}
+
+func TestDNSVolume_HighRatio(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+
+	// 80% DNS flows.
+	for i := 0; i < 800; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i%10000), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+	for i := 0; i < 200; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	hasRatioAdvisory := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Traffic Ratio" {
+			hasRatioAdvisory = true
+		}
+	}
+	if !hasRatioAdvisory {
+		t.Error("80% DNS ratio should trigger High DNS Traffic Ratio")
+	}
+}
+
+func TestDNSVolume_NormalDNS(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+
+	// 50 DNS flows in 10 min = 5/min (well under threshold).
+	for i := 0; i < 50; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+	// 1000 non-DNS flows (DNS is ~5% of total).
+	for i := 0; i < 1000; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", uint16(1000+i), 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("normal DNS volume should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestDNSVolume_TCPPort53(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+
+	// TCP DNS flows should also be counted.
+	for i := 0; i < 2000; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i%10000), 53, 6, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	hasAdvisory := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Query Rate" || a.Title == "High DNS Traffic Ratio" {
+			hasAdvisory = true
+		}
+	}
+	if !hasAdvisory {
+		t.Error("TCP DNS flows should also be detected")
+	}
+}
+
+// --- Flow Asymmetry tests ---
+
+func TestFlowAsymmetry_NoData(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestFlowAsymmetry_Symmetric(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Symmetric traffic: A→B and B→A with similar bytes.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 5000, 50),
+		makeFlow("192.168.1.1", "10.0.1.1", 80, 1234, 6, 4500, 45),
+	})
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("symmetric traffic should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestFlowAsymmetry_Asymmetric(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Highly asymmetric: A sends 1MB, B sends almost nothing back.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 1000000, 1000),
+		makeFlow("192.168.1.1", "10.0.1.1", 80, 1234, 6, 500, 5),
+	})
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 asymmetry advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("2000:1 ratio should be CRITICAL, got %s", advisories[0].Severity)
+	}
+}
+
+func TestFlowAsymmetry_Unidirectional(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Only A→B, no return traffic.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 500000, 500),
+	})
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 asymmetry advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("unidirectional traffic should be CRITICAL, got %s", advisories[0].Severity)
+	}
+}
+
+func TestFlowAsymmetry_BelowMinBytes(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Asymmetric but small flows (under 100KB threshold).
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 500, 5),
+	})
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("small flows should not trigger asymmetry, got %d advisories", len(advisories))
+	}
+}
+
+func TestFlowAsymmetry_ModerateAsymmetry(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// 15:1 ratio with enough volume to trigger — WARNING level.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 150000, 150),
+		makeFlow("192.168.1.1", "10.0.1.1", 80, 1234, 6, 10000, 10),
+	})
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != WARNING {
+		t.Errorf("15:1 ratio should be WARNING, got %s", advisories[0].Severity)
+	}
+}
+
+func TestFlowAsymmetry_Limit(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	// Create 20 asymmetric pairs — should be limited to top 10.
+	for i := 0; i < 20; i++ {
+		src := fmt.Sprintf("10.0.1.%d", i+1)
+		f := makeFlow(src, "192.168.1.1", uint16(1234+i), 80, 6, uint64(500000+i*10000), 500)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if len(advisories) > 10 {
+		t.Errorf("expected at most 10 advisories, got %d", len(advisories))
+	}
+}

@@ -76,14 +76,14 @@
 
 ## Phase 6 — Advanced Analyzers
 
-- [ ] Implement **Anomaly Detection** — baseline deviation (`anomaly.go`)
-  - [ ] Configurable baseline window (e.g., 7 days)
-  - [ ] Detect traffic spikes and drops vs. baseline
-- [ ] Implement **DNS Volume** analyzer
-  - [ ] Detect excessive DNS query rates
-- [ ] Implement **Flow Asymmetry** analyzer
-  - [ ] Detect asymmetric routing patterns
-- [ ] Unit tests for advanced analyzers
+- [x] Implement **Anomaly Detection** — baseline deviation (`anomaly.go`)
+  - [x] Configurable baseline window (e.g., 7 days)
+  - [x] Detect traffic spikes and drops vs. baseline
+- [x] Implement **DNS Volume** analyzer
+  - [x] Detect excessive DNS query rates
+- [x] Implement **Flow Asymmetry** analyzer
+  - [x] Detect asymmetric routing patterns
+- [x] Unit tests for advanced analyzers
 
 ---
 
