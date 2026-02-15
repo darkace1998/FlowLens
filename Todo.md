@@ -26,16 +26,16 @@
 
 ## Phase 3 — Storage Layer
 
-- [ ] Define `Storage` interface in `internal/storage/storage.go`
-- [ ] Implement fixed-capacity in-memory ring buffer (`ringbuffer.go`)
-  - [ ] Configurable duration / record cap
-  - [ ] Thread-safe read/write
-- [ ] Implement SQLite backend (`sqlite.go`)
-  - [ ] WAL mode enabled
-  - [ ] Insert flow records
-  - [ ] TTL-based pruning on a configurable schedule
-- [ ] Unit tests for ring buffer and SQLite storage
-- [ ] Wire storage into `main.go` (collector → ring buffer + SQLite)
+- [x] Define `Storage` interface in `internal/storage/storage.go`
+- [x] Implement fixed-capacity in-memory ring buffer (`ringbuffer.go`)
+  - [x] Configurable duration / record cap
+  - [x] Thread-safe read/write
+- [x] Implement SQLite backend (`sqlite.go`)
+  - [x] WAL mode enabled
+  - [x] Insert flow records
+  - [x] TTL-based pruning on a configurable schedule
+- [x] Unit tests for ring buffer and SQLite storage
+- [x] Wire storage into `main.go` (collector → ring buffer + SQLite)
 
 ---
 
