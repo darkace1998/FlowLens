@@ -1,12 +1,12 @@
 package analysis
 
 import (
-	"log"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -93,7 +93,7 @@ func (e *Engine) runAll() {
 	for _, a := range e.analyzers {
 		results := a.Analyze(e.store, e.cfg)
 		if len(results) > 0 {
-			log.Printf("Analysis [%s]: %d advisories", a.Name(), len(results))
+			logging.Default().Info("Analysis [%s]: %d advisories", a.Name(), len(results))
 		}
 		newAdvisories = append(newAdvisories, results...)
 	}

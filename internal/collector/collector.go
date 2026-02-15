@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 )
 
@@ -44,10 +44,10 @@ func (c *Collector) Start() error {
 	c.conn = conn
 
 	if err := conn.SetReadBuffer(c.cfg.BufferSize); err != nil {
-		log.Printf("warning: failed to set UDP read buffer to %d: %v", c.cfg.BufferSize, err)
+		logging.Default().Warn("Failed to set UDP read buffer to %d: %v", c.cfg.BufferSize, err)
 	}
 
-	log.Printf("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", c.cfg.NetFlowPort)
+	logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", c.cfg.NetFlowPort)
 
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
@@ -57,7 +57,7 @@ func (c *Collector) Start() error {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			log.Printf("UDP read error: %v", err)
+			logging.Default().Error("UDP read error: %v", err)
 			continue
 		}
 
@@ -69,7 +69,7 @@ func (c *Collector) Start() error {
 
 		flows, err := c.decodePacket(data, exporterIP)
 		if err != nil {
-			log.Printf("Failed to decode flow from %s: %v", remoteAddr, err)
+			logging.Default().Warn("Failed to decode flow from %s: %v", remoteAddr, err)
 			continue
 		}
 

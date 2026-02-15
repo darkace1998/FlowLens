@@ -3,11 +3,11 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 
 	_ "modernc.org/sqlite"
@@ -205,9 +205,9 @@ func (s *SQLiteStore) pruneLoop() {
 		case <-ticker.C:
 			deleted, err := s.Prune()
 			if err != nil {
-				log.Printf("SQLite prune error: %v", err)
+				logging.Default().Error("SQLite prune error: %v", err)
 			} else if deleted > 0 {
-				log.Printf("SQLite pruned %d expired flow records", deleted)
+				logging.Default().Info("SQLite pruned %d expired flow records", deleted)
 			}
 		case <-s.stopPrune:
 			return

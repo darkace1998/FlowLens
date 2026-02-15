@@ -3,16 +3,17 @@ package web
 import (
 	"fmt"
 	"html/template"
-	"log"
 	"math"
 	"net"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 )
 
@@ -176,7 +177,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
 		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		log.Printf("Dashboard query error: %v", err)
+		logging.Default().Error("Dashboard query error: %v", err)
 		return
 	}
 
@@ -185,13 +186,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/dashboard.xhtml")
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
-		log.Printf("Template parse error: %v", err)
+		logging.Default().Error("Template parse error: %v", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		log.Printf("Template execute error: %v", err)
+		logging.Default().Error("Template execute error: %v", err)
 	}
 }
 
@@ -332,7 +333,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	allFlows, err := s.ringBuf.Recent(10*time.Minute, 0)
 	if err != nil {
 		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		log.Printf("Flows query error: %v", err)
+		logging.Default().Error("Flows query error: %v", err)
 		return
 	}
 
@@ -387,13 +388,13 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/flows.xhtml")
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
-		log.Printf("Template parse error: %v", err)
+		logging.Default().Error("Template parse error: %v", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		log.Printf("Template execute error: %v", err)
+		logging.Default().Error("Template execute error: %v", err)
 	}
 }
 
@@ -471,12 +472,103 @@ func (s *Server) handleAdvisories(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/advisories.xhtml")
 	if err != nil {
 		http.Error(w, "Template error", http.StatusInternalServerError)
-		log.Printf("Template parse error: %v", err)
+		logging.Default().Error("Template parse error: %v", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		log.Printf("Template execute error: %v", err)
+		logging.Default().Error("Template execute error: %v", err)
 	}
+}
+
+// --- About / Status page ---
+
+// AboutPageData holds data for the About/Status page template.
+type AboutPageData struct {
+	Version       string
+	Uptime        string
+	GoVersion     string
+	NumGoroutines int
+	MemAllocMB    float64
+	MemSysMB      float64
+	NumCPU        int
+
+	// Config values
+	NetFlowPort      int
+	IPFIXPort        int
+	BufferSize       int
+	RingBufferDur    string
+	SQLitePath       string
+	SQLiteRetention  string
+	PruneInterval    string
+	AnalysisInterval string
+	TopTalkersCount  int
+	BaselineWindow   string
+	ScanThreshold    int
+	WebListen        string
+	PageSize         int
+	FlowCount        int
+}
+
+func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	uptime := time.Since(s.startTime)
+	uptimeStr := formatUptime(uptime)
+
+	data := AboutPageData{
+		Version:       s.version,
+		Uptime:        uptimeStr,
+		GoVersion:     runtime.Version(),
+		NumGoroutines: runtime.NumGoroutine(),
+		MemAllocMB:    float64(memStats.Alloc) / 1024 / 1024,
+		MemSysMB:      float64(memStats.Sys) / 1024 / 1024,
+		NumCPU:        runtime.NumCPU(),
+
+		NetFlowPort:      s.fullCfg.Collector.NetFlowPort,
+		IPFIXPort:        s.fullCfg.Collector.IPFIXPort,
+		BufferSize:       s.fullCfg.Collector.BufferSize,
+		RingBufferDur:    s.fullCfg.Storage.RingBufferDuration.String(),
+		SQLitePath:       s.fullCfg.Storage.SQLitePath,
+		SQLiteRetention:  s.fullCfg.Storage.SQLiteRetention.String(),
+		PruneInterval:    s.fullCfg.Storage.PruneInterval.String(),
+		AnalysisInterval: s.fullCfg.Analysis.Interval.String(),
+		TopTalkersCount:  s.fullCfg.Analysis.TopTalkersCount,
+		BaselineWindow:   s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
+		ScanThreshold:    s.fullCfg.Analysis.ScanThreshold,
+		WebListen:        s.fullCfg.Web.Listen,
+		PageSize:         s.fullCfg.Web.PageSize,
+		FlowCount:        s.ringBuf.Len(),
+	}
+
+	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/about.xhtml")
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+		logging.Default().Error("Template parse error: %v", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func formatUptime(d time.Duration) string {
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+	secs := int(d.Seconds()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm %ds", days, hours, mins, secs)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, mins, secs)
+	}
+	if mins > 0 {
+		return fmt.Sprintf("%dm %ds", mins, secs)
+	}
+	return fmt.Sprintf("%ds", secs)
 }

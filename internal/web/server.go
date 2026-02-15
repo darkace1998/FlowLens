@@ -2,11 +2,12 @@ package web
 
 import (
 	"embed"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -21,6 +22,11 @@ type Server struct {
 	engine   *analysis.Engine
 	mux      *http.ServeMux
 	srv      *http.Server
+
+	// About page info
+	fullCfg   config.Config
+	version   string
+	startTime time.Time
 }
 
 // NewServer creates a new web server with the given config and storage backends.
@@ -36,6 +42,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
 	s.mux.HandleFunc("/advisories", s.handleAdvisories)
+	s.mux.HandleFunc("/about", s.handleAbout)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	s.srv = &http.Server{
@@ -49,13 +56,20 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 // Start begins listening and serving HTTP requests. It blocks until the server
 // is shut down or encounters a fatal error.
 func (s *Server) Start() error {
-	log.Printf("Web server listening on %s", s.cfg.Listen)
+	logging.Default().Info("Web server listening on %s", s.cfg.Listen)
 	return s.srv.ListenAndServe()
 }
 
 // Stop gracefully shuts down the web server.
 func (s *Server) Stop() error {
 	return s.srv.Close()
+}
+
+// SetAboutInfo configures the information displayed on the About page.
+func (s *Server) SetAboutInfo(cfg config.Config, version string, startTime time.Time) {
+	s.fullCfg = cfg
+	s.version = version
+	s.startTime = startTime
 }
 
 // Mux returns the underlying ServeMux for testing purposes.

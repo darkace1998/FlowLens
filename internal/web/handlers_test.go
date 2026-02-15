@@ -351,3 +351,47 @@ func TestAdvisories_WithEngine(t *testing.T) {
 		t.Error("single host = 100% should show CRITICAL badge")
 	}
 }
+
+func TestAbout_Page(t *testing.T) {
+	s, _ := newTestServer(t)
+	s.SetAboutInfo(config.Defaults(), "test-version", time.Now().Add(-5*time.Minute))
+
+	req := httptest.NewRequest("GET", "/about", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "About") {
+		t.Error("response should contain 'About'")
+	}
+	if !strings.Contains(body, "test-version") {
+		t.Error("about page should show version string")
+	}
+	if !strings.Contains(body, "2055") {
+		t.Error("about page should show default NetFlow port 2055")
+	}
+	if !strings.Contains(body, "Goroutines") {
+		t.Error("about page should show goroutine count")
+	}
+}
+
+func TestFormatUptime(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{5 * time.Second, "5s"},
+		{2*time.Minute + 30*time.Second, "2m 30s"},
+		{3*time.Hour + 15*time.Minute, "3h 15m 0s"},
+		{26*time.Hour + 30*time.Minute, "1d 2h 30m 0s"},
+	}
+	for _, tt := range tests {
+		got := formatUptime(tt.d)
+		if got != tt.want {
+			t.Errorf("formatUptime(%v) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}

@@ -98,17 +98,17 @@
 
 ## Phase 8 — Polish & Hardening
 
-- [ ] **About / Status page** (`/about`)
-  - [ ] Show current config (listen ports, retention, thresholds)
-  - [ ] System resource usage (memory, goroutines, flow rate)
-  - [ ] Uptime and version info
-- [ ] Graceful shutdown (signal handling, drain connections)
-- [ ] Structured, leveled logging throughout the codebase
-- [ ] Resource budget enforcement
-  - [ ] Validate ring buffer stays within memory targets
-  - [ ] Cap goroutine pool for analysis workers to CPU core count
-- [ ] Dockerfile (multi-stage build, scratch/alpine base)
-- [ ] Update `README.md` with full setup and usage instructions
+- [x] **About / Status page** (`/about`)
+  - [x] Show current config (listen ports, retention, thresholds)
+  - [x] System resource usage (memory, goroutines, flow rate)
+  - [x] Uptime and version info
+- [x] Graceful shutdown (signal handling, drain connections)
+- [x] Structured, leveled logging throughout the codebase
+- [x] Resource budget enforcement
+  - [x] Validate ring buffer stays within memory targets
+  - [x] Cap goroutine pool for analysis workers to CPU core count
+- [x] Dockerfile (multi-stage build, scratch/alpine base)
+- [x] Update `README.md` with full setup and usage instructions
 
 ---
 
