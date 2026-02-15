@@ -190,7 +190,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
@@ -392,7 +392,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
@@ -476,7 +476,7 @@ func (s *Server) handleAdvisories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
@@ -550,7 +550,7 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
