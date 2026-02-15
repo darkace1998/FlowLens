@@ -41,20 +41,20 @@
 
 ## Phase 4 — Web Interface
 
-- [ ] Set up HTTP server with `net/http` in `internal/web/server.go`
-- [ ] Create XHTML base layout template (`templates/layout.xhtml`)
-- [ ] Create minimal CSS stylesheet (`static/style.css`)
-- [ ] **Dashboard page** (`/`)
-  - [ ] Total throughput (bps / pps) over last 10 minutes
-  - [ ] Top 10 talkers (source + destination)
-  - [ ] Protocol breakdown (CSS-only bar/chart)
-  - [ ] Active advisory count by severity
-- [ ] **Flow Explorer page** (`/flows`)
-  - [ ] Searchable, filterable table of recent flow records
-  - [ ] Filters: source IP, destination IP, port, protocol, time range
-  - [ ] Server-side pagination
-- [ ] Route handlers in `internal/web/handlers.go`
-- [ ] Wire web server into `main.go`
+- [x] Set up HTTP server with `net/http` in `internal/web/server.go`
+- [x] Create XHTML base layout template (`templates/layout.xhtml`)
+- [x] Create minimal CSS stylesheet (`static/style.css`)
+- [x] **Dashboard page** (`/`)
+  - [x] Total throughput (bps / pps) over last 10 minutes
+  - [x] Top 10 talkers (source + destination)
+  - [x] Protocol breakdown (CSS-only bar/chart)
+  - [x] Active advisory count by severity
+- [x] **Flow Explorer page** (`/flows`)
+  - [x] Searchable, filterable table of recent flow records
+  - [x] Filters: source IP, destination IP, port, protocol, time range
+  - [x] Server-side pagination
+- [x] Route handlers in `internal/web/handlers.go`
+- [x] Wire web server into `main.go`
 
 ---
 

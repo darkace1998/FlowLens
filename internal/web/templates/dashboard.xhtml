@@ -1,0 +1,104 @@
+{{define "title"}}Dashboard{{end}}
+{{define "content"}}
+<h1>Dashboard</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Throughput</div>
+    <div class="stat-value">{{.BPS}}</div>
+    <div class="stat-sub">{{.PPS}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Bytes</div>
+    <div class="stat-value">{{formatBytes .TotalBytes}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Packets</div>
+    <div class="stat-value">{{formatPkts .TotalPackets}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Flows ({{.Window}})</div>
+    <div class="stat-value">{{.FlowCount}}</div>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="panel">
+    <h2>Top Sources</h2>
+    {{if .TopSrc}}
+    <table>
+      <thead>
+        <tr><th>Source IP</th><th>Bytes</th><th>Packets</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopSrc}}
+        <tr>
+          <td><a href="/flows?src_ip={{.IP}}">{{.IP}}</a></td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{formatPkts .Packets}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2>Top Destinations</h2>
+    {{if .TopDst}}
+    <table>
+      <thead>
+        <tr><th>Destination IP</th><th>Bytes</th><th>Packets</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopDst}}
+        <tr>
+          <td><a href="/flows?dst_ip={{.IP}}">{{.IP}}</a></td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{formatPkts .Packets}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Protocol Breakdown</h2>
+  {{if .Protocols}}
+  <table>
+    <thead>
+      <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
+    </thead>
+    <tbody>
+      {{range .Protocols}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{formatBytes .Bytes}}</td>
+        <td>{{formatPkts .Packets}}</td>
+        <td>
+          <div class="bar-bg"><div class="bar-fill proto" style="width:{{.Pct}}%"></div></div>
+          {{.Pct}}%
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty">No flow data yet.</p>
+  {{end}}
+</div>
+{{end}}
