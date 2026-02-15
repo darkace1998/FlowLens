@@ -58,6 +58,7 @@ func TestSeverityString(t *testing.T) {
 
 func TestEngine_RunsAnalyzers(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
+	// Single host = 100% traffic → CRITICAL advisory (exceeds 25% threshold).
 	rb.Insert([]model.Flow{
 		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 10000, 100),
 	})
@@ -94,11 +95,10 @@ func TestEngine_EmptyStore(t *testing.T) {
 func TestEngine_SortsBySeverity(t *testing.T) {
 	rb := storage.NewRingBuffer(10000)
 
-	// Insert flows that will generate different severity levels.
-	// One dominant source (>50% = CRITICAL) and one minor source.
+	// One dominant source (>50% = CRITICAL) and one at ~30% (WARNING).
 	flows := []model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 90000, 900),
-		makeFlow("10.0.1.2", "192.168.1.1", 1235, 80, 6, 1000, 10),
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 70000, 700),
+		makeFlow("10.0.1.2", "192.168.1.1", 1235, 80, 6, 30000, 300),
 	}
 	rb.Insert(flows)
 
@@ -149,8 +149,9 @@ func TestTopTalkers_MultipleHosts(t *testing.T) {
 	cfg.TopTalkersCount = 3
 	advisories := TopTalkers{}.Analyze(rb, cfg)
 
-	if len(advisories) != 3 {
-		t.Fatalf("expected 3 advisories, got %d", len(advisories))
+	// 10.0.1.1 = 50% (CRITICAL), 10.0.1.2 = 30% (WARNING), 10.0.1.3 = 20% (<25%, filtered)
+	if len(advisories) != 2 {
+		t.Fatalf("expected 2 advisories (hosts above 25%%), got %d", len(advisories))
 	}
 
 	// First should be 10.0.1.1 (highest bytes).
@@ -170,8 +171,32 @@ func TestTopTalkers_Limit(t *testing.T) {
 	cfg.TopTalkersCount = 5
 	advisories := TopTalkers{}.Analyze(rb, cfg)
 
-	if len(advisories) != 5 {
-		t.Errorf("expected 5 advisories (limited), got %d", len(advisories))
+	// 20 hosts each at 5% — none exceed 25% threshold, so no advisories.
+	if len(advisories) != 0 {
+		t.Errorf("no host above 25%% should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestTopTalkers_DominantHost(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// One host at ~67%, another at ~33% — both above 25%.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 20000, 200),
+		makeFlow("10.0.1.2", "192.168.1.1", 1235, 80, 6, 10000, 100),
+	})
+
+	cfg := defaultCfg()
+	cfg.TopTalkersCount = 5
+	advisories := TopTalkers{}.Analyze(rb, cfg)
+
+	if len(advisories) != 2 {
+		t.Fatalf("expected 2 advisories (both above 25%%), got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("67%% host should be CRITICAL, got %s", advisories[0].Severity)
+	}
+	if advisories[1].Severity != WARNING {
+		t.Errorf("33%% host should be WARNING, got %s", advisories[1].Severity)
 	}
 }
 
@@ -194,19 +219,9 @@ func TestProtocolDistribution_Normal(t *testing.T) {
 	})
 
 	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	if len(advisories) == 0 {
-		t.Fatal("should produce at least one advisory")
-	}
-
-	// Normal distribution should produce INFO summary.
-	hasInfo := false
-	for _, a := range advisories {
-		if a.Severity == INFO {
-			hasInfo = true
-		}
-	}
-	if !hasInfo {
-		t.Error("normal distribution should include an INFO advisory")
+	// Normal distribution should produce NO advisories — silence is a feature.
+	if len(advisories) != 0 {
+		t.Errorf("normal protocol distribution should produce 0 advisories, got %d", len(advisories))
 	}
 }
 
@@ -672,5 +687,291 @@ func TestFlowAsymmetry_Limit(t *testing.T) {
 	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
 	if len(advisories) > 10 {
 		t.Errorf("expected at most 10 advisories, got %d", len(advisories))
+	}
+}
+
+// --- Engine Advisory History tests ---
+
+func TestEngine_AdvisoryHistory(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+
+	// First cycle: insert a dominant host to trigger CRITICAL.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 100000, 1000),
+	})
+
+	cfg := defaultCfg()
+	cfg.Interval = 50 * time.Millisecond
+	cfg.TopTalkersCount = 1
+
+	engine := NewEngine(cfg, rb, TopTalkers{})
+	go engine.Start()
+	time.Sleep(80 * time.Millisecond)
+
+	// Should have the advisory.
+	advisories := engine.Advisories()
+	if len(advisories) == 0 {
+		t.Fatal("expected at least 1 advisory after first cycle")
+	}
+	if advisories[0].Resolved {
+		t.Error("active advisory should not be resolved")
+	}
+
+	// Dilute the ring buffer: add enough traffic from many hosts to push
+	// 10.0.1.1 well below the 25% threshold.
+	for i := 0; i < 200; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.2.%d", i), "192.168.1.1", uint16(2000+i), 80, 6, 5000, 50),
+		})
+	}
+
+	time.Sleep(80 * time.Millisecond)
+	engine.Stop()
+
+	advisories = engine.Advisories()
+	// The old advisory should still be present but marked resolved.
+	foundResolved := false
+	for _, a := range advisories {
+		if a.Title == "Top Talker: 10.0.1.1" && a.Resolved {
+			foundResolved = true
+		}
+	}
+	if !foundResolved {
+		t.Error("old advisory should be present and marked as resolved")
+	}
+}
+
+// --- Retransmission Detector tests ---
+
+func TestRetransmissionDetector_Empty(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestRetransmissionDetector_NormalTCP(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Normal TCP: 1000 bytes/pkt average — well above smallPacketThreshold.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 50),
+	})
+
+	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("normal TCP should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestRetransmissionDetector_SmallPackets(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Small packets: 40 bytes/pkt (likely retransmissions) with enough packets.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 2400, 60),
+	})
+
+	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory for small packets, got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("40 bytes/pkt should be CRITICAL, got %s", advisories[0].Severity)
+	}
+}
+
+func TestRetransmissionDetector_IgnoresUDP(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// UDP with small packets — should not trigger.
+	rb.Insert([]model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 53, 17, 2400, 60),
+	})
+
+	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("UDP flows should not trigger retransmission detection, got %d", len(advisories))
+	}
+}
+
+// --- Unreachable Host Detector tests ---
+
+func TestUnreachableDetector_Empty(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestUnreachableDetector_HealthyService(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Normal flows — large bytes, not tiny.
+	for i := 0; i < 50; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(1000+i), 80, 6, 5000, 50),
+		})
+	}
+
+	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("healthy service should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestUnreachableDetector_DownService(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+	// Many tiny flows from multiple sources → service appears down.
+	for i := 0; i < 30; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.100", uint16(1000+i), 443, 6, 60, 1),
+		})
+	}
+
+	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory for unreachable service, got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("30 tiny flows from 30 sources should be CRITICAL, got %s", advisories[0].Severity)
+	}
+}
+
+// --- New Talker Detector tests ---
+
+func TestNewTalkerDetector_Empty(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := NewTalkerDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestNewTalkerDetector_AllKnownHosts(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// Baseline: host was active 5 minutes ago.
+	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
+	f.Timestamp = now.Add(-5 * time.Minute)
+	rb.Insert([]model.Flow{f})
+
+	// Recent: same host is still active.
+	f2 := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
+	f2.Timestamp = now.Add(-10 * time.Second)
+	rb.Insert([]model.Flow{f2})
+
+	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
+	if len(advisories) != 0 {
+		t.Errorf("known host should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestNewTalkerDetector_NewHost(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// Baseline: only 10.0.1.1 was active.
+	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
+	f.Timestamp = now.Add(-5 * time.Minute)
+	rb.Insert([]model.Flow{f})
+
+	// Recent: new host 10.0.1.99 appears with significant traffic.
+	f2 := makeFlow("10.0.1.99", "192.168.1.1", 1234, 80, 6, 50000, 500)
+	f2.Timestamp = now.Add(-10 * time.Second)
+	rb.Insert([]model.Flow{f2})
+
+	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory for new host, got %d", len(advisories))
+	}
+	if advisories[0].Title != "New Talker: 10.0.1.99" {
+		t.Errorf("expected advisory for 10.0.1.99, got %q", advisories[0].Title)
+	}
+}
+
+func TestNewTalkerDetector_SmallTrafficIgnored(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+	cfg := defaultCfg()
+	cfg.Interval = 1 * time.Minute
+
+	now := time.Now()
+	// Baseline: host was active.
+	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
+	f.Timestamp = now.Add(-5 * time.Minute)
+	rb.Insert([]model.Flow{f})
+
+	// Recent: new host with tiny traffic (below threshold).
+	f2 := makeFlow("10.0.1.99", "192.168.1.1", 1234, 80, 6, 100, 1)
+	f2.Timestamp = now.Add(-10 * time.Second)
+	rb.Insert([]model.Flow{f2})
+
+	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
+	if len(advisories) != 0 {
+		t.Errorf("small traffic new host should be ignored, got %d advisories", len(advisories))
+	}
+}
+
+// --- Port Concentration Detector tests ---
+
+func TestPortConcentrationDetector_Empty(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestPortConcentrationDetector_Normal(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+	// Few sources to one port — normal.
+	for i := 0; i < 5; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(1000+i), 80, 6, 5000, 50),
+		})
+	}
+
+	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("5 sources to one port should produce 0 advisories, got %d", len(advisories))
+	}
+}
+
+func TestPortConcentrationDetector_HighConcentration(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	// 25 unique sources all hitting the same port.
+	for i := 0; i < 25; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(50000+i), 443, 6, 5000, 50),
+		})
+	}
+
+	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory for high port concentration, got %d", len(advisories))
+	}
+	if advisories[0].Severity != WARNING {
+		t.Errorf("25 sources should be WARNING, got %s", advisories[0].Severity)
+	}
+}
+
+func TestPortConcentrationDetector_Critical(t *testing.T) {
+	rb := storage.NewRingBuffer(100000)
+	// 60+ unique sources (>= 3x threshold of 20) → CRITICAL.
+	for i := 0; i < 65; i++ {
+		rb.Insert([]model.Flow{
+			makeFlow(fmt.Sprintf("10.0.%d.%d", i/256, i%256), "192.168.1.1", uint16(50000+i), 22, 6, 100, 1),
+		})
+	}
+
+	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != CRITICAL {
+		t.Errorf("65 sources (>= 3x20) should be CRITICAL, got %s", advisories[0].Severity)
 	}
 }

@@ -3,13 +3,14 @@
 <h1>Advisories</h1>
 
 {{if .Advisories}}
-<p class="flow-summary">{{len .Advisories}} active advisory(ies)</p>
+<p class="flow-summary">{{len .Advisories}} advisory(ies) — active and resolved</p>
 
 <div class="advisory-list">
   {{range .Advisories}}
-  <div class="advisory-card severity-{{severityClass .Severity}}">
+  <div class="advisory-card severity-{{severityClass .Severity}}{{if .Resolved}} advisory-resolved{{end}}">
     <div class="advisory-header">
       <span class="severity-badge severity-{{severityClass .Severity}}">{{.Severity}}</span>
+      {{if .Resolved}}<span class="severity-badge severity-resolved">RESOLVED</span>{{end}}
       <span class="advisory-time">{{formatTime .Timestamp}}</span>
     </div>
     <h3 class="advisory-title">{{.Title}}</h3>

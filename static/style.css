@@ -258,6 +258,10 @@ a:hover { text-decoration: underline; }
 .severity-badge.severity-critical { background: #d73a49; }
 .severity-badge.severity-warning { background: #e36209; }
 .severity-badge.severity-info { background: #0366d6; }
+.severity-badge.severity-resolved { background: #6a737d; }
+
+.advisory-resolved { opacity: 0.6; }
+.advisory-resolved .advisory-title { text-decoration: line-through; }
 
 .advisory-time {
   font-size: 0.8rem;

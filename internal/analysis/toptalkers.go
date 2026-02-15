@@ -68,11 +68,15 @@ func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) 
 	for _, e := range entries[:n] {
 		pct := float64(e.Bytes) / float64(totalBytes) * 100
 
-		sev := INFO
+		// Only generate advisories when a host exceeds a meaningful threshold.
+		// A host at 20% of bandwidth is normal — silence is a feature.
+		if pct <= 25 {
+			continue
+		}
+
+		sev := WARNING
 		if pct > 50 {
 			sev = CRITICAL
-		} else if pct > 25 {
-			sev = WARNING
 		}
 
 		advisories = append(advisories, Advisory{
@@ -94,10 +98,8 @@ func actionForTalker(sev Severity, ip string) string {
 	switch sev {
 	case CRITICAL:
 		return fmt.Sprintf("Investigate %s immediately — consuming majority of bandwidth.", ip)
-	case WARNING:
-		return fmt.Sprintf("Monitor %s — significant bandwidth usage detected.", ip)
 	default:
-		return "No action required — informational."
+		return fmt.Sprintf("Monitor %s — significant bandwidth usage detected.", ip)
 	}
 }
 

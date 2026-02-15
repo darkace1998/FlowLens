@@ -47,7 +47,7 @@ func (ProtocolDistribution) Analyze(store *storage.RingBuffer, cfg config.Analys
 	for _, e := range report {
 		pct := float64(e.Bytes) / float64(totalBytes) * 100
 
-		// Flag protocols that are unexpectedly dominant or unusual.
+		// Only flag protocols when something is wrong — normal operation = no advisory.
 		var sev Severity
 		var shouldReport bool
 
@@ -59,10 +59,6 @@ func (ProtocolDistribution) Analyze(store *storage.RingBuffer, cfg config.Analys
 		// ICMP consuming >10% of traffic — possible flood.
 		case e.Proto == 1 && pct > 10:
 			sev = WARNING
-			shouldReport = true
-		// Any single protocol over 90% — low diversity.
-		case pct > 90:
-			sev = INFO
 			shouldReport = true
 		}
 
@@ -78,25 +74,6 @@ func (ProtocolDistribution) Analyze(store *storage.RingBuffer, cfg config.Analys
 				Action: actionForProtocol(sev, e.Name, pct),
 			})
 		}
-	}
-
-	// Always produce an informational summary.
-	if len(advisories) == 0 && len(report) > 0 {
-		desc := "Protocol breakdown: "
-		for i, e := range report {
-			pct := float64(e.Bytes) / float64(totalBytes) * 100
-			if i > 0 {
-				desc += ", "
-			}
-			desc += fmt.Sprintf("%s %.1f%%", e.Name, pct)
-		}
-		advisories = append(advisories, Advisory{
-			Severity:    INFO,
-			Timestamp:   now,
-			Title:       "Protocol Distribution Summary",
-			Description: desc,
-			Action:      "No action required — normal distribution.",
-		})
 	}
 
 	return advisories
