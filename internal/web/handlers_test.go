@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
@@ -38,7 +39,7 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir())
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil)
 	return s, ringBuf
 }
 
@@ -290,5 +291,63 @@ func TestFormatBPS(t *testing.T) {
 	got := formatBPS(1000000, 10*time.Minute)
 	if !strings.Contains(got, "Kbps") {
 		t.Errorf("formatBPS(1MB, 10m) = %q, expected Kbps range", got)
+	}
+}
+
+func TestAdvisories_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/advisories", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Advisories") {
+		t.Error("response should contain 'Advisories'")
+	}
+	if !strings.Contains(body, "All clear") {
+		t.Error("empty advisories page should show 'All clear'")
+	}
+}
+
+func TestAdvisories_WithEngine(t *testing.T) {
+	ringBuf := storage.NewRingBuffer(1000)
+	ringBuf.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 10000, 100),
+	})
+
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	analysisCfg := config.AnalysisConfig{
+		Interval:        50 * time.Millisecond,
+		TopTalkersCount: 5,
+		ScanThreshold:   500,
+	}
+
+	engine := analysis.NewEngine(analysisCfg, ringBuf,
+		analysis.TopTalkers{},
+		analysis.ProtocolDistribution{},
+	)
+	go engine.Start()
+	time.Sleep(100 * time.Millisecond)
+
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine)
+
+	req := httptest.NewRequest("GET", "/advisories", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	engine.Stop()
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Top Talker") {
+		t.Error("advisories should show Top Talker advisory")
+	}
+	if !strings.Contains(body, "severity-critical") || !strings.Contains(body, "CRITICAL") {
+		t.Error("single host = 100% should show CRITICAL badge")
 	}
 }

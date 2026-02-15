@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
@@ -17,21 +18,24 @@ type Server struct {
 	cfg      config.WebConfig
 	ringBuf  *storage.RingBuffer
 	sqlStore *storage.SQLiteStore
+	engine   *analysis.Engine
 	mux      *http.ServeMux
 	srv      *http.Server
 }
 
 // NewServer creates a new web server with the given config and storage backends.
-func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string) *Server {
+func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string, engine *analysis.Engine) *Server {
 	s := &Server{
 		cfg:      cfg,
 		ringBuf:  ringBuf,
 		sqlStore: sqlStore,
+		engine:   engine,
 		mux:      http.NewServeMux(),
 	}
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
+	s.mux.HandleFunc("/advisories", s.handleAdvisories)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	s.srv = &http.Server{

@@ -221,3 +221,58 @@ footer {
 /* Links */
 a { color: var(--accent); }
 a:hover { text-decoration: underline; }
+
+/* Advisory cards */
+.advisory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.advisory-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--border);
+}
+.advisory-card.severity-critical { border-left-color: #d73a49; }
+.advisory-card.severity-warning { border-left-color: #e36209; }
+.advisory-card.severity-info { border-left-color: #0366d6; }
+
+.advisory-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.severity-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.severity-badge.severity-critical { background: #d73a49; }
+.severity-badge.severity-warning { background: #e36209; }
+.severity-badge.severity-info { background: #0366d6; }
+
+.advisory-time {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.advisory-title {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+.advisory-desc {
+  font-size: 0.85rem;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+.advisory-action {
+  font-size: 0.8rem;
+  color: var(--muted);
+}

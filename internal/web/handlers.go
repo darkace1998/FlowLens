@@ -12,23 +12,36 @@ import (
 	"strings"
 	"time"
 
+	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/model"
 )
 
 // --- Template helpers ---
 
 var funcMap = template.FuncMap{
-	"formatBytes": formatBytes,
-	"formatPkts":  formatPkts,
-	"formatBPS":   formatBPS,
-	"formatPPS":   formatPPS,
-	"protoName":   model.ProtocolName,
-	"timeAgo":     timeAgo,
-	"formatTime":  formatTime,
-	"seq":         seq,
-	"add":         func(a, b int) int { return a + b },
-	"sub":         func(a, b int) int { return a - b },
-	"pctOf":       pctOf,
+	"formatBytes":   formatBytes,
+	"formatPkts":    formatPkts,
+	"formatBPS":     formatBPS,
+	"formatPPS":     formatPPS,
+	"protoName":     model.ProtocolName,
+	"timeAgo":       timeAgo,
+	"formatTime":    formatTime,
+	"seq":           seq,
+	"add":           func(a, b int) int { return a + b },
+	"sub":           func(a, b int) int { return a - b },
+	"pctOf":         pctOf,
+	"severityClass": severityClass,
+}
+
+func severityClass(sev analysis.Severity) string {
+	switch sev {
+	case analysis.CRITICAL:
+		return "critical"
+	case analysis.WARNING:
+		return "warning"
+	default:
+		return "info"
+	}
 }
 
 func formatBytes(b uint64) string {
@@ -436,4 +449,34 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.F
 func matchIP(ip net.IP, filter string) bool {
 	// Support prefix matching (e.g. "10.0.1")
 	return strings.HasPrefix(ip.String(), filter)
+}
+
+// --- Advisories page ---
+
+// AdvisoriesPageData holds data for the advisories template.
+type AdvisoriesPageData struct {
+	Advisories []analysis.Advisory
+}
+
+func (s *Server) handleAdvisories(w http.ResponseWriter, r *http.Request) {
+	var advisories []analysis.Advisory
+	if s.engine != nil {
+		advisories = s.engine.Advisories()
+	}
+
+	data := AdvisoriesPageData{
+		Advisories: advisories,
+	}
+
+	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/advisories.xhtml")
+	if err != nil {
+		http.Error(w, "Template error", http.StatusInternalServerError)
+		log.Printf("Template parse error: %v", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+		log.Printf("Template execute error: %v", err)
+	}
 }

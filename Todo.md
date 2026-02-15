@@ -60,17 +60,17 @@
 
 ## Phase 5 — Analysis Engine
 
-- [ ] Build analysis runner with configurable interval (`internal/analysis/engine.go`)
-- [ ] Define advisory model with severity levels (`advisory.go`)
-  - [ ] CRITICAL / WARNING / INFO levels
-- [ ] Implement **Top Talkers** analyzer (`toptalkers.go`)
-- [ ] Implement **Protocol Distribution** analyzer (`protocol.go`)
-- [ ] Implement **Port Scan / Sweep Detector** (`scanner.go`)
-- [ ] Unit tests for each analyzer
-- [ ] **Advisories page** (`/advisories`)
-  - [ ] List advisories sorted by severity
-  - [ ] Severity badge, timestamp, description, suggested action
-- [ ] Wire analysis engine into `main.go`
+- [x] Build analysis runner with configurable interval (`internal/analysis/engine.go`)
+- [x] Define advisory model with severity levels (`advisory.go`)
+  - [x] CRITICAL / WARNING / INFO levels
+- [x] Implement **Top Talkers** analyzer (`toptalkers.go`)
+- [x] Implement **Protocol Distribution** analyzer (`protocol.go`)
+- [x] Implement **Port Scan / Sweep Detector** (`scanner.go`)
+- [x] Unit tests for each analyzer
+- [x] **Advisories page** (`/advisories`)
+  - [x] List advisories sorted by severity
+  - [x] Severity badge, timestamp, description, suggested action
+- [x] Wire analysis engine into `main.go`
 
 ---
 

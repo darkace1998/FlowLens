@@ -1,0 +1,24 @@
+{{define "title"}}Advisories{{end}}
+{{define "content"}}
+<h1>Advisories</h1>
+
+{{if .Advisories}}
+<p class="flow-summary">{{len .Advisories}} active advisory(ies)</p>
+
+<div class="advisory-list">
+  {{range .Advisories}}
+  <div class="advisory-card severity-{{severityClass .Severity}}">
+    <div class="advisory-header">
+      <span class="severity-badge severity-{{severityClass .Severity}}">{{.Severity}}</span>
+      <span class="advisory-time">{{formatTime .Timestamp}}</span>
+    </div>
+    <h3 class="advisory-title">{{.Title}}</h3>
+    <p class="advisory-desc">{{.Description}}</p>
+    <p class="advisory-action"><strong>Action:</strong> {{.Action}}</p>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<p class="empty">No active advisories. All clear!</p>
+{{end}}
+{{end}}
