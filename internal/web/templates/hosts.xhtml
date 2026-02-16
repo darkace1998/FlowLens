@@ -25,6 +25,7 @@
     <thead>
       <tr>
         <th>IP Address</th>
+        <th>Country</th>
         <th>Bytes</th>
         <th>Packets</th>
         <th>Flows</th>
@@ -37,6 +38,7 @@
       {{range .Hosts}}
       <tr>
         <td><a href="/flows?src_ip={{.IP}}">{{.IP}}</a></td>
+        <td>{{if .Country}}{{.Country}}{{if .City}} ({{.City}}){{end}}{{else}}—{{end}}</td>
         <td>{{formatBytes .Bytes}}</td>
         <td>{{formatPkts .Packets}}</td>
         <td>{{.FlowCount}}</td>

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
@@ -413,6 +414,10 @@ type HostEntry struct {
 	FirstSeen time.Time
 	LastSeen  time.Time
 	Pct       float64
+	Country   string
+	City      string
+	Lat       float64
+	Lon       float64
 }
 
 // HostsPageData holds all data for the active hosts template.
@@ -971,6 +976,8 @@ type FlowRow struct {
 	Jitter      string
 	MOS         string
 	MOSClass    string
+	SrcCountry  string
+	DstCountry  string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1048,10 +1055,17 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
 			appCat = model.AppCategory(appProto)
 		}
+		srcAddr := model.SafeIPString(f.SrcAddr)
+		dstAddr := model.SafeIPString(f.DstAddr)
+		var srcCountry, dstCountry string
+		if s.geoLookup != nil {
+			srcCountry = s.geoLookup.Find(srcAddr).Country
+			dstCountry = s.geoLookup.Find(dstAddr).Country
+		}
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp:   f.Timestamp.Format("15:04:05"),
-			SrcAddr:     model.SafeIPString(f.SrcAddr),
-			DstAddr:     model.SafeIPString(f.DstAddr),
+			SrcAddr:     srcAddr,
+			DstAddr:     dstAddr,
 			SrcPort:     f.SrcPort,
 			DstPort:     f.DstPort,
 			Protocol:    model.ProtocolName(f.Protocol),
@@ -1069,6 +1083,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			Jitter:      formatJitter(f.JitterMicros),
 			MOS:         formatMOS(f.MOS),
 			MOSClass:    mosQuality(f.MOS),
+			SrcCountry:  srcCountry,
+			DstCountry:  dstCountry,
 		})
 	}
 
@@ -1163,7 +1179,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildHostsData(flows, window)
+	data := buildHostsData(flows, window, s.geoLookup)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplHosts.ExecuteTemplate(w, "layout", data); err != nil {
@@ -1171,7 +1187,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
+func buildHostsData(flows []model.Flow, window time.Duration, geoLookup *geo.Lookup) HostsPageData {
 	type hostAccum struct {
 		Bytes     uint64
 		Packets   uint64
@@ -1216,7 +1232,7 @@ func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
 		totalHostBytes += h.Bytes
 	}
 	for ip, h := range hostMap {
-		hosts = append(hosts, HostEntry{
+		entry := HostEntry{
 			IP:        ip,
 			Bytes:     h.Bytes,
 			Packets:   h.Packets,
@@ -1224,7 +1240,15 @@ func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
 			FirstSeen: h.FirstSeen,
 			LastSeen:  h.LastSeen,
 			Pct:       pctOf(h.Bytes, totalHostBytes),
-		})
+		}
+		if geoLookup != nil {
+			info := geoLookup.Find(ip)
+			entry.Country = info.Country
+			entry.City = info.City
+			entry.Lat = info.Latitude
+			entry.Lon = info.Longitude
+		}
+		hosts = append(hosts, entry)
 	}
 
 	// Sort descending by bytes.
@@ -1237,6 +1261,87 @@ func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
 		TotalHosts: len(hosts),
 		TotalBytes: totalBytes,
 		Window:     window,
+	}
+}
+
+// --- Geo Map page ---
+
+// MapMarker represents a host marker on the geo map.
+type MapMarker struct {
+	IP      string  `json:"ip"`
+	Lat     float64 `json:"lat"`
+	Lon     float64 `json:"lon"`
+	Country string  `json:"country"`
+	City    string  `json:"city"`
+	Bytes   uint64  `json:"bytes"`
+	Label   string  `json:"label"`
+}
+
+// MapPageData holds all data for the geo map template.
+type MapPageData struct {
+	Markers     []MapMarker
+	TotalHosts  int
+	MappedHosts int
+}
+
+func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	flows, err := s.ringBuf.Recent(window, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("Map query error: %v", err)
+		return
+	}
+
+	data := s.buildMapData(flows)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplMap.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func (s *Server) buildMapData(flows []model.Flow) MapPageData {
+	// Collect unique hosts with byte counts.
+	hostBytes := make(map[string]uint64)
+	for _, f := range flows {
+		for _, ip := range []string{model.SafeIPString(f.SrcAddr), model.SafeIPString(f.DstAddr)} {
+			hostBytes[ip] += f.Bytes
+		}
+	}
+
+	var markers []MapMarker
+	for ip, bytes := range hostBytes {
+		if s.geoLookup == nil {
+			continue
+		}
+		info := s.geoLookup.Find(ip)
+		if info.Country == "" || info.Country == "LAN" || (info.Latitude == 0 && info.Longitude == 0) {
+			continue
+		}
+		markers = append(markers, MapMarker{
+			IP:      ip,
+			Lat:     info.Latitude,
+			Lon:     info.Longitude,
+			Country: info.Country,
+			City:    info.City,
+			Bytes:   bytes,
+			Label:   fmt.Sprintf("%s (%s, %s) — %s", ip, info.City, info.Country, formatBytes(bytes)),
+		})
+	}
+
+	// Sort by bytes descending.
+	sort.Slice(markers, func(i, j int) bool {
+		return markers[i].Bytes > markers[j].Bytes
+	})
+
+	return MapPageData{
+		Markers:     markers,
+		TotalHosts:  len(hostBytes),
+		MappedHosts: len(markers),
 	}
 }
 

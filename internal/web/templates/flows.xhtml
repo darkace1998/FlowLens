@@ -21,8 +21,10 @@
       <th>Time</th>
       <th>Source</th>
       <th>Src Port</th>
+      <th>Src Country</th>
       <th>Destination</th>
       <th>Dst Port</th>
+      <th>Dst Country</th>
       <th>Protocol</th>
       <th>Application</th>
       <th>Category</th>
@@ -45,8 +47,10 @@
       <td>{{.Timestamp}}</td>
       <td>{{.SrcAddr}}</td>
       <td>{{.SrcPort}}</td>
+      <td>{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
       <td>{{.DstAddr}}</td>
       <td>{{.DstPort}}</td>
+      <td>{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
       <td>{{.Protocol}}</td>
       <td>{{.AppProto}}</td>
       <td>{{.AppCategory}}</td>

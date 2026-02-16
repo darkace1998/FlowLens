@@ -12,6 +12,7 @@ import (
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/collector"
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
@@ -87,6 +88,16 @@ func main() {
 	)
 	go engine.Start()
 
+	// Initialise GeoIP lookup.
+	geoLookup := geo.New()
+	if cfg.Storage.GeoIPPath != "" {
+		if err := geoLookup.LoadCSV(cfg.Storage.GeoIPPath); err != nil {
+			log.Warn("Failed to load GeoIP database: %v (using built-in ranges only)", err)
+		} else {
+			log.Info("Loaded GeoIP database from %s", cfg.Storage.GeoIPPath)
+		}
+	}
+
 	// Start web server.
 	// Resolve static directory relative to binary location if "static" doesn't exist in CWD.
 	staticDir := "static"
@@ -98,7 +109,7 @@ func main() {
 			}
 		}
 	}
-	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine)
+	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine, geoLookup)
 	srv.SetAboutInfo(cfg, Version, time.Now())
 	go func() {
 		if err := srv.Start(); err != nil {

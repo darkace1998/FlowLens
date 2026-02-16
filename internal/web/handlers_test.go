@@ -11,6 +11,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
@@ -40,7 +41,7 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil)
 	return s, ringBuf
 }
 
@@ -53,7 +54,7 @@ func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil)
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil)
 	t.Cleanup(func() { sqlStore.Close() })
 	return s, ringBuf, sqlStore
 }
@@ -335,7 +336,7 @@ func TestBuildHostsData(t *testing.T) {
 		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
 	}
 
-	data := buildHostsData(flows, 10*time.Minute)
+	data := buildHostsData(flows, 10*time.Minute, nil)
 
 	// 4 unique hosts: 10.0.1.1, 10.0.1.2, 192.168.1.1, 192.168.1.2
 	if data.TotalHosts != 4 {
@@ -554,7 +555,7 @@ func TestAdvisories_WithEngine(t *testing.T) {
 	go engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil)
 
 	req := httptest.NewRequest("GET", "/advisories", nil)
 	w := httptest.NewRecorder()
@@ -1172,5 +1173,145 @@ func TestFlows_JitterMOSColumns(t *testing.T) {
 	}
 	if !strings.Contains(body, "MOS") {
 		t.Error("flows page should show 'MOS' column header")
+	}
+}
+
+// --- Geo/Map tests ---
+
+func TestBuildHostsData_WithGeo(t *testing.T) {
+	geoLookup := geo.New()
+	flows := []model.Flow{
+		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
+	}
+	data := buildHostsData(flows, 10*time.Minute, geoLookup)
+	for _, h := range data.Hosts {
+		if h.IP == "8.8.8.8" {
+			if h.Country != "US" {
+				t.Errorf("8.8.8.8 Country = %q, want US", h.Country)
+			}
+		}
+		if h.IP == "192.168.1.1" {
+			if h.Country != "LAN" {
+				t.Errorf("192.168.1.1 Country = %q, want LAN", h.Country)
+			}
+		}
+	}
+}
+
+func TestBuildHostsData_NilGeo(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
+	}
+	data := buildHostsData(flows, 10*time.Minute, nil)
+	for _, h := range data.Hosts {
+		if h.Country != "" {
+			t.Errorf("with nil geo, host %s Country = %q, want empty", h.IP, h.Country)
+		}
+	}
+}
+
+func TestHandleMap_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/map", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /map status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Geo Map") {
+		t.Error("map page should contain 'Geo Map' title")
+	}
+}
+
+func TestHandleMap_WithGeo(t *testing.T) {
+	geoLookup := geo.New()
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	ringBuf.Insert([]model.Flow{
+		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
+	})
+
+	req := httptest.NewRequest("GET", "/map", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /map status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Mountain View") {
+		t.Error("map page should contain 'Mountain View' for 8.8.8.8")
+	}
+	if !strings.Contains(body, "Mapped Hosts") {
+		t.Error("map page should show 'Mapped Hosts' stat")
+	}
+}
+
+func TestFlows_CountryColumns(t *testing.T) {
+	geoLookup := geo.New()
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	ringBuf.Insert([]model.Flow{
+		makeTestFlow("8.8.8.8", "1.1.1.1", 443, 54321, 6, 5000, 10),
+	})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+	if !strings.Contains(body, "Src Country") {
+		t.Error("flows page should show 'Src Country' column header")
+	}
+	if !strings.Contains(body, "Dst Country") {
+		t.Error("flows page should show 'Dst Country' column header")
+	}
+}
+
+func TestHosts_CountryColumn(t *testing.T) {
+	geoLookup := geo.New()
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	ringBuf.Insert([]model.Flow{
+		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
+	})
+
+	req := httptest.NewRequest("GET", "/hosts", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+	if !strings.Contains(body, "Country") {
+		t.Error("hosts page should show 'Country' column header")
+	}
+	if !strings.Contains(body, "US") {
+		t.Error("hosts page should show 'US' for 8.8.8.8")
+	}
+}
+
+func TestBuildMapData(t *testing.T) {
+	geoLookup := geo.New()
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+
+	flows := []model.Flow{
+		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
+		makeTestFlow("9.9.9.9", "10.0.0.1", 53, 12345, 17, 200, 2),
+	}
+
+	data := s.buildMapData(flows)
+	if data.TotalHosts != 4 {
+		t.Errorf("TotalHosts = %d, want 4", data.TotalHosts)
+	}
+	if data.MappedHosts != 2 {
+		t.Errorf("MappedHosts = %d, want 2", data.MappedHosts)
 	}
 }

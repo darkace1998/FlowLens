@@ -8,6 +8,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
@@ -21,6 +22,7 @@ type Server struct {
 	ringBuf  *storage.RingBuffer
 	sqlStore *storage.SQLiteStore
 	engine   *analysis.Engine
+	geoLookup *geo.Lookup
 	mux      *http.ServeMux
 	srv      *http.Server
 
@@ -31,6 +33,7 @@ type Server struct {
 	tmplAbout      *template.Template
 	tmplHosts      *template.Template
 	tmplReports    *template.Template
+	tmplMap        *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -39,13 +42,14 @@ type Server struct {
 }
 
 // NewServer creates a new web server with the given config and storage backends.
-func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string, engine *analysis.Engine) *Server {
+func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string, engine *analysis.Engine, geoLookup *geo.Lookup) *Server {
 	s := &Server{
-		cfg:      cfg,
-		ringBuf:  ringBuf,
-		sqlStore: sqlStore,
-		engine:   engine,
-		mux:      http.NewServeMux(),
+		cfg:       cfg,
+		ringBuf:   ringBuf,
+		sqlStore:  sqlStore,
+		engine:    engine,
+		geoLookup: geoLookup,
+		mux:       http.NewServeMux(),
 	}
 
 	// Parse templates once at startup.
@@ -55,6 +59,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplAbout = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/about.xhtml"))
 	s.tmplHosts = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/hosts.xhtml"))
 	s.tmplReports = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/reports.xhtml"))
+	s.tmplMap = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/map.xhtml"))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
@@ -63,6 +68,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/reports/export", s.handleReportsExport)
 	s.mux.HandleFunc("/advisories", s.handleAdvisories)
 	s.mux.HandleFunc("/about", s.handleAbout)
+	s.mux.HandleFunc("/map", s.handleMap)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	s.srv = &http.Server{
