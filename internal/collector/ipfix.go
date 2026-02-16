@@ -36,11 +36,14 @@ const (
 	ipfixFieldFlowEndSec       = 151
 	ipfixFieldFlowStartMilli   = 152
 	ipfixFieldFlowEndMilli     = 153
-	// TCP quality metrics (IANA IPFIX assignments)
-	ipfixFieldTCPRetransmissionCount = 321
-	ipfixFieldTCPSynTotalCount       = 322
-	ipfixFieldTCPOutOfOrderCount     = 227  // tcpSequenceNumberLoss in various implementations
-	ipfixFieldPacketLossCount        = 233  // postPacketDeltaCount or vendor-specific loss
+	// TCP quality metrics (IANA IPFIX assignments).
+	// Note: Actual IE support varies by exporter vendor. These IDs cover
+	// common implementations; exporters that use different IDs will simply
+	// have these fields as zero (the heuristic detector provides a fallback).
+	ipfixFieldTCPRetransmissionCount = 321 // tcpRetransmissionCount (draft-ietf-ipfix-tcpControlBits)
+	ipfixFieldTCPSynTotalCount       = 322 // tcpSynTotalCount
+	ipfixFieldTCPOutOfOrderCount     = 227 // vendor-specific out-of-order counter (not in base IANA registry)
+	ipfixFieldPacketLossCount        = 233 // vendor-specific packet loss counter (not in base IANA registry)
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).

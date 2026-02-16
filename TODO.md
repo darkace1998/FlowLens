@@ -88,12 +88,12 @@
 
 | Status | Task |
 |--------|------|
-| 🔧 | Retransmission detector exists (heuristic based on packet-to-byte ratio) |
-| ❌ | Parse **TCP retransmission counters** from IPFIX IEs (IE 321 `tcpRetransmissionCount`, IE 322 `tcpSynTotalCount`, etc.) when exported by the device |
-| ❌ | Parse **out-of-order** and **packet-loss** counters from IPFIX performance IEs |
-| ❌ | Add a **TCP Health** dashboard widget summarizing retransmission rates, OOO, and loss across top flows |
-| ❌ | Store TCP quality metrics per flow in SQLite |
-| ❌ | Generate advisories when retransmission or loss rates exceed configurable thresholds |
+| ✅ | Retransmission detector: uses IPFIX/NetFlow counters when available, heuristic fallback for legacy exporters |
+| ✅ | Parse **TCP retransmission counters** from IPFIX IEs (IE 321, 322) and NetFlow v9 equivalents |
+| ✅ | Parse **out-of-order** (IE 227) and **packet-loss** (IE 233) counters from IPFIX/v9 |
+| ✅ | **TCP Health Summary** dashboard widget with retransmission/OOO/loss rates and **Top Affected TCP Flows** |
+| ✅ | Store TCP quality metrics per flow in SQLite (`retransmissions`, `out_of_order`, `packet_loss` columns) |
+| ✅ | Generate advisories when retransmission rate ≥ 1% or packet loss detected (CRITICAL at ≥ 5% or any loss) |
 
 ---
 

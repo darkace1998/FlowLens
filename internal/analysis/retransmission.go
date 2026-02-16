@@ -30,6 +30,10 @@ const retransmissionMinPackets = 50
 // an advisory is generated when actual counters are available.
 const retransmissionRateThreshold = 1.0
 
+// criticalRetransmissionRateThreshold is the retransmission rate (%) above
+// which the advisory severity is elevated to CRITICAL.
+const criticalRetransmissionRateThreshold = 5.0
+
 // Analyze returns advisories about flows with retransmissions, OOO, or loss.
 func (RetransmissionDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(10*time.Minute, 0)
@@ -127,7 +131,7 @@ func analyzeWithCounters(flows []model.Flow) []Advisory {
 
 	for _, r := range results {
 		sev := WARNING
-		if r.rate >= 5.0 || r.loss > 0 {
+		if r.rate >= criticalRetransmissionRateThreshold || r.loss > 0 {
 			sev = CRITICAL
 		}
 
