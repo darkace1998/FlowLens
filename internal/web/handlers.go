@@ -375,7 +375,8 @@ type VoIPFlowEntry struct {
 	DstPort  uint16
 	Jitter   string
 	MOS      string
-	MOSClass string // "good", "fair", "poor", "bad"
+	MOSVal   float32 // numeric MOS for sorting
+	MOSClass string  // "good", "fair", "poor", "bad"
 	Loss     uint32
 	Packets  uint64
 }
@@ -805,8 +806,8 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 		count       int
 		loss        uint32
 		packets     uint64
-		bestJitter  int64
-		bestMOS     float32
+		worstJitter int64
+		worstMOS    float32
 	}
 	agg := make(map[voipKey]*voipAgg)
 
@@ -846,17 +847,17 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 			a.count++
 			a.loss += f.PacketLoss
 			a.packets += f.Packets
-			if mos > 0 && (a.bestMOS == 0 || mos < a.bestMOS) {
-				a.bestMOS = mos
+			if mos > 0 && (a.worstMOS == 0 || mos < a.worstMOS) {
+				a.worstMOS = mos
 			}
-			if jitter > a.bestJitter {
-				a.bestJitter = jitter
+			if jitter > a.worstJitter {
+				a.worstJitter = jitter
 			}
 		} else {
 			agg[key] = &voipAgg{
 				jitterSum: jitter, mosSum: mos, count: 1,
 				loss: f.PacketLoss, packets: f.Packets,
-				bestJitter: jitter, bestMOS: mos,
+				worstJitter: jitter, worstMOS: mos,
 			}
 		}
 	}
@@ -900,22 +901,21 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 			SrcPort:  key.srcPort, DstPort: key.dstPort,
 			Jitter:   formatJitter(avgJitter),
 			MOS:      formatMOS(avgMOS),
+			MOSVal:   avgMOS,
 			MOSClass: mosQuality(avgMOS),
 			Loss:     a.loss,
 			Packets:  a.packets,
 		})
 	}
 	sort.Slice(topFlows, func(i, j int) bool {
-		// Worst MOS first; flows without MOS go last.
-		iMOS := topFlows[i].MOS
-		jMOS := topFlows[j].MOS
-		if iMOS == "—" && jMOS != "—" {
+		// Worst MOS first; flows without MOS (MOSVal=0) go last.
+		if topFlows[i].MOSVal == 0 && topFlows[j].MOSVal > 0 {
 			return false
 		}
-		if iMOS != "—" && jMOS == "—" {
+		if topFlows[i].MOSVal > 0 && topFlows[j].MOSVal == 0 {
 			return true
 		}
-		return iMOS < jMOS
+		return topFlows[i].MOSVal < topFlows[j].MOSVal
 	})
 	if len(topFlows) > 10 {
 		topFlows = topFlows[:10]

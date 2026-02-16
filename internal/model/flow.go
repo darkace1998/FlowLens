@@ -100,11 +100,11 @@ func CalcMOS(jitterUs int64, rttUs int64, lossPercent float64) float32 {
 	}
 
 	// Equipment impairment for loss (Ie-eff).
-	// Using the ITU G.107 simplified formula with stronger loss sensitivity.
+	// Using the ITU G.107 simplified formula with loss sensitivity.
 	if lossPercent > 0 {
 		burstR := 1.0 // burst ratio for random loss
-		ie := 0.0 + 30.0*(-1.0+1.0/(1.0+lossPercent*burstR/4.0))
-		r += ie // ie is negative, subtracts from R
+		ieLoss := 30.0 * (1.0 - 1.0/(1.0+lossPercent*burstR/4.0))
+		r -= ieLoss // loss reduces R
 	}
 
 	// Clamp R to [0, 93.2].

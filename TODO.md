@@ -101,11 +101,11 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Identify **VoIP / RTP flows** (by port range 10000–20000, or SIP signaling on 5060/5061, or DPI) |
-| ❌ | Parse **jitter** from IPFIX IEs (e.g., IE 387 `rtp_jitter`) if exported |
-| ❌ | Compute **estimated MOS** from jitter, latency, and packet loss using the E-model (ITU-T G.107) |
-| ❌ | Add a **VoIP Quality** dashboard page showing active calls, jitter, MOS, packet loss |
-| ❌ | Generate advisories when MOS drops below configurable thresholds (e.g., < 3.5) |
+| ✅ | Identify **VoIP / RTP flows** (by port range 10000–20000, or SIP signaling on 5060/5061, or DPI) |
+| ✅ | Parse **jitter** from IPFIX IEs (e.g., IE 387 `rtp_jitter`) if exported |
+| ✅ | Compute **estimated MOS** from jitter, latency, and packet loss using the E-model (ITU-T G.107) |
+| ✅ | Add a **VoIP Quality** dashboard widget showing active calls, jitter, MOS, packet loss |
+| ✅ | Generate advisories when MOS drops below configurable thresholds (e.g., < 3.5) |
 
 ---
 
