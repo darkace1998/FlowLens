@@ -212,6 +212,7 @@ func decodeNFV9DataFlowSet(data []byte, sourceID uint32, templateID uint16,
 			f.Timestamp = baseTime.Add(-elapsed)
 		}
 
+		f.Classify()
 		flows = append(flows, f)
 	}
 

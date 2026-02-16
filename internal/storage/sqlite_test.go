@@ -100,6 +100,7 @@ func TestSQLiteStore_RecordFields(t *testing.T) {
 		Duration:    5 * time.Second,
 		ExporterIP:  net.ParseIP("172.16.0.1"),
 	}
+	f.Classify()
 
 	if err := store.Insert([]model.Flow{f}); err != nil {
 		t.Fatalf("Insert failed: %v", err)
@@ -159,6 +160,12 @@ func TestSQLiteStore_RecordFields(t *testing.T) {
 	}
 	if !got.ExporterIP.Equal(net.ParseIP("172.16.0.1")) {
 		t.Errorf("ExporterIP = %s, want 172.16.0.1", got.ExporterIP)
+	}
+	if got.AppProto != "HTTPS" {
+		t.Errorf("AppProto = %q, want HTTPS", got.AppProto)
+	}
+	if got.AppCat != "Web" {
+		t.Errorf("AppCat = %q, want Web", got.AppCat)
 	}
 }
 

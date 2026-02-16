@@ -237,6 +237,7 @@ func decodeIPFIXDataSet(data []byte, obsDomainID uint32, templateID uint16,
 			f.Duration = time.Duration(ctx.flowEndSysUp-ctx.flowStartSysUp) * time.Millisecond
 		}
 
+		f.Classify()
 		flows = append(flows, f)
 	}
 

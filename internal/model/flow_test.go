@@ -131,3 +131,40 @@ func TestASName(t *testing.T) {
 		}
 	}
 }
+
+func TestFlowClassify(t *testing.T) {
+	tests := []struct {
+		name     string
+		proto    uint8
+		srcPort  uint16
+		dstPort  uint16
+		wantApp  string
+		wantCat  string
+	}{
+		{"HTTPS", 6, 12345, 443, "HTTPS", "Web"},
+		{"HTTP", 6, 12345, 80, "HTTP", "Web"},
+		{"DNS", 17, 12345, 53, "DNS", "Network Services"},
+		{"SSH", 6, 12345, 22, "SSH", "Remote Access"},
+		{"SMTP", 6, 12345, 25, "SMTP", "Email"},
+		{"MySQL", 6, 12345, 3306, "MySQL", "Database"},
+		{"Other", 6, 50000, 60000, "Other", "Other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := Flow{
+				Protocol: tt.proto,
+				SrcPort:  tt.srcPort,
+				DstPort:  tt.dstPort,
+			}
+			f.Classify()
+
+			if f.AppProto != tt.wantApp {
+				t.Errorf("Classify().AppProto = %q, want %q", f.AppProto, tt.wantApp)
+			}
+			if f.AppCat != tt.wantCat {
+				t.Errorf("Classify().AppCat = %q, want %q", f.AppCat, tt.wantCat)
+			}
+		})
+	}
+}

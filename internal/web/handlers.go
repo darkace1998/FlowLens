@@ -355,7 +355,10 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		}
 
 		// Aggregate by L7 application protocol.
-		appName := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+		appName := f.AppProto
+		if appName == "" {
+			appName = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+		}
 		if e, ok := appProtoMap[appName]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -370,7 +373,10 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		}
 
 		// Aggregate by category.
-		catName := model.AppCategory(appName)
+		catName := f.AppCat
+		if catName == "" {
+			catName = model.AppCategory(appName)
+		}
 		if e, ok := categoryMap[catName]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -545,7 +551,13 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 
 	var pageFlows []FlowRow
 	for _, f := range filtered[start:end] {
-		appProto := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+		appProto := f.AppProto
+		appCat := f.AppCat
+		// Fallback for flows without pre-computed classification.
+		if appProto == "" {
+			appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+			appCat = model.AppCategory(appProto)
+		}
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp:   f.Timestamp.Format("15:04:05"),
 			SrcAddr:     model.SafeIPString(f.SrcAddr),
@@ -558,7 +570,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			Duration:    f.Duration.String(),
 			TimeAgo:     timeAgo(f.Timestamp),
 			AppProto:    appProto,
-			AppCategory: model.AppCategory(appProto),
+			AppCategory: appCat,
 		})
 	}
 

@@ -55,12 +55,18 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		src_as      INTEGER NOT NULL,
 		dst_as      INTEGER NOT NULL,
 		duration_ns INTEGER NOT NULL,
-		exporter_ip TEXT NOT NULL
+		exporter_ip TEXT NOT NULL,
+		app_proto   TEXT NOT NULL DEFAULT '',
+		app_category TEXT NOT NULL DEFAULT ''
 	)`
 	if _, err := db.Exec(createSQL); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("creating flows table: %w", err)
 	}
+
+	// Migrate existing databases: add app_proto and app_category columns if missing.
+	db.Exec("ALTER TABLE flows ADD COLUMN app_proto TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE flows ADD COLUMN app_category TEXT NOT NULL DEFAULT ''")
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {
@@ -96,8 +102,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 	stmt, err := tx.Prepare(`INSERT INTO flows
 		(timestamp, src_addr, dst_addr, src_port, dst_port, protocol,
 		 bytes, packets, tcp_flags, tos, input_iface, output_iface,
-		 src_as, dst_as, duration_ns, exporter_ip)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		 src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
@@ -122,6 +128,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 			f.DstAS,
 			f.Duration.Nanoseconds(),
 			model.SafeIPString(f.ExporterIP),
+			f.AppProto,
+			f.AppCat,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -139,7 +147,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 
 	query := "SELECT timestamp, src_addr, dst_addr, src_port, dst_port, protocol, " +
 		"bytes, packets, tcp_flags, tos, input_iface, output_iface, " +
-		"src_as, dst_as, duration_ns, exporter_ip " +
+		"src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category " +
 		"FROM flows WHERE timestamp >= ? ORDER BY timestamp DESC"
 
 	var rows *sql.Rows
@@ -171,6 +179,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 			&f.SrcAS, &f.DstAS,
 			&durationNs,
 			&exporterIP,
+			&f.AppProto, &f.AppCat,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)

@@ -8,22 +8,31 @@ import (
 
 // Flow represents a unified flow record decoded from any NetFlow/IPFIX version.
 type Flow struct {
-	Timestamp   time.Time
-	SrcAddr     net.IP
-	DstAddr     net.IP
-	SrcPort     uint16
-	DstPort     uint16
-	Protocol    uint8 // TCP=6, UDP=17, ICMP=1, etc.
-	Bytes       uint64
-	Packets     uint64
-	TCPFlags    uint8
-	ToS         uint8
-	InputIface  uint32
-	OutputIface uint32
-	SrcAS       uint32
-	DstAS       uint32
-	Duration    time.Duration
-	ExporterIP  net.IP // which device sent this flow
+	Timestamp    time.Time
+	SrcAddr      net.IP
+	DstAddr      net.IP
+	SrcPort      uint16
+	DstPort      uint16
+	Protocol     uint8 // TCP=6, UDP=17, ICMP=1, etc.
+	Bytes        uint64
+	Packets      uint64
+	TCPFlags     uint8
+	ToS          uint8
+	InputIface   uint32
+	OutputIface  uint32
+	SrcAS        uint32
+	DstAS        uint32
+	Duration     time.Duration
+	ExporterIP   net.IP // which device sent this flow
+	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
+	AppCat       string // traffic category (e.g. "Web", "Email")
+}
+
+// Classify populates AppProto and AppCat using port-based heuristic detection.
+// It should be called after all other flow fields have been set.
+func (f *Flow) Classify() {
+	f.AppProto = AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+	f.AppCat = AppCategory(f.AppProto)
 }
 
 // ProtocolName returns a human-readable name for common IP protocol numbers.

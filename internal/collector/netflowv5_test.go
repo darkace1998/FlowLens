@@ -128,6 +128,14 @@ func TestDecodeNetFlowV5_SingleRecord(t *testing.T) {
 	if !f.ExporterIP.Equal(exporterIP) {
 		t.Errorf("ExporterIP = %s, want %s", f.ExporterIP, exporterIP)
 	}
+
+	// Classify should have been called by the decoder.
+	if f.AppProto != "HTTPS" {
+		t.Errorf("AppProto = %q, want HTTPS", f.AppProto)
+	}
+	if f.AppCat != "Web" {
+		t.Errorf("AppCat = %q, want Web", f.AppCat)
+	}
 }
 
 func TestDecodeNetFlowV5_MultipleRecords(t *testing.T) {
