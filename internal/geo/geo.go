@@ -257,12 +257,20 @@ func builtinRanges() []rangeEntry {
 }
 
 // ipRange creates a rangeEntry from dotted-quad start/end IPs.
+// Panics if the IPs are invalid (should only be called with hardcoded literals).
 func ipRange(startStr, endStr, country, city string, lat, lon float64) rangeEntry {
-	startIP := net.ParseIP(startStr).To4()
-	endIP := net.ParseIP(endStr).To4()
+	startIP := net.ParseIP(startStr)
+	endIP := net.ParseIP(endStr)
+	if startIP == nil || endIP == nil {
+		panic(fmt.Sprintf("geo: invalid builtin IP range %s-%s", startStr, endStr))
+	}
+	s4, e4 := startIP.To4(), endIP.To4()
+	if s4 == nil || e4 == nil {
+		panic(fmt.Sprintf("geo: non-IPv4 builtin IP range %s-%s", startStr, endStr))
+	}
 	return rangeEntry{
-		startIP: binary.BigEndian.Uint32(startIP),
-		endIP:   binary.BigEndian.Uint32(endIP),
+		startIP: binary.BigEndian.Uint32(s4),
+		endIP:   binary.BigEndian.Uint32(e4),
 		info: Info{
 			Country:   country,
 			City:      city,

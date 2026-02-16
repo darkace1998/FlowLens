@@ -113,11 +113,11 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Integrate a **GeoIP database** (MaxMind GeoLite2 or ip2location-lite) |
-| ❌ | Add `Country`, `City`, `Latitude`, `Longitude` to enriched flow/host metadata |
-| ❌ | Add a **Geo Map** page rendering host locations on a world map (e.g., Leaflet.js with OpenStreetMap tiles) |
-| ❌ | Show country flags or codes in the Flow Explorer and Top Talkers tables |
-| ❌ | Add a config option for the GeoIP database path and auto-update schedule |
+| ✅ | Integrate a **GeoIP database** — pure-Go `internal/geo/` package with CSV loader (IP2Location LITE compatible) + built-in well-known ranges (30+ cloud/CDN providers) |
+| ✅ | Add `Country`, `City`, `Latitude`, `Longitude` to enriched flow/host metadata — HostEntry and FlowRow include geo fields |
+| ✅ | Add a **Geo Map** page rendering host locations on a world map — `/map` route with Leaflet.js + OpenStreetMap tiles |
+| ✅ | Show country codes in the Flow Explorer and Hosts tables — Src/Dst Country columns in flows, Country column in hosts |
+| ✅ | Add a config option for the GeoIP database path — `geoip_path` in StorageConfig (auto-update not yet implemented) |
 
 ---
 

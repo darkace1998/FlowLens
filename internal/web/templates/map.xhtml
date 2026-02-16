@@ -76,6 +76,6 @@ markers.forEach(function(m) {
 });
 </script>
 {{else}}
-<p class="empty">No geolocated hosts found. To enable geolocation, configure a GeoIP CSV database in your config file (geoip_path setting) or wait for traffic from known IP ranges.</p>
+<p class="empty">No geolocated hosts found. To enable geolocation, add <code>geoip_path: /path/to/IP2LOCATION-LITE-DB5.CSV</code> to the <code>storage</code> section of your config file, or wait for traffic from known IP ranges (major cloud/CDN providers are detected automatically).</p>
 {{end}}
 {{end}}
