@@ -58,3 +58,76 @@ func TestProtocolName(t *testing.T) {
 		}
 	}
 }
+
+func TestAppProtocol(t *testing.T) {
+	tests := []struct {
+		proto   uint8
+		srcPort uint16
+		dstPort uint16
+		want    string
+	}{
+		{6, 12345, 80, "HTTP"},
+		{6, 12345, 443, "HTTPS"},
+		{6, 12345, 22, "SSH"},
+		{17, 12345, 53, "DNS"},
+		{6, 12345, 25, "SMTP"},
+		{6, 12345, 3389, "RDP"},
+		{6, 12345, 3306, "MySQL"},
+		{6, 12345, 5432, "PostgreSQL"},
+		{17, 12345, 123, "NTP"},
+		{6, 80, 12345, "HTTP"},   // reversed: src is well-known
+		{1, 0, 0, "ICMP"},        // ICMP protocol
+		{58, 0, 0, "ICMP"},       // ICMPv6
+		{6, 50000, 60000, "Other"}, // unknown ports
+	}
+
+	for _, tt := range tests {
+		got := AppProtocol(tt.proto, tt.srcPort, tt.dstPort)
+		if got != tt.want {
+			t.Errorf("AppProtocol(%d, %d, %d) = %q, want %q", tt.proto, tt.srcPort, tt.dstPort, got, tt.want)
+		}
+	}
+}
+
+func TestAppCategory(t *testing.T) {
+	tests := []struct {
+		appProto string
+		want     string
+	}{
+		{"HTTP", "Web"},
+		{"HTTPS", "Web"},
+		{"DNS", "Network Services"},
+		{"SSH", "Remote Access"},
+		{"SMTP", "Email"},
+		{"MySQL", "Database"},
+		{"FTP", "File Transfer"},
+		{"Other", "Other"},
+	}
+
+	for _, tt := range tests {
+		got := AppCategory(tt.appProto)
+		if got != tt.want {
+			t.Errorf("AppCategory(%q) = %q, want %q", tt.appProto, got, tt.want)
+		}
+	}
+}
+
+func TestASName(t *testing.T) {
+	tests := []struct {
+		asn  uint32
+		want string
+	}{
+		{15169, "Google"},
+		{13335, "Cloudflare"},
+		{16509, "Amazon (AWS)"},
+		{0, "Private/Unknown"},
+		{99999, "AS99999"},
+	}
+
+	for _, tt := range tests {
+		got := ASName(tt.asn)
+		if got != tt.want {
+			t.Errorf("ASName(%d) = %q, want %q", tt.asn, got, tt.want)
+		}
+	}
+}
