@@ -131,11 +131,9 @@ func DecodeNetFlowV9(data []byte, exporterIP net.IP, cache *NFV9TemplateCache) (
 			}
 		}
 
+		// RFC 3954: flowSetLen already includes any padding bytes for
+		// 4-byte alignment, so no additional padding adjustment is needed.
 		offset += flowSetLen
-		// FlowSets are padded to 4-byte boundary
-		if offset%4 != 0 {
-			offset += 4 - (offset % 4)
-		}
 	}
 
 	return flows, nil

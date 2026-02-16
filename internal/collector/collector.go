@@ -38,6 +38,13 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 // It listens on both NetFlowPort and IPFIXPort (if configured and different).
 // It blocks until all connections are closed or an unrecoverable error occurs.
 func (c *Collector) Start() error {
+	if c.cfg.NetFlowPort < 0 || c.cfg.NetFlowPort > 65535 {
+		return fmt.Errorf("invalid NetFlow port: %d (must be 0–65535)", c.cfg.NetFlowPort)
+	}
+	if c.cfg.IPFIXPort < 0 || c.cfg.IPFIXPort > 65535 {
+		return fmt.Errorf("invalid IPFIX port: %d (must be 0–65535)", c.cfg.IPFIXPort)
+	}
+
 	ports := []int{c.cfg.NetFlowPort}
 	if c.cfg.IPFIXPort > 0 && c.cfg.IPFIXPort != c.cfg.NetFlowPort {
 		ports = append(ports, c.cfg.IPFIXPort)
@@ -138,6 +145,7 @@ func (c *Collector) Stop() {
 	for _, conn := range c.conns {
 		conn.Close()
 	}
+	c.conns = nil
 }
 
 // Addr returns the local address of the first listener,

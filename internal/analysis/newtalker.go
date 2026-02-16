@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -28,7 +29,11 @@ func (NewTalkerDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisC
 		recentWindow = 60 * time.Second
 	}
 
-	allFlows, _ := store.Recent(10*time.Minute, 0)
+	allFlows, err := store.Recent(10*time.Minute, 0)
+	if err != nil {
+		logging.Default().Error("NewTalkerDetector: failed to query recent flows: %v", err)
+		return nil
+	}
 	if len(allFlows) == 0 {
 		return nil
 	}

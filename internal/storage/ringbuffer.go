@@ -54,7 +54,7 @@ func (rb *RingBuffer) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		idx := (rb.head - 1 - i + rb.capacity) % rb.capacity
 		f := rb.buf[idx]
 		if f.Timestamp.Before(cutoff) {
-			break
+			continue
 		}
 		result = append(result, f)
 		if limit > 0 && len(result) >= limit {

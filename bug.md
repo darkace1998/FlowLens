@@ -180,17 +180,17 @@ During shutdown, `coll.Stop()` is called first (which closes UDP connections), t
 
 ## Summary
 
-| # | Issue | Severity | Category |
-|---|-------|----------|----------|
-| 1 | `ring_buffer_duration` config ignored | Medium | Config |
-| 2 | Nil-pointer panic on nil IP addresses | High | Crash |
-| 3 | NFv9 FlowSet padding over-skip | Low | Protocol |
-| 4 | Relative static file path | Medium | Deployment |
-| 5 | Templates re-parsed every request | Low | Performance |
-| 6 | RingBuffer early-break on out-of-order data | Medium | Correctness |
-| 7 | Analyzer errors silently discarded | Low | Error handling |
-| 8 | `Stop()` doesn't reset `conns` slice | Low | Lifecycle |
-| 9 | No port range validation | Low | Config |
-| 10 | Pagination renders all page links | Low | UI/UX |
-| 11 | No SQLite connection pool limits | Low | Database |
-| 12 | Shutdown race condition | Low | Concurrency |
+| # | Issue | Severity | Category | Status |
+|---|-------|----------|----------|--------|
+| 1 | `ring_buffer_duration` config ignored | Medium | Config | ✅ Fixed |
+| 2 | Nil-pointer panic on nil IP addresses | High | Crash | ✅ Fixed |
+| 3 | NFv9 FlowSet padding over-skip | Low | Protocol | ✅ Fixed |
+| 4 | Relative static file path | Medium | Deployment | ✅ Fixed |
+| 5 | Templates re-parsed every request | Low | Performance | ✅ Fixed |
+| 6 | RingBuffer early-break on out-of-order data | Medium | Correctness | ✅ Fixed |
+| 7 | Analyzer errors silently discarded | Low | Error handling | ✅ Fixed |
+| 8 | `Stop()` doesn't reset `conns` slice | Low | Lifecycle | ✅ Fixed |
+| 9 | No port range validation | Low | Config | ✅ Fixed |
+| 10 | Pagination renders all page links | Low | UI/UX | ✅ Fixed |
+| 11 | No SQLite connection pool limits | Low | Database | ✅ Fixed |
+| 12 | Shutdown race condition | Low | Concurrency | ✅ Fixed |

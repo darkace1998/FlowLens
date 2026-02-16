@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -48,7 +50,11 @@ func main() {
 	defer sqlStore.Close()
 
 	// Flow handler: fan-out to both storage backends.
+	// Use a WaitGroup to track in-flight handler calls for clean shutdown.
+	var handlerWg sync.WaitGroup
 	handler := func(flows []model.Flow) {
+		handlerWg.Add(1)
+		defer handlerWg.Done()
 		if err := ringBuf.Insert(flows); err != nil {
 			log.Warn("Ring buffer insert error: %v", err)
 		}
@@ -81,7 +87,17 @@ func main() {
 	go engine.Start()
 
 	// Start web server.
-	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, "static", engine)
+	// Resolve static directory relative to binary location if "static" doesn't exist in CWD.
+	staticDir := "static"
+	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		if exe, err := os.Executable(); err == nil {
+			candidate := filepath.Join(filepath.Dir(exe), "static")
+			if _, err := os.Stat(candidate); err == nil {
+				staticDir = candidate
+			}
+		}
+	}
+	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine)
 	srv.SetAboutInfo(cfg, Version, time.Now())
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -98,6 +114,7 @@ func main() {
 
 	log.Info("Shutting down…")
 	coll.Stop()
+	handlerWg.Wait() // Wait for in-flight flow handlers to complete before closing storage.
 	engine.Stop()
 	if err := srv.Stop(); err != nil {
 		log.Warn("Web server shutdown error: %v", err)

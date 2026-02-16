@@ -28,6 +28,7 @@ var funcMap = template.FuncMap{
 	"timeAgo":       timeAgo,
 	"formatTime":    formatTime,
 	"seq":           seq,
+	"pageWindow":    pageWindow,
 	"add":           func(a, b int) int { return a + b },
 	"sub":           func(a, b int) int { return a - b },
 	"pctOf":         pctOf,
@@ -126,6 +127,32 @@ func seq(start, end int) []int {
 	return s
 }
 
+// pageWindow returns a sliding window of page numbers around the current page,
+// showing at most 5 pages centered on the current page.
+func pageWindow(currentPage, totalPages int) []int {
+	const windowSize = 5
+	start := currentPage - windowSize/2
+	end := start + windowSize - 1
+
+	if start < 1 {
+		start = 1
+		end = start + windowSize - 1
+	}
+	if end > totalPages {
+		end = totalPages
+		start = end - windowSize + 1
+		if start < 1 {
+			start = 1
+		}
+	}
+
+	var pages []int
+	for i := start; i <= end; i++ {
+		pages = append(pages, i)
+	}
+	return pages
+}
+
 func pctOf(part, total uint64) float64 {
 	if total == 0 {
 		return 0
@@ -173,7 +200,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	window := 10 * time.Minute
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
 		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
@@ -183,15 +213,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := buildDashboardData(flows, window)
 
-	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/dashboard.xhtml")
-	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		logging.Default().Error("Template parse error: %v", err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+	if err := s.tmplDashboard.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
 }
@@ -206,7 +229,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		totalBytes += f.Bytes
 		totalPkts += f.Packets
 
-		src := f.SrcAddr.String()
+		src := safeIPString(f.SrcAddr)
 		if e, ok := srcMap[src]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -214,7 +237,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 			srcMap[src] = &TalkerEntry{IP: src, Bytes: f.Bytes, Packets: f.Packets}
 		}
 
-		dst := f.DstAddr.String()
+		dst := safeIPString(f.DstAddr)
 		if e, ok := dstMap[dst]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -329,8 +352,12 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 
-	// Fetch all recent flows from the ring buffer (last 10 minutes).
-	allFlows, err := s.ringBuf.Recent(10*time.Minute, 0)
+	// Fetch all recent flows from the ring buffer using the configured window.
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
 	if err != nil {
 		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
 		logging.Default().Error("Flows query error: %v", err)
@@ -359,8 +386,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	for _, f := range filtered[start:end] {
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp: f.Timestamp.Format("15:04:05"),
-			SrcAddr:   f.SrcAddr.String(),
-			DstAddr:   f.DstAddr.String(),
+			SrcAddr:   safeIPString(f.SrcAddr),
+			DstAddr:   safeIPString(f.DstAddr),
 			SrcPort:   f.SrcPort,
 			DstPort:   f.DstPort,
 			Protocol:  model.ProtocolName(f.Protocol),
@@ -385,15 +412,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterProtocol: filterProto,
 	}
 
-	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/flows.xhtml")
-	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		logging.Default().Error("Template parse error: %v", err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+	if err := s.tmplFlows.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
 }
@@ -448,8 +468,19 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.F
 }
 
 func matchIP(ip net.IP, filter string) bool {
+	if ip == nil {
+		return false
+	}
 	// Support prefix matching (e.g. "10.0.1")
 	return strings.HasPrefix(ip.String(), filter)
+}
+
+// safeIPString converts a net.IP to string, returning "0.0.0.0" for nil IPs.
+func safeIPString(ip net.IP) string {
+	if ip == nil {
+		return "0.0.0.0"
+	}
+	return ip.String()
 }
 
 // --- Advisories page ---
@@ -469,15 +500,8 @@ func (s *Server) handleAdvisories(w http.ResponseWriter, r *http.Request) {
 		Advisories: advisories,
 	}
 
-	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/advisories.xhtml")
-	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		logging.Default().Error("Template parse error: %v", err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+	if err := s.tmplAdvisories.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
 }
@@ -543,15 +567,8 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		FlowCount:        s.ringBuf.Len(),
 	}
 
-	tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/about.xhtml")
-	if err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		logging.Default().Error("Template parse error: %v", err)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+	if err := s.tmplAbout.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
 }

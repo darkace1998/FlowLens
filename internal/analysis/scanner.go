@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -17,7 +18,11 @@ func (ScanDetector) Name() string { return "Port Scan Detector" }
 
 // Analyze returns advisories about potential port scans or sweeps.
 func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, _ := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(10*time.Minute, 0)
+	if err != nil {
+		logging.Default().Error("ScanDetector: failed to query recent flows: %v", err)
+		return nil
+	}
 	if len(flows) == 0 {
 		return nil
 	}
