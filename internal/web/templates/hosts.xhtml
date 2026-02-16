@@ -1,0 +1,57 @@
+{{define "title"}}Active Hosts{{end}}
+{{define "head"}}<meta http-equiv="refresh" content="30" />{{end}}
+{{define "content"}}
+<h1>Active Hosts</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Unique Hosts</div>
+    <div class="stat-value">{{.TotalHosts}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Bytes</div>
+    <div class="stat-value">{{formatBytes .TotalBytes}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Window</div>
+    <div class="stat-value">{{.Window}}</div>
+  </div>
+</div>
+
+{{if .Hosts}}
+<div class="panel">
+  <p class="flow-summary">Showing {{.TotalHosts}} active hosts in the last {{.Window}}.</p>
+  <table class="flows-table">
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>Bytes</th>
+        <th>Packets</th>
+        <th>Flows</th>
+        <th>First Seen</th>
+        <th>Last Seen</th>
+        <th>Bandwidth %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Hosts}}
+      <tr>
+        <td><a href="/flows?src_ip={{.IP}}">{{.IP}}</a></td>
+        <td>{{formatBytes .Bytes}}</td>
+        <td>{{formatPkts .Packets}}</td>
+        <td>{{.FlowCount}}</td>
+        <td>{{formatTime .FirstSeen}}</td>
+        <td>{{formatTime .LastSeen}}</td>
+        <td>
+          <div class="bar-bg"><div class="bar-fill" style="width:{{.Pct}}%"></div></div>
+          {{.Pct}}%
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<p class="empty">No active hosts detected.</p>
+{{end}}
+{{end}}

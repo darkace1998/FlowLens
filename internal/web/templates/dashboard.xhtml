@@ -1,4 +1,5 @@
 {{define "title"}}Dashboard{{end}}
+{{define "head"}}<meta http-equiv="refresh" content="30" />{{end}}
 {{define "content"}}
 <h1>Dashboard</h1>
 
@@ -19,6 +20,14 @@
   <div class="stat-card">
     <div class="stat-label">Flows ({{.Window}})</div>
     <div class="stat-value">{{.FlowCount}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Flows (last 60s)</div>
+    <div class="stat-value">{{.ActiveFlows}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Hosts</div>
+    <div class="stat-value"><a href="/hosts">{{.ActiveHosts}}</a></div>
   </div>
 </div>
 

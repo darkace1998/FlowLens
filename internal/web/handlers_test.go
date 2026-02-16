@@ -234,6 +234,121 @@ func TestBuildDashboardData(t *testing.T) {
 	if data.TopSrc[0].IP != "10.0.1.2" {
 		t.Errorf("TopSrc[0] = %s, want 10.0.1.2 (highest bytes)", data.TopSrc[0].IP)
 	}
+	// Active hosts: 10.0.1.1, 10.0.1.2, 192.168.1.1, 192.168.1.2 = 4 unique
+	if data.ActiveHosts != 4 {
+		t.Errorf("ActiveHosts = %d, want 4", data.ActiveHosts)
+	}
+	// All flows were just created with time.Now(), so all 3 should be active.
+	if data.ActiveFlows != 3 {
+		t.Errorf("ActiveFlows = %d, want 3", data.ActiveFlows)
+	}
+}
+
+func TestHosts_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/hosts", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Active Hosts") {
+		t.Error("response should contain 'Active Hosts'")
+	}
+	if !strings.Contains(body, "No active hosts") {
+		t.Error("empty hosts page should show 'No active hosts'")
+	}
+}
+
+func TestHosts_WithData(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/hosts", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "10.0.1.1") {
+		t.Error("hosts page should contain host IP 10.0.1.1")
+	}
+	if !strings.Contains(body, "192.168.1.1") {
+		t.Error("hosts page should contain host IP 192.168.1.1")
+	}
+	if !strings.Contains(body, "4 active hosts") {
+		t.Errorf("hosts page should show '4 active hosts', body snippet: %s", body[:min(len(body), 500)])
+	}
+}
+
+func TestBuildHostsData(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+
+	data := buildHostsData(flows, 10*time.Minute)
+
+	// 4 unique hosts: 10.0.1.1, 10.0.1.2, 192.168.1.1, 192.168.1.2
+	if data.TotalHosts != 4 {
+		t.Errorf("TotalHosts = %d, want 4", data.TotalHosts)
+	}
+	if data.TotalBytes != 15200 {
+		t.Errorf("TotalBytes = %d, want 15200", data.TotalBytes)
+	}
+	// Hosts should be sorted by bytes descending.
+	if len(data.Hosts) < 2 {
+		t.Fatalf("expected at least 2 hosts, got %d", len(data.Hosts))
+	}
+	if data.Hosts[0].Bytes < data.Hosts[1].Bytes {
+		t.Error("hosts should be sorted by bytes descending")
+	}
+	// Each host should have FlowCount > 0.
+	for _, h := range data.Hosts {
+		if h.FlowCount == 0 {
+			t.Errorf("host %s should have FlowCount > 0", h.IP)
+		}
+		if h.FirstSeen.IsZero() {
+			t.Errorf("host %s should have non-zero FirstSeen", h.IP)
+		}
+		if h.LastSeen.IsZero() {
+			t.Errorf("host %s should have non-zero LastSeen", h.IP)
+		}
+	}
+}
+
+func TestDashboard_ActiveFlowsAndHosts(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Active Flows") {
+		t.Error("dashboard should show 'Active Flows' stat card")
+	}
+	if !strings.Contains(body, "Active Hosts") {
+		t.Error("dashboard should show 'Active Hosts' stat card")
+	}
 }
 
 func TestFilterFlows(t *testing.T) {

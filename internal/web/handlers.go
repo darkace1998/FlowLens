@@ -186,10 +186,33 @@ type DashboardData struct {
 	BPS          string
 	PPS          string
 	FlowCount    int
+	ActiveFlows  int
+	ActiveHosts  int
 	Window       time.Duration
 	TopSrc       []TalkerEntry
 	TopDst       []TalkerEntry
 	Protocols    []ProtocolEntry
+}
+
+// --- Active Hosts data structures ---
+
+// HostEntry represents a unique host with aggregate traffic statistics.
+type HostEntry struct {
+	IP        string
+	Bytes     uint64
+	Packets   uint64
+	FlowCount int
+	FirstSeen time.Time
+	LastSeen  time.Time
+	Pct       float64
+}
+
+// HostsPageData holds all data for the active hosts template.
+type HostsPageData struct {
+	Hosts      []HostEntry
+	TotalHosts int
+	TotalBytes uint64
+	Window     time.Duration
 }
 
 // --- Dashboard handler ---
@@ -224,6 +247,10 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	srcMap := make(map[string]*TalkerEntry)
 	dstMap := make(map[string]*TalkerEntry)
 	protoMap := make(map[uint8]*ProtocolEntry)
+	uniqueHosts := make(map[string]struct{})
+
+	now := time.Now()
+	activeFlows := 0
 
 	for _, f := range flows {
 		totalBytes += f.Bytes
@@ -256,6 +283,14 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 				Packets: f.Packets,
 			}
 		}
+
+		uniqueHosts[src] = struct{}{}
+		uniqueHosts[dst] = struct{}{}
+
+		// A flow is "active" if it was seen in the last 60 seconds.
+		if now.Sub(f.Timestamp) <= 60*time.Second {
+			activeFlows++
+		}
 	}
 
 	topSrc := topN(srcMap, totalBytes, 10)
@@ -274,6 +309,8 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		BPS:          formatBPS(totalBytes, window),
 		PPS:          formatPPS(totalPkts, window),
 		FlowCount:    len(flows),
+		ActiveFlows:  activeFlows,
+		ActiveHosts:  len(uniqueHosts),
 		Window:       window,
 		TopSrc:       topSrc,
 		TopDst:       topDst,
@@ -473,6 +510,97 @@ func matchIP(ip net.IP, filter string) bool {
 	}
 	// Support prefix matching (e.g. "10.0.1")
 	return strings.HasPrefix(ip.String(), filter)
+}
+
+// --- Active Hosts handler ---
+
+func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	flows, err := s.ringBuf.Recent(window, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("Hosts query error: %v", err)
+		return
+	}
+
+	data := buildHostsData(flows, window)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplHosts.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
+	type hostAccum struct {
+		Bytes     uint64
+		Packets   uint64
+		FlowCount int
+		FirstSeen time.Time
+		LastSeen  time.Time
+	}
+
+	hostMap := make(map[string]*hostAccum)
+	var totalBytes uint64
+
+	for _, f := range flows {
+		totalBytes += f.Bytes
+
+		// Track both source and destination as active hosts.
+		for _, ip := range []string{model.SafeIPString(f.SrcAddr), model.SafeIPString(f.DstAddr)} {
+			if h, ok := hostMap[ip]; ok {
+				h.Bytes += f.Bytes
+				h.Packets += f.Packets
+				h.FlowCount++
+				if f.Timestamp.Before(h.FirstSeen) {
+					h.FirstSeen = f.Timestamp
+				}
+				if f.Timestamp.After(h.LastSeen) {
+					h.LastSeen = f.Timestamp
+				}
+			} else {
+				hostMap[ip] = &hostAccum{
+					Bytes:     f.Bytes,
+					Packets:   f.Packets,
+					FlowCount: 1,
+					FirstSeen: f.Timestamp,
+					LastSeen:  f.Timestamp,
+				}
+			}
+		}
+	}
+
+	hosts := make([]HostEntry, 0, len(hostMap))
+	var totalHostBytes uint64
+	for _, h := range hostMap {
+		totalHostBytes += h.Bytes
+	}
+	for ip, h := range hostMap {
+		hosts = append(hosts, HostEntry{
+			IP:        ip,
+			Bytes:     h.Bytes,
+			Packets:   h.Packets,
+			FlowCount: h.FlowCount,
+			FirstSeen: h.FirstSeen,
+			LastSeen:  h.LastSeen,
+			Pct:       pctOf(h.Bytes, totalHostBytes),
+		})
+	}
+
+	// Sort descending by bytes.
+	sort.Slice(hosts, func(i, j int) bool {
+		return hosts[i].Bytes > hosts[j].Bytes
+	})
+
+	return HostsPageData{
+		Hosts:      hosts,
+		TotalHosts: len(hosts),
+		TotalBytes: totalBytes,
+		Window:     window,
+	}
 }
 
 // --- Advisories page ---

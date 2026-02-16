@@ -21,10 +21,10 @@
 | ✅ | Collect flows in real time via UDP (NetFlow v5/v9, IPFIX) |
 | ✅ | In-memory ring buffer for recent flows (~10 min window) |
 | ✅ | Dashboard shows total throughput (bytes/s, packets/s) |
-| ❌ | Add an **Active Hosts** view listing unique src/dst IPs currently communicating |
-| ❌ | Add an **Active Flows** counter and table showing live (not yet expired) flows |
-| ❌ | Add **auto-refresh / WebSocket push** so the dashboard updates without manual reload |
-| ❌ | Show per-host bandwidth, packet count, first-seen/last-seen timestamps |
+| ✅ | Add an **Active Hosts** view listing unique src/dst IPs currently communicating |
+| ✅ | Add an **Active Flows** counter and table showing live (not yet expired) flows |
+| ✅ | Add **auto-refresh / WebSocket push** so the dashboard updates without manual reload |
+| ✅ | Show per-host bandwidth, packet count, first-seen/last-seen timestamps |
 
 ---
 

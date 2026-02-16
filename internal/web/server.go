@@ -29,6 +29,7 @@ type Server struct {
 	tmplFlows      *template.Template
 	tmplAdvisories *template.Template
 	tmplAbout      *template.Template
+	tmplHosts      *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -51,9 +52,11 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplFlows = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/flows.xhtml"))
 	s.tmplAdvisories = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/advisories.xhtml"))
 	s.tmplAbout = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/about.xhtml"))
+	s.tmplHosts = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/hosts.xhtml"))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
+	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/advisories", s.handleAdvisories)
 	s.mux.HandleFunc("/about", s.handleAbout)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
