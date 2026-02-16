@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,11 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+// isColumnExistsError returns true if the error indicates a duplicate column.
+func isColumnExistsError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column")
+}
 
 // SQLiteStore persists flow records in a SQLite database with WAL mode.
 type SQLiteStore struct {
@@ -65,8 +71,17 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 	}
 
 	// Migrate existing databases: add app_proto and app_category columns if missing.
-	db.Exec("ALTER TABLE flows ADD COLUMN app_proto TEXT NOT NULL DEFAULT ''")
-	db.Exec("ALTER TABLE flows ADD COLUMN app_category TEXT NOT NULL DEFAULT ''")
+	// Errors are expected if columns already exist; only log unexpected failures.
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN app_proto TEXT NOT NULL DEFAULT ''"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration app_proto: %v", err)
+		}
+	}
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN app_category TEXT NOT NULL DEFAULT ''"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration app_category: %v", err)
+		}
+	}
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {

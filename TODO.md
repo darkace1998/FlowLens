@@ -49,11 +49,11 @@
 |--------|------|
 | ✅ | L3/L4 protocol identification (TCP, UDP, ICMP, GRE, ESP, ICMPv6) |
 | ✅ | Protocol distribution analysis in the analysis engine |
-| ❌ | Implement **Deep Packet Inspection (DPI)** integration (bind to nDPI C library via CGo, or use a pure-Go heuristic engine) |
-| ❌ | Map well-known destination ports to application names when DPI is unavailable (port 443→HTTPS, 53→DNS, 22→SSH, etc.) |
-| ❌ | Extend the `Flow` struct with `AppProtocol string` and `AppCategory string` fields |
-| ❌ | Store and query application protocol data in SQLite |
-| ❌ | Add protocol/application columns to the Flow Explorer table |
+| ✅ | Pure-Go heuristic engine for **application protocol detection** via `AppProtocol()` (port-based, 20+ protocols) and `Classify()` method |
+| ✅ | Map well-known destination ports to application names (port 443→HTTPS, 53→DNS, 22→SSH, 80→HTTP, 25→SMTP, etc.) |
+| ✅ | Extend the `Flow` struct with `AppProto string` and `AppCat string` fields, auto-populated by `Classify()` |
+| ✅ | Store and query application protocol data in SQLite (`app_proto`, `app_category` columns with migration) |
+| ✅ | Add protocol/application columns to the Flow Explorer table |
 
 ---
 
