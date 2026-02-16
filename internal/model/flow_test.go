@@ -168,3 +168,100 @@ func TestFlowClassify(t *testing.T) {
 		})
 	}
 }
+
+func TestCalcThroughput(t *testing.T) {
+	f := Flow{Bytes: 10000, Duration: 5 * time.Second}
+	f.CalcThroughput()
+
+	// 10000 bytes * 8 bits / 5 seconds = 16000 bps
+	if f.ThroughputBPS != 16000 {
+		t.Errorf("ThroughputBPS = %f, want 16000", f.ThroughputBPS)
+	}
+
+	// Zero duration should not panic.
+	f2 := Flow{Bytes: 1000, Duration: 0}
+	f2.CalcThroughput()
+	if f2.ThroughputBPS != 0 {
+		t.Errorf("ThroughputBPS with zero duration = %f, want 0", f2.ThroughputBPS)
+	}
+}
+
+func TestClassifySetsThruput(t *testing.T) {
+	f := Flow{
+		Protocol: 6,
+		SrcPort:  12345,
+		DstPort:  443,
+		Bytes:    1000,
+		Duration: 1 * time.Second,
+	}
+	f.Classify()
+	if f.ThroughputBPS != 8000 {
+		t.Errorf("Classify should set ThroughputBPS=8000, got %f", f.ThroughputBPS)
+	}
+}
+
+func TestFlowKey(t *testing.T) {
+	// FlowKey should be canonical regardless of direction.
+	key1 := FlowKey(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 12345, 80, 6)
+	key2 := FlowKey(net.ParseIP("10.0.0.2"), net.ParseIP("10.0.0.1"), 80, 12345, 6)
+
+	if key1 != key2 {
+		t.Errorf("FlowKey should be same regardless of direction: %q != %q", key1, key2)
+	}
+
+	// Different protocol should yield different key.
+	key3 := FlowKey(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 12345, 80, 17)
+	if key1 == key3 {
+		t.Error("FlowKey should differ for different protocols")
+	}
+}
+
+func TestStitchFlows(t *testing.T) {
+	now := time.Now()
+
+	flows := []Flow{
+		// Client → Server
+		{
+			Timestamp: now,
+			SrcAddr:   net.ParseIP("10.0.0.1"),
+			DstAddr:   net.ParseIP("10.0.0.2"),
+			SrcPort:   12345,
+			DstPort:   80,
+			Protocol:  6,
+			Bytes:     5000,
+			Duration:  2 * time.Second,
+		},
+		// Server → Client (reverse 5-tuple, 500µs later)
+		{
+			Timestamp: now.Add(500 * time.Microsecond),
+			SrcAddr:   net.ParseIP("10.0.0.2"),
+			DstAddr:   net.ParseIP("10.0.0.1"),
+			SrcPort:   80,
+			DstPort:   12345,
+			Protocol:  6,
+			Bytes:     10000,
+			Duration:  2 * time.Second,
+		},
+	}
+
+	StitchFlows(flows)
+
+	// Both flows should have throughput computed.
+	if flows[0].ThroughputBPS <= 0 {
+		t.Error("flows[0] should have ThroughputBPS > 0 after stitching")
+	}
+	if flows[1].ThroughputBPS <= 0 {
+		t.Error("flows[1] should have ThroughputBPS > 0 after stitching")
+	}
+
+	// At least one should have RTT set from timestamp correlation.
+	if flows[0].RTTMicros == 0 && flows[1].RTTMicros == 0 {
+		t.Error("at least one flow should have RTTMicros > 0 after stitching")
+	}
+
+	// RTT should be ~500 microseconds.
+	rtt := flows[1].RTTMicros
+	if rtt != 500 {
+		t.Errorf("RTTMicros = %d, want 500", rtt)
+	}
+}

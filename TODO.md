@@ -75,12 +75,12 @@
 
 | Status | Task |
 |--------|------|
-| ✅ | Per-flow throughput derivable from `Bytes / Duration` |
-| ❌ | Parse **RTT** from NetFlow v9 / IPFIX option templates that export latency fields (e.g., IPFIX IE 352 `flowStartMicroseconds`, IE 160 `minimumTTL`) |
-| ❌ | Compute **application response time** when client→server and server→client flows are correlated |
-| ❌ | Add **flow stitching** to correlate bidirectional flows (match on 5-tuple reversal) |
-| ❌ | Store and display RTT and latency metrics in the Flow Explorer and Dashboard |
-| ❌ | Add a **Latency & Throughput** dashboard widget with percentile breakdowns (p50, p95, p99) |
+| ✅ | Per-flow throughput computed and stored via `CalcThroughput()` (Bytes×8 / Duration) |
+| ✅ | Parse **RTT** from NetFlow v9 / IPFIX option templates — `RTTMicros` field on Flow struct, stored in SQLite `rtt_us` column |
+| ✅ | Compute **application response time** via bidirectional flow correlation (`StitchFlows`) |
+| ✅ | **Flow stitching** correlates bidirectional flows by canonical 5-tuple reversal (`FlowKey`) |
+| ✅ | Store and display RTT and throughput metrics in Flow Explorer (Throughput/RTT columns) and Dashboard |
+| ✅ | **Throughput & RTT Percentiles** dashboard widget with p50, p95, p99 breakdowns |
 
 ---
 

@@ -88,7 +88,6 @@ func StitchFlows(flows []Flow) {
 	}
 }
 
-
 // Classify populates AppProto and AppCat using port-based heuristic detection,
 // and computes ThroughputBPS. It should be called after all other flow fields have been set.
 func (f *Flow) Classify() {

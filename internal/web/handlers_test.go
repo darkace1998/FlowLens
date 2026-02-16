@@ -776,3 +776,131 @@ func TestChooseBucket(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatThroughput(t *testing.T) {
+	tests := []struct {
+		bps  float64
+		want string
+	}{
+		{0, "—"},
+		{500, "500 bps"},
+		{5000, "5.00 Kbps"},
+		{5000000, "5.00 Mbps"},
+		{5000000000, "5.00 Gbps"},
+	}
+	for _, tt := range tests {
+		got := formatThroughput(tt.bps)
+		if got != tt.want {
+			t.Errorf("formatThroughput(%f) = %q, want %q", tt.bps, got, tt.want)
+		}
+	}
+}
+
+func TestFormatRTT(t *testing.T) {
+	tests := []struct {
+		us   int64
+		want string
+	}{
+		{0, "—"},
+		{500, "500µs"},
+		{1500, "1.5ms"},
+		{150000, "150.0ms"},
+		{1500000, "1.50s"},
+	}
+	for _, tt := range tests {
+		got := formatRTT(tt.us)
+		if got != tt.want {
+			t.Errorf("formatRTT(%d) = %q, want %q", tt.us, got, tt.want)
+		}
+	}
+}
+
+func TestComputeLatencyStats(t *testing.T) {
+	flows := []model.Flow{
+		{Bytes: 1000, Duration: 1 * time.Second, ThroughputBPS: 8000, RTTMicros: 100},
+		{Bytes: 2000, Duration: 1 * time.Second, ThroughputBPS: 16000, RTTMicros: 500},
+		{Bytes: 3000, Duration: 1 * time.Second, ThroughputBPS: 24000, RTTMicros: 1000},
+		{Bytes: 4000, Duration: 1 * time.Second, ThroughputBPS: 32000},
+	}
+
+	stats := computeLatencyStats(flows)
+
+	if stats.FlowsWithRTT != 3 {
+		t.Errorf("FlowsWithRTT = %d, want 3", stats.FlowsWithRTT)
+	}
+	if stats.FlowsWithThru != 4 {
+		t.Errorf("FlowsWithThru = %d, want 4", stats.FlowsWithThru)
+	}
+	if stats.P50RTT == "" {
+		t.Error("P50RTT should not be empty")
+	}
+	if stats.P95RTT == "" {
+		t.Error("P95RTT should not be empty")
+	}
+	if stats.P50Thru == "" {
+		t.Error("P50Thru should not be empty")
+	}
+}
+
+func TestDashboard_ThroughputWidget(t *testing.T) {
+	s, rb := newTestServer(t)
+	f := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f.Duration = 5 * time.Second
+	f.Classify()
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Throughput Percentiles") {
+		t.Error("dashboard should show 'Throughput Percentiles' when flows have duration > 0")
+	}
+}
+
+func TestFlows_ThroughputColumn(t *testing.T) {
+	s, rb := newTestServer(t)
+	f := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, 6, 10000, 100)
+	f.Duration = 2 * time.Second
+	f.Classify()
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Throughput") {
+		t.Error("flows page should show Throughput column header")
+	}
+	if !strings.Contains(body, "RTT") {
+		t.Error("flows page should show RTT column header")
+	}
+	// 10000 bytes * 8 / 2s = 40000 bps = 40.00 Kbps
+	if !strings.Contains(body, "Kbps") {
+		t.Error("flows page should show throughput value in Kbps")
+	}
+}
+
+func TestPercentileInt64(t *testing.T) {
+	sorted := []int64{100, 200, 300, 400, 500}
+	p50 := percentileInt64(sorted, 50)
+	if p50 != 300 {
+		t.Errorf("p50 = %d, want 300", p50)
+	}
+	p99 := percentileInt64(sorted, 99)
+	if p99 != 500 {
+		t.Errorf("p99 = %d, want 500", p99)
+	}
+	empty := percentileInt64(nil, 50)
+	if empty != 0 {
+		t.Errorf("percentile of empty = %d, want 0", empty)
+	}
+}
