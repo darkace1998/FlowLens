@@ -92,22 +92,25 @@ func main() {
 			if ifCfg.Listen != "" {
 				extraCfg := cfg.Collector
 				// Parse port from listen address.
-				_, portStr, _ := splitHostPort(ifCfg.Listen)
-				if portStr != "" {
-					port := 0
-					fmt.Sscanf(portStr, "%d", &port)
-					if port > 0 {
-						extraCfg.NetFlowPort = port
-						extraCfg.IPFIXPort = 0
-						extraColl := collector.New(extraCfg, handler)
-						go func(name string) {
-							if err := extraColl.Start(); err != nil {
-								log.Error("Collector %q error: %v", name, err)
-							}
-						}(ifCfg.Name)
-						log.Info("Started additional collector on %s (%s)", ifCfg.Listen, ifCfg.Name)
-					}
+				_, portStr, err := splitHostPort(ifCfg.Listen)
+				if err != nil {
+					log.Warn("Invalid listen address %q for interface %q: %v", ifCfg.Listen, ifCfg.Name, err)
+					continue
 				}
+				port := 0
+				if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil || port <= 0 {
+					log.Warn("Invalid port %q for interface %q", portStr, ifCfg.Name)
+					continue
+				}
+				extraCfg.NetFlowPort = port
+				extraCfg.IPFIXPort = 0
+				extraColl := collector.New(extraCfg, handler)
+				go func(name string) {
+					if err := extraColl.Start(); err != nil {
+						log.Error("Collector %q error: %v", name, err)
+					}
+				}(ifCfg.Name)
+				log.Info("Started additional collector on %s (%s)", ifCfg.Listen, ifCfg.Name)
 			}
 		}
 	}

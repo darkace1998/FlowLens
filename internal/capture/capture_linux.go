@@ -3,11 +3,11 @@
 package capture
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"syscall"
 	"time"
-	"unsafe"
 )
 
 // startCapture opens an AF_PACKET raw socket on the specified device and reads
@@ -74,8 +74,9 @@ func (s *Source) startCapture(device string, snapLen int) error {
 	}
 }
 
-// htons converts a uint16 from host to network byte order.
+// htons converts a uint16 from host to network byte order (big-endian).
 func htons(v uint16) uint16 {
-	b := (*[2]byte)(unsafe.Pointer(&v))
-	return uint16(b[0])<<8 | uint16(b[1])
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, v)
+	return binary.NativeEndian.Uint16(buf)
 }

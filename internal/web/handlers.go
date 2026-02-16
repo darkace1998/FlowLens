@@ -474,6 +474,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			flows = filtered
+		} else {
+			logging.Default().Warn("Invalid interface filter %q: %v", ifaceFilter, err)
 		}
 	}
 
