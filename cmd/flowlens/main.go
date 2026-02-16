@@ -83,6 +83,7 @@ func main() {
 		analysis.PortConcentrationDetector{},
 		analysis.UnreachableDetector{},
 		analysis.NewTalkerDetector{},
+		analysis.VoIPQualityDetector{},
 	)
 	go engine.Start()
 

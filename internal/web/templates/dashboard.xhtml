@@ -131,6 +131,57 @@
 </div>
 {{end}}
 
+{{if .VoIP.TotalVoIPFlows}}
+<div class="two-col">
+  <div class="panel">
+    <h2>VoIP Quality Summary</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>VoIP/RTP Flows</td><td>{{.VoIP.TotalVoIPFlows}}</td></tr>
+        {{if .VoIP.FlowsWithJitter}}
+        <tr><td>Avg Jitter</td><td>{{.VoIP.AvgJitter}}</td></tr>
+        <tr><td>p50 Jitter</td><td>{{.VoIP.P50Jitter}}</td></tr>
+        <tr><td>p95 Jitter</td><td>{{.VoIP.P95Jitter}}</td></tr>
+        {{end}}
+        {{if .VoIP.FlowsWithMOS}}
+        <tr><td>Avg MOS</td><td>{{.VoIP.AvgMOS}}</td></tr>
+        <tr><td>Min MOS</td><td>{{.VoIP.MinMOS}}</td></tr>
+        <tr><td>Flows Below MOS 3.5</td><td>{{.VoIP.FlowsBelowMOS35}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.VoIP.TotalVoIPFlows}} detected VoIP flows (UDP 10000–20000, SIP 5060/5061)</p>
+  </div>
+
+  <div class="panel">
+    <h2>Top VoIP Flows</h2>
+    {{if .VoIP.TopVoIPFlows}}
+    <table>
+      <thead>
+        <tr><th>Flow</th><th>Jitter</th><th>MOS</th><th>Loss</th><th>Packets</th></tr>
+      </thead>
+      <tbody>
+        {{range .VoIP.TopVoIPFlows}}
+        <tr>
+          <td>{{.SrcAddr}}:{{.SrcPort}} → {{.DstAddr}}:{{.DstPort}}</td>
+          <td>{{.Jitter}}</td>
+          <td><span class="mos-{{.MOSClass}}">{{.MOS}}</span></td>
+          <td>{{.Loss}}</td>
+          <td>{{.Packets}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No VoIP flows detected.</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 <div class="two-col">
   <div class="panel">
     <h2>Top Sources</h2>

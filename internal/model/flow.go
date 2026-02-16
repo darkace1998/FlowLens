@@ -31,6 +31,8 @@ type Flow struct {
 	Retransmissions uint32  // TCP retransmission count (from IPFIX IE 321 or heuristic)
 	OutOfOrder      uint32  // TCP out-of-order segment count
 	PacketLoss      uint32  // estimated packet loss count
+	JitterMicros    int64   // inter-packet jitter in microseconds (from IPFIX IE 387 or estimated)
+	MOS             float32 // Mean Opinion Score (1.0–4.41, 0 = not computed)
 }
 
 // CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
@@ -57,6 +59,71 @@ func (f *Flow) PacketLossRate() float64 {
 	}
 	total := f.Packets + uint64(f.PacketLoss)
 	return float64(f.PacketLoss) / float64(total) * 100
+}
+
+// IsVoIP returns true if the flow is likely VoIP/RTP traffic based on port
+// heuristics: UDP in the common RTP range (10000–20000) or SIP (5060/5061).
+func (f *Flow) IsVoIP() bool {
+	if f.Protocol != 17 { // UDP only
+		return false
+	}
+	if f.SrcPort == 5060 || f.SrcPort == 5061 || f.DstPort == 5060 || f.DstPort == 5061 {
+		return true
+	}
+	port := f.DstPort
+	if f.SrcPort >= 10000 && f.SrcPort <= 20000 {
+		port = f.SrcPort
+	}
+	return port >= 10000 && port <= 20000
+}
+
+// CalcMOS estimates a Mean Opinion Score using a simplified ITU-T G.107
+// E-model. Inputs: jitter (microseconds), RTT (microseconds), packet loss (%).
+// Returns a value between 1.0 and 4.41 (max for a G.711 codec path).
+func CalcMOS(jitterUs int64, rttUs int64, lossPercent float64) float32 {
+	// R-value computation (simplified E-model).
+	r := 93.2 // base R-value for G.711
+
+	// Delay impairment (Id): effective one-way delay includes codec delay
+	// (≈10ms), one-way network delay (RTT/2), and jitter buffer (≈2× jitter).
+	codecDelay := 10.0
+	oneWayMs := float64(rttUs) / 2000.0
+	jitterBufMs := float64(jitterUs) / 500.0 // 2×jitter in ms
+	totalDelay := codecDelay + oneWayMs + jitterBufMs
+
+	// ITU-T G.107 §A.1: delay impairment factor Id.
+	if totalDelay > 177.3 {
+		id := 0.024*totalDelay + 0.11*(totalDelay-177.3)
+		r -= id
+	} else {
+		r -= 0.024 * totalDelay
+	}
+
+	// Equipment impairment for loss (Ie-eff).
+	// Using the ITU G.107 simplified formula with stronger loss sensitivity.
+	if lossPercent > 0 {
+		burstR := 1.0 // burst ratio for random loss
+		ie := 0.0 + 30.0*(-1.0+1.0/(1.0+lossPercent*burstR/4.0))
+		r += ie // ie is negative, subtracts from R
+	}
+
+	// Clamp R to [0, 93.2].
+	if r < 0 {
+		r = 0
+	}
+	if r > 93.2 {
+		r = 93.2
+	}
+
+	// Convert R-value to MOS using the ITU formula.
+	mos := 1.0 + 0.035*r + r*(r-60)*(100-r)*7e-6
+	if mos < 1.0 {
+		mos = 1.0
+	}
+	if mos > 4.41 {
+		mos = 4.41
+	}
+	return float32(mos)
 }
 
 // FlowKey returns a canonical 5-tuple key for flow stitching (always lower IP first).
@@ -110,11 +177,16 @@ func StitchFlows(flows []Flow) {
 }
 
 // Classify populates AppProto and AppCat using port-based heuristic detection,
-// and computes ThroughputBPS. It should be called after all other flow fields have been set.
+// computes ThroughputBPS, and estimates MOS for VoIP flows.
+// It should be called after all other flow fields have been set.
 func (f *Flow) Classify() {
 	f.AppProto = AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
 	f.AppCat = AppCategory(f.AppProto)
 	f.CalcThroughput()
+	// Estimate MOS for VoIP flows that don't already have one.
+	if f.MOS == 0 && f.IsVoIP() {
+		f.MOS = CalcMOS(f.JitterMicros, f.RTTMicros, f.PacketLossRate())
+	}
 }
 
 // ProtocolName returns a human-readable name for common IP protocol numbers.
@@ -230,6 +302,9 @@ func AppProtocol(proto uint8, srcPort, dstPort uint16) string {
 	// SMB
 	case port == 445 || port == 139:
 		return "SMB"
+	// SIP (VoIP signaling)
+	case port == 5060 || port == 5061:
+		return "SIP"
 	// ICMP family
 	case proto == 1 || proto == 58:
 		return "ICMP"
@@ -255,6 +330,8 @@ func AppCategory(appProto string) string {
 		return "File Transfer"
 	case "LDAP":
 		return "Directory"
+	case "SIP":
+		return "Multimedia"
 	case "ICMP":
 		return "Network Services"
 	default:

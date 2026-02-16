@@ -1003,3 +1003,174 @@ func TestFlows_TCPQualityColumns(t *testing.T) {
 		t.Error("flows page should show 'Loss' column header")
 	}
 }
+
+func TestFormatJitter(t *testing.T) {
+	tests := []struct {
+		us   int64
+		want string
+	}{
+		{0, "—"},
+		{500, "500µs"},
+		{5000, "5.0ms"},
+		{100000, "100.0ms"},
+	}
+	for _, tt := range tests {
+		got := formatJitter(tt.us)
+		if got != tt.want {
+			t.Errorf("formatJitter(%d) = %q, want %q", tt.us, got, tt.want)
+		}
+	}
+}
+
+func TestFormatMOS(t *testing.T) {
+	tests := []struct {
+		mos  float32
+		want string
+	}{
+		{0, "—"},
+		{4.41, "4.41"},
+		{3.50, "3.50"},
+		{2.10, "2.10"},
+	}
+	for _, tt := range tests {
+		got := formatMOS(tt.mos)
+		if got != tt.want {
+			t.Errorf("formatMOS(%.2f) = %q, want %q", tt.mos, got, tt.want)
+		}
+	}
+}
+
+func TestMOSQuality(t *testing.T) {
+	tests := []struct {
+		mos  float32
+		want string
+	}{
+		{4.2, "good"},
+		{3.7, "fair"},
+		{3.2, "poor"},
+		{2.5, "bad"},
+	}
+	for _, tt := range tests {
+		got := mosQuality(tt.mos)
+		if got != tt.want {
+			t.Errorf("mosQuality(%.1f) = %q, want %q", tt.mos, got, tt.want)
+		}
+	}
+}
+
+func TestComputeVoIPStats(t *testing.T) {
+	now := time.Now()
+	flows := []model.Flow{
+		// VoIP flow 1: UDP on RTP port with jitter and MOS set
+		{
+			Timestamp: now, Protocol: 17, // UDP
+			SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+			SrcPort: 50000, DstPort: 16000,
+			Bytes: 80000, Packets: 1000,
+			JitterMicros: 10000, MOS: 3.8,
+		},
+		// VoIP flow 2: with bad MOS
+		{
+			Timestamp: now, Protocol: 17,
+			SrcAddr: net.ParseIP("10.0.0.3"), DstAddr: net.ParseIP("10.0.0.4"),
+			SrcPort: 50000, DstPort: 15000,
+			Bytes: 40000, Packets: 500,
+			JitterMicros: 50000, MOS: 2.5,
+		},
+		// Non-VoIP flow: TCP
+		{
+			Timestamp: now, Protocol: 6,
+			SrcAddr: net.ParseIP("10.0.0.5"), DstAddr: net.ParseIP("10.0.0.6"),
+			SrcPort: 12345, DstPort: 443,
+			Bytes: 100000, Packets: 200,
+		},
+		// Non-VoIP flow: UDP on low port
+		{
+			Timestamp: now, Protocol: 17,
+			SrcAddr: net.ParseIP("10.0.0.7"), DstAddr: net.ParseIP("10.0.0.8"),
+			SrcPort: 1234, DstPort: 53,
+			Bytes: 5000, Packets: 10,
+		},
+	}
+
+	stats := computeVoIPStats(flows)
+
+	if stats.TotalVoIPFlows != 2 {
+		t.Errorf("TotalVoIPFlows = %d, want 2", stats.TotalVoIPFlows)
+	}
+	if stats.FlowsWithJitter != 2 {
+		t.Errorf("FlowsWithJitter = %d, want 2", stats.FlowsWithJitter)
+	}
+	if stats.FlowsWithMOS != 2 {
+		t.Errorf("FlowsWithMOS = %d, want 2", stats.FlowsWithMOS)
+	}
+	if stats.FlowsBelowMOS35 != 1 {
+		t.Errorf("FlowsBelowMOS35 = %d, want 1", stats.FlowsBelowMOS35)
+	}
+	if stats.AvgJitter == "" || stats.AvgJitter == "—" {
+		t.Error("AvgJitter should be set")
+	}
+	if stats.AvgMOS == "" || stats.AvgMOS == "—" {
+		t.Error("AvgMOS should be set")
+	}
+	if len(stats.TopVoIPFlows) != 2 {
+		t.Errorf("TopVoIPFlows count = %d, want 2", len(stats.TopVoIPFlows))
+	}
+}
+
+func TestDashboard_VoIPWidget(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	// Insert a VoIP flow.
+	voipFlow := model.Flow{
+		Timestamp: time.Now(), Protocol: 17,
+		SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+		SrcPort: 50000, DstPort: 16000,
+		Bytes: 80000, Packets: 1000,
+		JitterMicros: 20000, MOS: 3.2,
+	}
+	_ = ringBuf.Insert([]model.Flow{voipFlow})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "VoIP Quality Summary") {
+		t.Error("dashboard should show VoIP Quality Summary widget when VoIP flows exist")
+	}
+	if !strings.Contains(body, "Top VoIP Flows") {
+		t.Error("dashboard should show Top VoIP Flows widget")
+	}
+}
+
+func TestFlows_JitterMOSColumns(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	voipFlow := model.Flow{
+		Timestamp: time.Now(), Protocol: 17,
+		SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+		SrcPort: 50000, DstPort: 16000,
+		Bytes: 80000, Packets: 1000,
+		JitterMicros: 15000, MOS: 3.8,
+	}
+	_ = ringBuf.Insert([]model.Flow{voipFlow})
+
+	req := httptest.NewRequest(http.MethodGet, "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Jitter") {
+		t.Error("flows page should show 'Jitter' column header")
+	}
+	if !strings.Contains(body, "MOS") {
+		t.Error("flows page should show 'MOS' column header")
+	}
+}

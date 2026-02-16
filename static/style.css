@@ -341,3 +341,9 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
   margin-top: 0.25rem;
 }
+
+/* MOS quality indicators */
+.mos-good { color: #28a745; font-weight: 600; }
+.mos-fair { color: #dbab09; font-weight: 600; }
+.mos-poor { color: #e36209; font-weight: 600; }
+.mos-bad  { color: #cb2431; font-weight: 600; }

@@ -300,3 +300,85 @@ func TestPacketLossRate(t *testing.T) {
 		t.Error("PacketLossRate with zero loss should be 0")
 	}
 }
+
+func TestIsVoIP(t *testing.T) {
+	tests := []struct {
+		name    string
+		proto   uint8
+		srcPort uint16
+		dstPort uint16
+		want    bool
+	}{
+		{"UDP RTP range dst", 17, 50000, 16000, true},
+		{"UDP RTP range src", 17, 15000, 50000, true},
+		{"UDP SIP 5060", 17, 50000, 5060, true},
+		{"UDP SIP 5061", 17, 5061, 50000, true},
+		{"UDP low ports", 17, 1234, 80, false},
+		{"TCP RTP range", 6, 50000, 16000, false},     // TCP not VoIP
+		{"UDP both high non-RTP", 17, 50000, 50001, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := Flow{Protocol: tt.proto, SrcPort: tt.srcPort, DstPort: tt.dstPort}
+			if got := f.IsVoIP(); got != tt.want {
+				t.Errorf("IsVoIP() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalcMOS(t *testing.T) {
+	// Perfect conditions: should give high MOS (with 10ms codec delay, slight impairment).
+	mos := CalcMOS(0, 0, 0)
+	if mos < 4.3 {
+		t.Errorf("CalcMOS(0,0,0) = %.2f, want >= 4.3", mos)
+	}
+
+	// Some jitter and RTT: MOS should decrease.
+	mos2 := CalcMOS(30000, 100000, 0) // 30ms jitter, 100ms RTT
+	if mos2 >= mos {
+		t.Errorf("MOS with jitter/RTT (%.2f) should be less than near-perfect (%.2f)", mos2, mos)
+	}
+
+	// High loss: MOS should drop significantly.
+	mos3 := CalcMOS(0, 0, 10) // 10% loss
+	if mos3 >= mos {
+		t.Errorf("CalcMOS with 10%% loss = %.2f, should be less than no-loss (%.2f)", mos3, mos)
+	}
+
+	// Extreme conditions: MOS should not go below 1.0.
+	mos4 := CalcMOS(1000000, 5000000, 50) // massive jitter, RTT, loss
+	if mos4 < 1.0 {
+		t.Errorf("CalcMOS with extreme values = %.2f, should not go below 1.0", mos4)
+	}
+}
+
+func TestClassifySetsMOSForVoIP(t *testing.T) {
+	f := Flow{
+		Protocol:     17,        // UDP
+		SrcPort:      50000,
+		DstPort:      16000,     // RTP range
+		JitterMicros: 10000,     // 10ms
+		RTTMicros:    50000,     // 50ms
+		Packets:      950,
+		PacketLoss:   50,
+	}
+	f.Classify()
+
+	if f.MOS == 0 {
+		t.Error("Classify should compute MOS for VoIP flows")
+	}
+	if f.MOS < 1.0 || f.MOS > 4.41 {
+		t.Errorf("MOS = %.2f, should be in range [1.0, 4.41]", f.MOS)
+	}
+}
+
+func TestSIPDetection(t *testing.T) {
+	if got := AppProtocol(17, 50000, 5060); got != "SIP" {
+		t.Errorf("AppProtocol(17, 50000, 5060) = %q, want SIP", got)
+	}
+	if got := AppCategory("SIP"); got != "Multimedia" {
+		t.Errorf("AppCategory(SIP) = %q, want Multimedia", got)
+	}
+}

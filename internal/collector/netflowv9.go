@@ -39,6 +39,7 @@ const (
 	nfv9FieldTCPRetransmissionCount = 321
 	nfv9FieldTCPOutOfOrderCount     = 227
 	nfv9FieldPacketLossCount        = 233
+	nfv9FieldRTPJitter              = 387
 )
 
 // nfv9HeaderSize is the size of the NetFlow v9 packet header in bytes.
@@ -294,6 +295,8 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 		f.OutOfOrder = uint32(readUintN(data))
 	case nfv9FieldPacketLossCount:
 		f.PacketLoss = uint32(readUintN(data))
+	case nfv9FieldRTPJitter:
+		f.JitterMicros = int64(readUintN(data))
 	}
 }
 

@@ -44,6 +44,7 @@ const (
 	ipfixFieldTCPSynTotalCount       = 322 // tcpSynTotalCount
 	ipfixFieldTCPOutOfOrderCount     = 227 // vendor-specific out-of-order counter (not in base IANA registry)
 	ipfixFieldPacketLossCount        = 233 // vendor-specific packet loss counter (not in base IANA registry)
+	ipfixFieldRTPJitter              = 387 // transportRtpJitterMean (IANA IPFIX IE 387) in microseconds
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).
@@ -336,5 +337,7 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 		f.OutOfOrder = uint32(readUintN(data))
 	case ipfixFieldPacketLossCount:
 		f.PacketLoss = uint32(readUintN(data))
+	case ipfixFieldRTPJitter:
+		f.JitterMicros = int64(readUintN(data))
 	}
 }

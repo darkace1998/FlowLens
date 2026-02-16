@@ -38,6 +38,8 @@ var funcMap = template.FuncMap{
 	"pctOf":         pctOf,
 	"severityClass": severityClass,
 	"formatAS":      formatAS,
+	"formatJitter":  formatJitter,
+	"formatMOS":     formatMOS,
 	"int":           func(v interface{}) int {
 		switch n := v.(type) {
 		case int:
@@ -163,6 +165,36 @@ func formatRTT(us int64) string {
 		return fmt.Sprintf("%.1fms", ms)
 	}
 	return fmt.Sprintf("%.2fs", ms/1000)
+}
+
+func formatJitter(us int64) string {
+	if us <= 0 {
+		return "—"
+	}
+	if us < 1000 {
+		return fmt.Sprintf("%dµs", us)
+	}
+	return fmt.Sprintf("%.1fms", float64(us)/1000)
+}
+
+func formatMOS(mos float32) string {
+	if mos <= 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", mos)
+}
+
+func mosQuality(mos float32) string {
+	switch {
+	case mos >= 4.0:
+		return "good"
+	case mos >= 3.5:
+		return "fair"
+	case mos >= 3.0:
+		return "poor"
+	default:
+		return "bad"
+	}
 }
 
 func timeAgo(t time.Time) string {
@@ -321,6 +353,33 @@ type TCPFlowEntry struct {
 	RetransRate  float64
 }
 
+// VoIPStats holds aggregate VoIP quality metrics for the dashboard.
+type VoIPStats struct {
+	TotalVoIPFlows int
+	FlowsWithJitter int
+	FlowsWithMOS    int
+	AvgJitter       string
+	P50Jitter       string
+	P95Jitter       string
+	AvgMOS          string
+	MinMOS          string
+	FlowsBelowMOS35 int     // MOS < 3.5 (poor quality)
+	TopVoIPFlows    []VoIPFlowEntry
+}
+
+// VoIPFlowEntry is a VoIP flow with quality metrics for the dashboard.
+type VoIPFlowEntry struct {
+	SrcAddr  string
+	DstAddr  string
+	SrcPort  uint16
+	DstPort  uint16
+	Jitter   string
+	MOS      string
+	MOSClass string // "good", "fair", "poor", "bad"
+	Loss     uint32
+	Packets  uint64
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -339,6 +398,7 @@ type DashboardData struct {
 	Categories   []CategoryEntry
 	Latency      LatencyStats
 	TCPHealth    TCPHealthStats
+	VoIP         VoIPStats
 }
 
 // --- Active Hosts data structures ---
@@ -542,6 +602,9 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	// Compute TCP quality metrics.
 	tcpHealth := computeTCPHealthStats(flows)
 
+	// Compute VoIP quality metrics.
+	voipStats := computeVoIPStats(flows)
+
 	return DashboardData{
 		TotalBytes:   totalBytes,
 		TotalPackets: totalPkts,
@@ -559,6 +622,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		Categories:   categories,
 		Latency:      latencyStats,
 		TCPHealth:    tcpHealth,
+		VoIP:         voipStats,
 	}
 }
 
@@ -725,6 +789,142 @@ func computeTCPHealthStats(flows []model.Flow) TCPHealthStats {
 	return stats
 }
 
+// computeVoIPStats computes VoIP quality metrics from flows.
+func computeVoIPStats(flows []model.Flow) VoIPStats {
+	var stats VoIPStats
+	var jitterValues []int64
+	var mosValues []float32
+
+	type voipKey struct {
+		src, dst         string
+		srcPort, dstPort uint16
+	}
+	type voipAgg struct {
+		jitterSum   int64
+		mosSum      float32
+		count       int
+		loss        uint32
+		packets     uint64
+		bestJitter  int64
+		bestMOS     float32
+	}
+	agg := make(map[voipKey]*voipAgg)
+
+	for _, f := range flows {
+		if !f.IsVoIP() {
+			continue
+		}
+		stats.TotalVoIPFlows++
+
+		mos := f.MOS
+		jitter := f.JitterMicros
+
+		// Compute MOS if not already set but we have metrics.
+		if mos == 0 && (jitter > 0 || f.RTTMicros > 0 || f.PacketLoss > 0) {
+			mos = model.CalcMOS(jitter, f.RTTMicros, f.PacketLossRate())
+		}
+
+		if jitter > 0 {
+			stats.FlowsWithJitter++
+			jitterValues = append(jitterValues, jitter)
+		}
+		if mos > 0 {
+			stats.FlowsWithMOS++
+			mosValues = append(mosValues, mos)
+			if mos < 3.5 {
+				stats.FlowsBelowMOS35++
+			}
+		}
+
+		key := voipKey{
+			src: model.SafeIPString(f.SrcAddr), dst: model.SafeIPString(f.DstAddr),
+			srcPort: f.SrcPort, dstPort: f.DstPort,
+		}
+		if a, ok := agg[key]; ok {
+			a.jitterSum += jitter
+			a.mosSum += mos
+			a.count++
+			a.loss += f.PacketLoss
+			a.packets += f.Packets
+			if mos > 0 && (a.bestMOS == 0 || mos < a.bestMOS) {
+				a.bestMOS = mos
+			}
+			if jitter > a.bestJitter {
+				a.bestJitter = jitter
+			}
+		} else {
+			agg[key] = &voipAgg{
+				jitterSum: jitter, mosSum: mos, count: 1,
+				loss: f.PacketLoss, packets: f.Packets,
+				bestJitter: jitter, bestMOS: mos,
+			}
+		}
+	}
+
+	// Compute jitter percentiles.
+	if len(jitterValues) > 0 {
+		sort.Slice(jitterValues, func(i, j int) bool { return jitterValues[i] < jitterValues[j] })
+		var sum int64
+		for _, v := range jitterValues {
+			sum += v
+		}
+		stats.AvgJitter = formatJitter(sum / int64(len(jitterValues)))
+		stats.P50Jitter = formatJitter(percentileInt64(jitterValues, 50))
+		stats.P95Jitter = formatJitter(percentileInt64(jitterValues, 95))
+	}
+
+	// Compute MOS summary.
+	if len(mosValues) > 0 {
+		sort.Slice(mosValues, func(i, j int) bool { return mosValues[i] < mosValues[j] })
+		var sum float32
+		for _, v := range mosValues {
+			sum += v
+		}
+		stats.AvgMOS = formatMOS(sum / float32(len(mosValues)))
+		stats.MinMOS = formatMOS(mosValues[0])
+	}
+
+	// Build top VoIP flows (sorted by worst MOS first).
+	var topFlows []VoIPFlowEntry
+	for key, a := range agg {
+		avgMOS := float32(0)
+		if a.count > 0 && a.mosSum > 0 {
+			avgMOS = a.mosSum / float32(a.count)
+		}
+		avgJitter := int64(0)
+		if a.count > 0 && a.jitterSum > 0 {
+			avgJitter = a.jitterSum / int64(a.count)
+		}
+		topFlows = append(topFlows, VoIPFlowEntry{
+			SrcAddr:  key.src, DstAddr: key.dst,
+			SrcPort:  key.srcPort, DstPort: key.dstPort,
+			Jitter:   formatJitter(avgJitter),
+			MOS:      formatMOS(avgMOS),
+			MOSClass: mosQuality(avgMOS),
+			Loss:     a.loss,
+			Packets:  a.packets,
+		})
+	}
+	sort.Slice(topFlows, func(i, j int) bool {
+		// Worst MOS first; flows without MOS go last.
+		iMOS := topFlows[i].MOS
+		jMOS := topFlows[j].MOS
+		if iMOS == "—" && jMOS != "—" {
+			return false
+		}
+		if iMOS != "—" && jMOS == "—" {
+			return true
+		}
+		return iMOS < jMOS
+	})
+	if len(topFlows) > 10 {
+		topFlows = topFlows[:10]
+	}
+	stats.TopVoIPFlows = topFlows
+
+	return stats
+}
+
 func topN(m map[string]*TalkerEntry, totalBytes uint64, n int) []TalkerEntry {
 	entries := make([]TalkerEntry, 0, len(m))
 	for _, e := range m {
@@ -768,6 +968,9 @@ type FlowRow struct {
 	Retrans     uint32
 	OOO         uint32
 	Loss        uint32
+	Jitter      string
+	MOS         string
+	MOSClass    string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -863,6 +1066,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			Retrans:     f.Retransmissions,
 			OOO:         f.OutOfOrder,
 			Loss:        f.PacketLoss,
+			Jitter:      formatJitter(f.JitterMicros),
+			MOS:         formatMOS(f.MOS),
+			MOSClass:    mosQuality(f.MOS),
 		})
 	}
 
