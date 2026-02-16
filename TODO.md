@@ -63,9 +63,9 @@
 |--------|------|
 | ✅ | SQLite stores historical flows with configurable retention (default 72 h) |
 | ✅ | Flow Explorer supports filtering by src IP, dst IP, port, protocol |
-| ❌ | Add a **Reports** page with configurable date range, group-by, and aggregation (sum bytes, avg throughput, count flows) |
-| ❌ | Implement **trend lines** (time-series charts for bytes, packets, flow count over selected period) |
-| ❌ | Add **CSV / JSON export** for report results |
+| ✅ | **Reports** page with configurable date range, group-by (8 dimensions), and aggregation (sum bytes, avg throughput, count flows) |
+| ✅ | **Trend lines** — CSS bar chart showing time-series traffic over selected period with auto-bucketing |
+| ✅ | **CSV / JSON export** via `/reports/export` endpoint with Content-Disposition headers |
 | ❌ | Support **scheduled reports** (e.g., daily/weekly email or file dump) |
 | ❌ | Add **comparison mode** (compare two time ranges side-by-side) |
 
