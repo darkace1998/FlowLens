@@ -243,6 +243,97 @@ func (s *SQLiteStore) pruneLoop() {
 	}
 }
 
+// ReportRow holds a single aggregated row from a report query.
+type ReportRow struct {
+	GroupKey     string
+	TotalBytes   uint64
+	TotalPackets uint64
+	FlowCount    int64
+	AvgBytes     float64
+}
+
+// TimeSeriesPoint holds one bucket of a time-series aggregation.
+type TimeSeriesPoint struct {
+	Bucket       string
+	TotalBytes   uint64
+	TotalPackets uint64
+	FlowCount    int64
+}
+
+// QueryReport runs an aggregated query over historical flows in SQLite.
+// groupBy must be one of: "src_addr", "dst_addr", "protocol", "app_proto",
+// "app_category", "dst_port", "src_as", "dst_as".
+// Results are sorted by total bytes descending, limited to 100 rows.
+func (s *SQLiteStore) QueryReport(start, end time.Time, groupBy string) ([]ReportRow, error) {
+	// Whitelist allowed group-by columns to prevent SQL injection.
+	allowed := map[string]bool{
+		"src_addr": true, "dst_addr": true, "protocol": true,
+		"app_proto": true, "app_category": true, "dst_port": true,
+		"src_as": true, "dst_as": true,
+	}
+	if !allowed[groupBy] {
+		return nil, fmt.Errorf("invalid group-by column: %q", groupBy)
+	}
+
+	query := fmt.Sprintf(
+		`SELECT %s, SUM(bytes), SUM(packets), COUNT(*), AVG(bytes)
+		 FROM flows WHERE timestamp >= ? AND timestamp <= ?
+		 GROUP BY %s ORDER BY SUM(bytes) DESC LIMIT 100`,
+		groupBy, groupBy,
+	)
+
+	rows, err := s.db.Query(query, start.UTC(), end.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("report query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ReportRow
+	for rows.Next() {
+		var r ReportRow
+		if err := rows.Scan(&r.GroupKey, &r.TotalBytes, &r.TotalPackets, &r.FlowCount, &r.AvgBytes); err != nil {
+			return nil, fmt.Errorf("scan report row: %w", err)
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+// QueryTimeSeries returns traffic aggregated into time buckets over the given range.
+// bucketSec controls bucket width in seconds (e.g. 300 for 5-minute buckets).
+func (s *SQLiteStore) QueryTimeSeries(start, end time.Time, bucketSec int) ([]TimeSeriesPoint, error) {
+	if bucketSec < 1 {
+		bucketSec = 300
+	}
+
+	// SQLite's strftime can't parse Go's nanosecond timestamps directly, so we
+	// truncate to the first 19 characters (YYYY-MM-DDTHH:MM:SS) for bucketing.
+	query := fmt.Sprintf(
+		`SELECT datetime(
+		    (CAST(strftime('%%s', substr(timestamp, 1, 19)) AS INTEGER) / %d) * %d,
+		    'unixepoch') AS bucket,
+		  SUM(bytes), SUM(packets), COUNT(*)
+		 FROM flows WHERE timestamp >= ? AND timestamp <= ?
+		 GROUP BY bucket ORDER BY bucket`, bucketSec, bucketSec,
+	)
+
+	rows, err := s.db.Query(query, start.UTC(), end.UTC())
+	if err != nil {
+		return nil, fmt.Errorf("timeseries query: %w", err)
+	}
+	defer rows.Close()
+
+	var points []TimeSeriesPoint
+	for rows.Next() {
+		var p TimeSeriesPoint
+		if err := rows.Scan(&p.Bucket, &p.TotalBytes, &p.TotalPackets, &p.FlowCount); err != nil {
+			return nil, fmt.Errorf("scan timeseries: %w", err)
+		}
+		points = append(points, p)
+	}
+	return points, rows.Err()
+}
+
 // Close stops the pruning goroutine and closes the database.
 func (s *SQLiteStore) Close() error {
 	close(s.stopPrune)

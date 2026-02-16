@@ -15,6 +15,7 @@ import (
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
+	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
 // --- Template helpers ---
@@ -37,6 +38,35 @@ var funcMap = template.FuncMap{
 	"pctOf":         pctOf,
 	"severityClass": severityClass,
 	"formatAS":      formatAS,
+	"int":           func(v interface{}) int {
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case uint64:
+			return int(n)
+		case float64:
+			return int(n)
+		default:
+			return 0
+		}
+	},
+	"uint64": func(v interface{}) uint64 {
+		switch n := v.(type) {
+		case int:
+			return uint64(n)
+		case int64:
+			return uint64(n)
+		case uint64:
+			return n
+		case float64:
+			return uint64(n)
+		default:
+			return 0
+		}
+	},
+	"gt": func(a, b int) bool { return a > b },
 }
 
 func severityClass(sev analysis.Severity) string {
@@ -739,6 +769,197 @@ func buildHostsData(flows []model.Flow, window time.Duration) HostsPageData {
 		TotalHosts: len(hosts),
 		TotalBytes: totalBytes,
 		Window:     window,
+	}
+}
+
+// --- Reports page ---
+
+// ReportPageData holds all data for the reports template.
+type ReportPageData struct {
+	// Form values for persistence.
+	StartTime  string
+	EndTime    string
+	GroupBy    string
+	Metric     string
+
+	// Results.
+	Rows       []storage.ReportRow
+	TimeSeries []storage.TimeSeriesPoint
+	HasResults bool
+	TotalBytes uint64
+	TotalPkts  uint64
+	TotalFlows int64
+	Error      string
+}
+
+func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	defaultStart := now.Add(-1 * time.Hour).Format("2006-01-02T15:04")
+	defaultEnd := now.Format("2006-01-02T15:04")
+
+	data := ReportPageData{
+		StartTime: defaultStart,
+		EndTime:   defaultEnd,
+		GroupBy:   "app_proto",
+		Metric:    "bytes",
+	}
+
+	// If no query parameters, just show the form.
+	q := r.URL.Query()
+	if q.Get("start") == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := s.tmplReports.ExecuteTemplate(w, "layout", data); err != nil {
+			logging.Default().Error("Template execute error: %v", err)
+		}
+		return
+	}
+
+	// Parse form inputs.
+	data.StartTime = q.Get("start")
+	data.EndTime = q.Get("end")
+	data.GroupBy = q.Get("group_by")
+	data.Metric = q.Get("metric")
+
+	if data.GroupBy == "" {
+		data.GroupBy = "app_proto"
+	}
+	if data.Metric == "" {
+		data.Metric = "bytes"
+	}
+
+	startTime, err := time.Parse("2006-01-02T15:04", data.StartTime)
+	if err != nil {
+		data.Error = "Invalid start time format"
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		return
+	}
+	endTime, err := time.Parse("2006-01-02T15:04", data.EndTime)
+	if err != nil {
+		data.Error = "Invalid end time format"
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		return
+	}
+
+	if s.sqlStore == nil {
+		data.Error = "SQLite store not configured"
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		return
+	}
+
+	// Run aggregate query.
+	rows, err := s.sqlStore.QueryReport(startTime, endTime, data.GroupBy)
+	if err != nil {
+		data.Error = fmt.Sprintf("Report query failed: %v", err)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		return
+	}
+
+	// Run time-series query — auto-select bucket size.
+	dur := endTime.Sub(startTime)
+	bucketSec := chooseBucket(dur)
+	ts, err := s.sqlStore.QueryTimeSeries(startTime, endTime, bucketSec)
+	if err != nil {
+		logging.Default().Warn("Time-series query failed: %v", err)
+	}
+
+	var totalB, totalP uint64
+	var totalF int64
+	for _, row := range rows {
+		totalB += row.TotalBytes
+		totalP += row.TotalPackets
+		totalF += row.FlowCount
+	}
+
+	data.Rows = rows
+	data.TimeSeries = ts
+	data.HasResults = len(rows) > 0
+	data.TotalBytes = totalB
+	data.TotalPkts = totalP
+	data.TotalFlows = totalF
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplReports.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+// chooseBucket picks an appropriate time-series bucket width based on the range.
+func chooseBucket(d time.Duration) int {
+	switch {
+	case d <= 1*time.Hour:
+		return 60 // 1-minute buckets
+	case d <= 6*time.Hour:
+		return 300 // 5-minute buckets
+	case d <= 24*time.Hour:
+		return 900 // 15-minute buckets
+	case d <= 7*24*time.Hour:
+		return 3600 // 1-hour buckets
+	default:
+		return 86400 // 1-day buckets
+	}
+}
+
+// --- Reports export (CSV / JSON) ---
+
+func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+	if format == "" {
+		format = "csv"
+	}
+
+	startTime, err := time.Parse("2006-01-02T15:04", q.Get("start"))
+	if err != nil {
+		http.Error(w, "Invalid start time", http.StatusBadRequest)
+		return
+	}
+	endTime, err := time.Parse("2006-01-02T15:04", q.Get("end"))
+	if err != nil {
+		http.Error(w, "Invalid end time", http.StatusBadRequest)
+		return
+	}
+
+	groupBy := q.Get("group_by")
+	if groupBy == "" {
+		groupBy = "app_proto"
+	}
+
+	if s.sqlStore == nil {
+		http.Error(w, "SQLite store not configured", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := s.sqlStore.QueryReport(startTime, endTime, groupBy)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	switch format {
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.json")
+		fmt.Fprint(w, "[")
+		for i, row := range rows {
+			if i > 0 {
+				fmt.Fprint(w, ",")
+			}
+			fmt.Fprintf(w, `{"group":%q,"bytes":%d,"packets":%d,"flows":%d,"avg_bytes":%.1f}`,
+				row.GroupKey, row.TotalBytes, row.TotalPackets, row.FlowCount, row.AvgBytes)
+		}
+		fmt.Fprint(w, "]")
+	default: // CSV
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.csv")
+		fmt.Fprintf(w, "%s,bytes,packets,flows,avg_bytes\n", groupBy)
+		for _, row := range rows {
+			fmt.Fprintf(w, "%s,%d,%d,%d,%.1f\n",
+				row.GroupKey, row.TotalBytes, row.TotalPackets, row.FlowCount, row.AvgBytes)
+		}
 	}
 }
 

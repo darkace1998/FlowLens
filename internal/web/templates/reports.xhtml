@@ -1,0 +1,119 @@
+{{define "title"}}Reports{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>Reports</h1>
+<p class="flow-summary">Generate custom reports on historical flow data with aggregation, trends, and export.</p>
+
+<form class="filter-bar report-form" method="get" action="/reports">
+  <label>Start
+    <input type="datetime-local" name="start" value="{{.StartTime}}" />
+  </label>
+  <label>End
+    <input type="datetime-local" name="end" value="{{.EndTime}}" />
+  </label>
+  <label>Group By
+    <select name="group_by">
+      <option value="app_proto"{{if eq .GroupBy "app_proto"}} selected{{end}}>Application Protocol</option>
+      <option value="app_category"{{if eq .GroupBy "app_category"}} selected{{end}}>Category</option>
+      <option value="src_addr"{{if eq .GroupBy "src_addr"}} selected{{end}}>Source IP</option>
+      <option value="dst_addr"{{if eq .GroupBy "dst_addr"}} selected{{end}}>Destination IP</option>
+      <option value="protocol"{{if eq .GroupBy "protocol"}} selected{{end}}>L4 Protocol</option>
+      <option value="dst_port"{{if eq .GroupBy "dst_port"}} selected{{end}}>Destination Port</option>
+      <option value="src_as"{{if eq .GroupBy "src_as"}} selected{{end}}>Source AS</option>
+      <option value="dst_as"{{if eq .GroupBy "dst_as"}} selected{{end}}>Destination AS</option>
+    </select>
+  </label>
+  <label>Metric
+    <select name="metric">
+      <option value="bytes"{{if eq .Metric "bytes"}} selected{{end}}>Bytes</option>
+      <option value="packets"{{if eq .Metric "packets"}} selected{{end}}>Packets</option>
+      <option value="flows"{{if eq .Metric "flows"}} selected{{end}}>Flows</option>
+    </select>
+  </label>
+  <button type="submit">Generate Report</button>
+</form>
+
+{{if .Error}}
+<div class="panel" style="border-left: 4px solid #d73a49; margin-bottom:1rem;">
+  <strong>Error:</strong> {{.Error}}
+</div>
+{{end}}
+
+{{if .HasResults}}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Bytes</div>
+    <div class="stat-value">{{formatBytes .TotalBytes}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Packets</div>
+    <div class="stat-value">{{formatPkts .TotalPkts}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Flows</div>
+    <div class="stat-value">{{.TotalFlows}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Groups</div>
+    <div class="stat-value">{{len .Rows}}</div>
+  </div>
+</div>
+
+{{if .TimeSeries}}
+<div class="panel">
+  <h2>Traffic Trend</h2>
+  <div class="trend-chart">
+    <div class="trend-bars">
+      {{range .TimeSeries}}
+      <div class="trend-bar-wrap" title="{{.Bucket}} — {{formatBytes .TotalBytes}}">
+        <div class="trend-bar" style="height: {{pctOf .TotalBytes $.TotalBytes}}%"></div>
+      </div>
+      {{end}}
+    </div>
+    <div class="trend-labels">
+      {{$count := len .TimeSeries}}
+      {{if gt $count 0}}
+        <span>{{(index .TimeSeries 0).Bucket}}</span>
+        {{if gt $count 1}}<span>{{(index .TimeSeries (sub $count 1)).Bucket}}</span>{{end}}
+      {{end}}
+    </div>
+  </div>
+</div>
+{{end}}
+
+<div class="panel">
+  <h2>Aggregated Results</h2>
+  <div class="report-export">
+    <a href="/reports/export?start={{.StartTime}}&amp;end={{.EndTime}}&amp;group_by={{.GroupBy}}&amp;format=csv" class="btn-export">Export CSV</a>
+    <a href="/reports/export?start={{.StartTime}}&amp;end={{.EndTime}}&amp;group_by={{.GroupBy}}&amp;format=json" class="btn-export">Export JSON</a>
+  </div>
+  <table class="flows-table">
+    <thead>
+      <tr>
+        <th>{{.GroupBy}}</th>
+        <th>Bytes</th>
+        <th>Packets</th>
+        <th>Flows</th>
+        <th>Avg Bytes/Flow</th>
+        <th>Share</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Rows}}
+      <tr>
+        <td>{{.GroupKey}}</td>
+        <td>{{formatBytes .TotalBytes}}</td>
+        <td>{{formatPkts .TotalPackets}}</td>
+        <td>{{.FlowCount}}</td>
+        <td>{{formatBytes (uint64 .AvgBytes)}}</td>
+        <td>
+          <span class="bar-bg"><span class="bar-fill report" style="width: {{pctOf .TotalBytes $.TotalBytes}}%"></span></span>
+          {{pctOf .TotalBytes $.TotalBytes}}%
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}
+{{end}}

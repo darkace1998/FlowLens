@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,20 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
 	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil)
 	return s, ringBuf
+}
+
+func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.SQLiteStore) {
+	t.Helper()
+	ringBuf := storage.NewRingBuffer(1000)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	sqlStore, err := storage.NewSQLiteStore(dbPath, 1*time.Hour, 10*time.Minute)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil)
+	t.Cleanup(func() { sqlStore.Close() })
+	return s, ringBuf, sqlStore
 }
 
 func TestDashboard_Empty(t *testing.T) {
@@ -599,6 +614,165 @@ func TestFormatUptime(t *testing.T) {
 		got := formatUptime(tt.d)
 		if got != tt.want {
 			t.Errorf("formatUptime(%v) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}
+
+func TestReports_EmptyForm(t *testing.T) {
+	s, _, _ := newTestServerWithSQL(t)
+	req := httptest.NewRequest("GET", "/reports", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Reports") {
+		t.Error("reports page should contain 'Reports'")
+	}
+	if !strings.Contains(body, "Generate Report") {
+		t.Error("reports page should show 'Generate Report' button")
+	}
+}
+
+func TestReports_WithData(t *testing.T) {
+	s, _, sqlStore := newTestServerWithSQL(t)
+	now := time.Now().UTC()
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+	// Classify flows so AppProto is set
+	for i := range flows {
+		flows[i].Classify()
+	}
+	if err := sqlStore.Insert(flows); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	start := now.Add(-1 * time.Hour).Format("2006-01-02T15:04")
+	end := now.Add(1 * time.Hour).Format("2006-01-02T15:04")
+
+	req := httptest.NewRequest("GET", "/reports?start="+start+"&end="+end+"&group_by=app_proto&metric=bytes", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Aggregated Results") {
+		t.Error("reports page with data should show 'Aggregated Results'")
+	}
+	if !strings.Contains(body, "HTTPS") {
+		t.Error("reports page should show HTTPS protocol")
+	}
+	if !strings.Contains(body, "Export CSV") {
+		t.Error("reports page should show export links")
+	}
+}
+
+func TestReportsExport_CSV(t *testing.T) {
+	s, _, sqlStore := newTestServerWithSQL(t)
+	now := time.Now().UTC()
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, 6, 10000, 100),
+	}
+	for i := range flows {
+		flows[i].Classify()
+	}
+	if err := sqlStore.Insert(flows); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	start := now.Add(-1 * time.Hour).Format("2006-01-02T15:04")
+	end := now.Add(1 * time.Hour).Format("2006-01-02T15:04")
+
+	req := httptest.NewRequest("GET", "/reports/export?start="+start+"&end="+end+"&group_by=app_proto&format=csv", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	ct := w.Header().Get("Content-Type")
+	if ct != "text/csv" {
+		t.Errorf("Content-Type = %q, want text/csv", ct)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "HTTPS") {
+		t.Error("CSV export should contain HTTPS")
+	}
+	if !strings.Contains(body, "app_proto,bytes,packets,flows") {
+		t.Error("CSV export should have header row")
+	}
+}
+
+func TestReportsExport_JSON(t *testing.T) {
+	s, _, sqlStore := newTestServerWithSQL(t)
+	now := time.Now().UTC()
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, 6, 10000, 100),
+	}
+	for i := range flows {
+		flows[i].Classify()
+	}
+	if err := sqlStore.Insert(flows); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	start := now.Add(-1 * time.Hour).Format("2006-01-02T15:04")
+	end := now.Add(1 * time.Hour).Format("2006-01-02T15:04")
+
+	req := httptest.NewRequest("GET", "/reports/export?start="+start+"&end="+end+"&group_by=app_proto&format=json", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	ct := w.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"group":"HTTPS"`) {
+		t.Error("JSON export should contain HTTPS entry")
+	}
+}
+
+func TestReports_NoSQLStore(t *testing.T) {
+	s, _ := newTestServer(t) // No SQL store
+	req := httptest.NewRequest("GET", "/reports?start=2025-01-01T00:00&end=2025-01-02T00:00&group_by=app_proto", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "not configured") {
+		t.Error("reports page without SQL should show error about store not configured")
+	}
+}
+
+func TestChooseBucket(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want int
+	}{
+		{30 * time.Minute, 60},
+		{3 * time.Hour, 300},
+		{12 * time.Hour, 900},
+		{3 * 24 * time.Hour, 3600},
+		{30 * 24 * time.Hour, 86400},
+	}
+	for _, tt := range tests {
+		got := chooseBucket(tt.d)
+		if got != tt.want {
+			t.Errorf("chooseBucket(%v) = %d, want %d", tt.d, got, tt.want)
 		}
 	}
 }
