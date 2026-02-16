@@ -25,6 +25,9 @@ var funcMap = template.FuncMap{
 	"formatBPS":     formatBPS,
 	"formatPPS":     formatPPS,
 	"protoName":     model.ProtocolName,
+	"appProto":      model.AppProtocol,
+	"appCategory":   model.AppCategory,
+	"asName":        model.ASName,
 	"timeAgo":       timeAgo,
 	"formatTime":    formatTime,
 	"seq":           seq,
@@ -33,6 +36,7 @@ var funcMap = template.FuncMap{
 	"sub":           func(a, b int) int { return a - b },
 	"pctOf":         pctOf,
 	"severityClass": severityClass,
+	"formatAS":      formatAS,
 }
 
 func severityClass(sev analysis.Severity) string {
@@ -160,6 +164,14 @@ func pctOf(part, total uint64) float64 {
 	return math.Round(float64(part) / float64(total) * 1000) / 10
 }
 
+func formatAS(asn uint32) string {
+	name := model.ASName(asn)
+	if asn == 0 {
+		return name
+	}
+	return fmt.Sprintf("AS%d (%s)", asn, name)
+}
+
 // --- Dashboard data structures ---
 
 // TalkerEntry represents a top talker (source or destination IP).
@@ -179,6 +191,33 @@ type ProtocolEntry struct {
 	Pct     float64
 }
 
+// ASEntry represents an Autonomous System's share of traffic.
+type ASEntry struct {
+	ASN     uint32
+	Name    string
+	Bytes   uint64
+	Packets uint64
+	Pct     float64
+}
+
+// AppProtoEntry represents an L7 application protocol's share of traffic.
+type AppProtoEntry struct {
+	Name    string
+	Bytes   uint64
+	Packets uint64
+	Flows   int
+	Pct     float64
+}
+
+// CategoryEntry represents a traffic category's share of traffic.
+type CategoryEntry struct {
+	Name    string
+	Bytes   uint64
+	Packets uint64
+	Flows   int
+	Pct     float64
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -192,6 +231,9 @@ type DashboardData struct {
 	TopSrc       []TalkerEntry
 	TopDst       []TalkerEntry
 	Protocols    []ProtocolEntry
+	TopAS        []ASEntry
+	AppProtocols []AppProtoEntry
+	Categories   []CategoryEntry
 }
 
 // --- Active Hosts data structures ---
@@ -248,6 +290,9 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	dstMap := make(map[string]*TalkerEntry)
 	protoMap := make(map[uint8]*ProtocolEntry)
 	uniqueHosts := make(map[string]struct{})
+	asMap := make(map[uint32]*ASEntry)
+	appProtoMap := make(map[string]*AppProtoEntry)
+	categoryMap := make(map[string]*CategoryEntry)
 
 	now := time.Now()
 	activeFlows := 0
@@ -291,6 +336,53 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		if now.Sub(f.Timestamp) <= 60*time.Second {
 			activeFlows++
 		}
+
+		// Aggregate by AS — use destination AS (the target service).
+		asn := f.DstAS
+		if asn == 0 {
+			asn = f.SrcAS
+		}
+		if e, ok := asMap[asn]; ok {
+			e.Bytes += f.Bytes
+			e.Packets += f.Packets
+		} else {
+			asMap[asn] = &ASEntry{
+				ASN:     asn,
+				Name:    model.ASName(asn),
+				Bytes:   f.Bytes,
+				Packets: f.Packets,
+			}
+		}
+
+		// Aggregate by L7 application protocol.
+		appName := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+		if e, ok := appProtoMap[appName]; ok {
+			e.Bytes += f.Bytes
+			e.Packets += f.Packets
+			e.Flows++
+		} else {
+			appProtoMap[appName] = &AppProtoEntry{
+				Name:    appName,
+				Bytes:   f.Bytes,
+				Packets: f.Packets,
+				Flows:   1,
+			}
+		}
+
+		// Aggregate by category.
+		catName := model.AppCategory(appName)
+		if e, ok := categoryMap[catName]; ok {
+			e.Bytes += f.Bytes
+			e.Packets += f.Packets
+			e.Flows++
+		} else {
+			categoryMap[catName] = &CategoryEntry{
+				Name:    catName,
+				Bytes:   f.Bytes,
+				Packets: f.Packets,
+				Flows:   1,
+			}
+		}
 	}
 
 	topSrc := topN(srcMap, totalBytes, 10)
@@ -302,6 +394,33 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		protocols = append(protocols, *e)
 	}
 	sortProtocols(protocols)
+
+	// Build Top AS list (top 10 by bytes).
+	topAS := make([]ASEntry, 0, len(asMap))
+	for _, e := range asMap {
+		e.Pct = pctOf(e.Bytes, totalBytes)
+		topAS = append(topAS, *e)
+	}
+	sort.Slice(topAS, func(i, j int) bool { return topAS[i].Bytes > topAS[j].Bytes })
+	if len(topAS) > 10 {
+		topAS = topAS[:10]
+	}
+
+	// Build L7 application protocol list (sorted by bytes).
+	appProtocols := make([]AppProtoEntry, 0, len(appProtoMap))
+	for _, e := range appProtoMap {
+		e.Pct = pctOf(e.Bytes, totalBytes)
+		appProtocols = append(appProtocols, *e)
+	}
+	sort.Slice(appProtocols, func(i, j int) bool { return appProtocols[i].Bytes > appProtocols[j].Bytes })
+
+	// Build category list (sorted by bytes).
+	categories := make([]CategoryEntry, 0, len(categoryMap))
+	for _, e := range categoryMap {
+		e.Pct = pctOf(e.Bytes, totalBytes)
+		categories = append(categories, *e)
+	}
+	sort.Slice(categories, func(i, j int) bool { return categories[i].Bytes > categories[j].Bytes })
 
 	return DashboardData{
 		TotalBytes:   totalBytes,
@@ -315,6 +434,9 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		TopSrc:       topSrc,
 		TopDst:       topDst,
 		Protocols:    protocols,
+		TopAS:        topAS,
+		AppProtocols: appProtocols,
+		Categories:   categories,
 	}
 }
 
@@ -344,16 +466,18 @@ func sortProtocols(p []ProtocolEntry) {
 
 // FlowRow is a display-friendly representation of a flow record.
 type FlowRow struct {
-	Timestamp string
-	SrcAddr   string
-	DstAddr   string
-	SrcPort   uint16
-	DstPort   uint16
-	Protocol  string
-	Bytes     string
-	Packets   string
-	Duration  string
-	TimeAgo   string
+	Timestamp   string
+	SrcAddr     string
+	DstAddr     string
+	SrcPort     uint16
+	DstPort     uint16
+	Protocol    string
+	Bytes       string
+	Packets     string
+	Duration    string
+	TimeAgo     string
+	AppProto    string
+	AppCategory string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -421,17 +545,20 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 
 	var pageFlows []FlowRow
 	for _, f := range filtered[start:end] {
+		appProto := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
 		pageFlows = append(pageFlows, FlowRow{
-			Timestamp: f.Timestamp.Format("15:04:05"),
-			SrcAddr:   model.SafeIPString(f.SrcAddr),
-			DstAddr:   model.SafeIPString(f.DstAddr),
-			SrcPort:   f.SrcPort,
-			DstPort:   f.DstPort,
-			Protocol:  model.ProtocolName(f.Protocol),
-			Bytes:     formatBytes(f.Bytes),
-			Packets:   formatPkts(f.Packets),
-			Duration:  f.Duration.String(),
-			TimeAgo:   timeAgo(f.Timestamp),
+			Timestamp:   f.Timestamp.Format("15:04:05"),
+			SrcAddr:     model.SafeIPString(f.SrcAddr),
+			DstAddr:     model.SafeIPString(f.DstAddr),
+			SrcPort:     f.SrcPort,
+			DstPort:     f.DstPort,
+			Protocol:    model.ProtocolName(f.Protocol),
+			Bytes:       formatBytes(f.Bytes),
+			Packets:     formatPkts(f.Packets),
+			Duration:    f.Duration.String(),
+			TimeAgo:     timeAgo(f.Timestamp),
+			AppProto:    appProto,
+			AppCategory: model.AppCategory(appProto),
 		})
 	}
 

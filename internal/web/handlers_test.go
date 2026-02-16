@@ -242,6 +242,29 @@ func TestBuildDashboardData(t *testing.T) {
 	if data.ActiveFlows != 3 {
 		t.Errorf("ActiveFlows = %d, want 3", data.ActiveFlows)
 	}
+
+	// L7 Application Protocols: HTTP (port 80), HTTPS (port 443), DNS (port 53)
+	if len(data.AppProtocols) != 3 {
+		t.Errorf("AppProtocols count = %d, want 3", len(data.AppProtocols))
+	}
+	// HTTPS should be first (10000 bytes)
+	if len(data.AppProtocols) > 0 && data.AppProtocols[0].Name != "HTTPS" {
+		t.Errorf("AppProtocols[0] = %s, want HTTPS (highest bytes)", data.AppProtocols[0].Name)
+	}
+
+	// Categories: Web (HTTP+HTTPS), Network Services (DNS)
+	if len(data.Categories) != 2 {
+		t.Errorf("Categories count = %d, want 2", len(data.Categories))
+	}
+	// Web should be first (5000+10000=15000 bytes)
+	if len(data.Categories) > 0 && data.Categories[0].Name != "Web" {
+		t.Errorf("Categories[0] = %s, want Web (highest bytes)", data.Categories[0].Name)
+	}
+
+	// Top AS: all flows have DstAS=65001
+	if len(data.TopAS) < 1 {
+		t.Fatal("TopAS should have at least 1 entry")
+	}
 }
 
 func TestHosts_Empty(t *testing.T) {
@@ -348,6 +371,75 @@ func TestDashboard_ActiveFlowsAndHosts(t *testing.T) {
 	}
 	if !strings.Contains(body, "Active Hosts") {
 		t.Error("dashboard should show 'Active Hosts' stat card")
+	}
+}
+
+func TestDashboard_L7AndCategories(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "L7 Application Protocols") {
+		t.Error("dashboard should show 'L7 Application Protocols' section")
+	}
+	if !strings.Contains(body, "Traffic Categories") {
+		t.Error("dashboard should show 'Traffic Categories' section")
+	}
+	if !strings.Contains(body, "Top Autonomous Systems") {
+		t.Error("dashboard should show 'Top Autonomous Systems' section")
+	}
+	if !strings.Contains(body, "HTTPS") {
+		t.Error("dashboard should show HTTPS application protocol")
+	}
+	if !strings.Contains(body, "HTTP") {
+		t.Error("dashboard should show HTTP application protocol")
+	}
+	if !strings.Contains(body, "DNS") {
+		t.Error("dashboard should show DNS application protocol")
+	}
+	if !strings.Contains(body, "Web") {
+		t.Error("dashboard should show Web category")
+	}
+}
+
+func TestFlows_AppProtocolColumns(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, 6, 10000, 100),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Application") {
+		t.Error("flows page should show Application column header")
+	}
+	if !strings.Contains(body, "Category") {
+		t.Error("flows page should show Category column header")
+	}
+	if !strings.Contains(body, "HTTPS") {
+		t.Error("flows page should show HTTPS for port 443")
+	}
+	if !strings.Contains(body, "Web") {
+		t.Error("flows page should show Web category for HTTPS")
 	}
 }
 

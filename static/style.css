@@ -131,6 +131,9 @@ tr:hover td { background: var(--accent-light); }
   min-width: 2px;
 }
 .bar-fill.proto { background: var(--proto-bar); }
+.bar-fill.app { background: #6f42c1; }
+.bar-fill.cat { background: #e36209; }
+.bar-fill.as { background: #0366d6; }
 
 /* Filter bar */
 .filter-bar {

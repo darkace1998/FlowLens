@@ -240,8 +240,5 @@ func ASName(asn uint32) string {
 	if name, ok := wellKnownAS[asn]; ok {
 		return name
 	}
-	if asn == 0 {
-		return "Private/Unknown"
-	}
 	return fmt.Sprintf("AS%d", asn)
 }

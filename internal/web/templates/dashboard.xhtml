@@ -85,29 +85,111 @@
   </div>
 </div>
 
-<div class="panel">
-  <h2>Protocol Breakdown</h2>
-  {{if .Protocols}}
-  <table>
-    <thead>
-      <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
-    </thead>
-    <tbody>
-      {{range .Protocols}}
-      <tr>
-        <td>{{.Name}}</td>
-        <td>{{formatBytes .Bytes}}</td>
-        <td>{{formatPkts .Packets}}</td>
-        <td>
-          <div class="bar-bg"><div class="bar-fill proto" style="width:{{.Pct}}%"></div></div>
-          {{.Pct}}%
-        </td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p class="empty">No flow data yet.</p>
-  {{end}}
+<div class="two-col">
+  <div class="panel">
+    <h2>L7 Application Protocols</h2>
+    {{if .AppProtocols}}
+    <table>
+      <thead>
+        <tr><th>Application</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .AppProtocols}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{.Flows}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill app" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2>Traffic Categories</h2>
+    {{if .Categories}}
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .Categories}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{.Flows}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill cat" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="panel">
+    <h2>Protocol Breakdown</h2>
+    {{if .Protocols}}
+    <table>
+      <thead>
+        <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .Protocols}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{formatPkts .Packets}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill proto" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2>Top Autonomous Systems</h2>
+    {{if .TopAS}}
+    <table>
+      <thead>
+        <tr><th>AS</th><th>Organisation</th><th>Bytes</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopAS}}
+        <tr>
+          <td>{{if .ASN}}AS{{.ASN}}{{else}}—{{end}}</td>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill as" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
 </div>
 {{end}}

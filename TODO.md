@@ -34,12 +34,12 @@
 |--------|------|
 | ✅ | Top 10 talkers by bytes (source and destination) on dashboard |
 | ✅ | AS numbers stored in Flow struct (`SrcAS`, `DstAS`) |
-| 🔧 | Display **Autonomous System** names alongside AS numbers (integrate an AS-name database, e.g. `iptoasn` or Team Cymru bulk lookup) |
-| ❌ | Add a **Top AS** view ranked by traffic volume |
-| ❌ | Integrate **nDPI** or a port/heuristic-based classifier for **Layer-7 application protocol detection** (HTTP, HTTPS, DNS, SSH, SMTP, etc.) |
-| ❌ | Add an **L7 Protocols** dashboard widget showing top application protocols by traffic |
-| ❌ | Define a **traffic category taxonomy** (Web, Streaming, Gaming, Social, Cloud, etc.) and map L7 protocols to categories |
-| ❌ | Add a **Categories** dashboard widget with per-category byte/packet totals |
+| ✅ | Display **Autonomous System** names alongside AS numbers (integrate an AS-name database, e.g. `iptoasn` or Team Cymru bulk lookup) |
+| ✅ | Add a **Top AS** view ranked by traffic volume |
+| ✅ | Integrate **nDPI** or a port/heuristic-based classifier for **Layer-7 application protocol detection** (HTTP, HTTPS, DNS, SSH, SMTP, etc.) |
+| ✅ | Add an **L7 Protocols** dashboard widget showing top application protocols by traffic |
+| ✅ | Define a **traffic category taxonomy** (Web, Streaming, Gaming, Social, Cloud, etc.) and map L7 protocols to categories |
+| ✅ | Add a **Categories** dashboard widget with per-category byte/packet totals |
 
 ---
 
