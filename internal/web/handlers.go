@@ -135,6 +135,36 @@ func formatPPS(pktsTotal uint64, duration time.Duration) string {
 	}
 }
 
+func formatThroughput(bps float64) string {
+	if bps <= 0 {
+		return "—"
+	}
+	switch {
+	case bps >= 1e9:
+		return fmt.Sprintf("%.2f Gbps", bps/1e9)
+	case bps >= 1e6:
+		return fmt.Sprintf("%.2f Mbps", bps/1e6)
+	case bps >= 1e3:
+		return fmt.Sprintf("%.2f Kbps", bps/1e3)
+	default:
+		return fmt.Sprintf("%.0f bps", bps)
+	}
+}
+
+func formatRTT(us int64) string {
+	if us <= 0 {
+		return "—"
+	}
+	if us < 1000 {
+		return fmt.Sprintf("%dµs", us)
+	}
+	ms := float64(us) / 1000
+	if ms < 1000 {
+		return fmt.Sprintf("%.1fms", ms)
+	}
+	return fmt.Sprintf("%.2fs", ms/1000)
+}
+
 func timeAgo(t time.Time) string {
 	d := time.Since(t)
 	switch {
@@ -248,6 +278,20 @@ type CategoryEntry struct {
 	Pct     float64
 }
 
+// LatencyStats holds percentile-based latency/throughput statistics.
+type LatencyStats struct {
+	AvgRTT     string
+	P50RTT     string
+	P95RTT     string
+	P99RTT     string
+	AvgThru    string
+	P50Thru    string
+	P95Thru    string
+	P99Thru    string
+	FlowsWithRTT int
+	FlowsWithThru int
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -264,6 +308,7 @@ type DashboardData struct {
 	TopAS        []ASEntry
 	AppProtocols []AppProtoEntry
 	Categories   []CategoryEntry
+	Latency      LatencyStats
 }
 
 // --- Active Hosts data structures ---
@@ -305,6 +350,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		logging.Default().Error("Dashboard query error: %v", err)
 		return
 	}
+
+	// Stitch bidirectional flows to compute RTT estimates.
+	model.StitchFlows(flows)
 
 	data := buildDashboardData(flows, window)
 
@@ -458,6 +506,9 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	}
 	sort.Slice(categories, func(i, j int) bool { return categories[i].Bytes > categories[j].Bytes })
 
+	// Compute latency and throughput percentiles.
+	latencyStats := computeLatencyStats(flows)
+
 	return DashboardData{
 		TotalBytes:   totalBytes,
 		TotalPackets: totalPkts,
@@ -473,7 +524,82 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		TopAS:        topAS,
 		AppProtocols: appProtocols,
 		Categories:   categories,
+		Latency:      latencyStats,
 	}
+}
+
+// computeLatencyStats calculates percentile-based latency/throughput statistics.
+func computeLatencyStats(flows []model.Flow) LatencyStats {
+	var rttValues []int64
+	var thruValues []float64
+
+	for _, f := range flows {
+		if f.RTTMicros > 0 {
+			rttValues = append(rttValues, f.RTTMicros)
+		}
+		if f.ThroughputBPS > 0 {
+			thruValues = append(thruValues, f.ThroughputBPS)
+		}
+	}
+
+	stats := LatencyStats{
+		FlowsWithRTT:  len(rttValues),
+		FlowsWithThru: len(thruValues),
+	}
+
+	if len(rttValues) > 0 {
+		sort.Slice(rttValues, func(i, j int) bool { return rttValues[i] < rttValues[j] })
+		var sum int64
+		for _, v := range rttValues {
+			sum += v
+		}
+		stats.AvgRTT = formatRTT(sum / int64(len(rttValues)))
+		stats.P50RTT = formatRTT(percentileInt64(rttValues, 50))
+		stats.P95RTT = formatRTT(percentileInt64(rttValues, 95))
+		stats.P99RTT = formatRTT(percentileInt64(rttValues, 99))
+	}
+
+	if len(thruValues) > 0 {
+		sort.Float64s(thruValues)
+		var sum float64
+		for _, v := range thruValues {
+			sum += v
+		}
+		stats.AvgThru = formatThroughput(sum / float64(len(thruValues)))
+		stats.P50Thru = formatThroughput(percentileFloat64(thruValues, 50))
+		stats.P95Thru = formatThroughput(percentileFloat64(thruValues, 95))
+		stats.P99Thru = formatThroughput(percentileFloat64(thruValues, 99))
+	}
+
+	return stats
+}
+
+func percentileInt64(sorted []int64, pct int) int64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	idx := int(math.Ceil(float64(pct)/100*float64(len(sorted)))) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
+func percentileFloat64(sorted []float64, pct int) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	idx := int(math.Ceil(float64(pct)/100*float64(len(sorted)))) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
 }
 
 func topN(m map[string]*TalkerEntry, totalBytes uint64, n int) []TalkerEntry {
@@ -514,6 +640,8 @@ type FlowRow struct {
 	TimeAgo     string
 	AppProto    string
 	AppCategory string
+	Throughput  string
+	RTT         string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -561,6 +689,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Stitch bidirectional flows to compute RTT estimates and throughput.
+	model.StitchFlows(allFlows)
+
 	// Apply filters.
 	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto)
 
@@ -601,6 +732,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			TimeAgo:     timeAgo(f.Timestamp),
 			AppProto:    appProto,
 			AppCategory: appCat,
+			Throughput:  formatThroughput(f.ThroughputBPS),
+			RTT:         formatRTT(f.RTTMicros),
 		})
 	}
 

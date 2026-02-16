@@ -26,13 +26,75 @@ type Flow struct {
 	ExporterIP   net.IP // which device sent this flow
 	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
 	AppCat       string // traffic category (e.g. "Web", "Email")
+	RTTMicros    int64  // round-trip time in microseconds (0 = unknown)
+	ThroughputBPS float64 // throughput in bits per second (0 = unknown)
 }
 
-// Classify populates AppProto and AppCat using port-based heuristic detection.
-// It should be called after all other flow fields have been set.
+// CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
+// It should be called after all flow fields are set.
+func (f *Flow) CalcThroughput() {
+	if f.Duration > 0 {
+		f.ThroughputBPS = float64(f.Bytes*8) / f.Duration.Seconds()
+	}
+}
+
+// FlowKey returns a canonical 5-tuple key for flow stitching (always lower IP first).
+func FlowKey(srcIP, dstIP net.IP, srcPort, dstPort uint16, proto uint8) string {
+	s := SafeIPString(srcIP)
+	d := SafeIPString(dstIP)
+	// Canonical ordering: lower IP first, break ties on port.
+	if s > d || (s == d && srcPort > dstPort) {
+		s, d = d, s
+		srcPort, dstPort = dstPort, srcPort
+	}
+	return fmt.Sprintf("%s:%d-%s:%d/%d", s, srcPort, d, dstPort, proto)
+}
+
+// StitchFlows performs bidirectional flow correlation on a slice of flows.
+// For each pair sharing a 5-tuple reversal it estimates RTT from the timestamp
+// difference and computes throughput. Flows are modified in place.
+func StitchFlows(flows []Flow) {
+	type stitchEntry struct {
+		idx       int
+		timestamp time.Time
+	}
+	seen := make(map[string]*stitchEntry, len(flows))
+
+	for i := range flows {
+		f := &flows[i]
+		// Always compute throughput.
+		f.CalcThroughput()
+
+		key := FlowKey(f.SrcAddr, f.DstAddr, f.SrcPort, f.DstPort, f.Protocol)
+		if prev, ok := seen[key]; ok {
+			// Found the other direction — estimate RTT from timestamp delta.
+			delta := f.Timestamp.Sub(prev.timestamp)
+			if delta < 0 {
+				delta = -delta
+			}
+			rttMicros := delta.Microseconds()
+			if rttMicros > 0 && f.RTTMicros == 0 {
+				f.RTTMicros = rttMicros
+			}
+			if rttMicros > 0 && flows[prev.idx].RTTMicros == 0 {
+				flows[prev.idx].RTTMicros = rttMicros
+			}
+			// Update entry to latest.
+			prev.idx = i
+			prev.timestamp = f.Timestamp
+		} else {
+			seen[key] = &stitchEntry{idx: i, timestamp: f.Timestamp}
+		}
+	}
+}
+
+
+// Classify populates AppProto and AppCat using port-based heuristic detection,
+// and computes ThroughputBPS. It should be called after all other flow fields have been set.
 func (f *Flow) Classify() {
 	f.AppProto = AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
 	f.AppCat = AppCategory(f.AppProto)
+	f.CalcThroughput()
 }
 
 // ProtocolName returns a human-readable name for common IP protocol numbers.
