@@ -100,6 +100,7 @@ func TestSQLiteStore_RecordFields(t *testing.T) {
 		Duration:    5 * time.Second,
 		ExporterIP:  net.ParseIP("172.16.0.1"),
 	}
+	f.Classify()
 
 	if err := store.Insert([]model.Flow{f}); err != nil {
 		t.Fatalf("Insert failed: %v", err)
@@ -159,6 +160,12 @@ func TestSQLiteStore_RecordFields(t *testing.T) {
 	}
 	if !got.ExporterIP.Equal(net.ParseIP("172.16.0.1")) {
 		t.Errorf("ExporterIP = %s, want 172.16.0.1", got.ExporterIP)
+	}
+	if got.AppProto != "HTTPS" {
+		t.Errorf("AppProto = %q, want HTTPS", got.AppProto)
+	}
+	if got.AppCat != "Web" {
+		t.Errorf("AppCat = %q, want Web", got.AppCat)
 	}
 }
 
@@ -229,5 +236,80 @@ func TestSQLiteStore_Close(t *testing.T) {
 	err := store.Close()
 	if err != nil {
 		t.Errorf("Close() returned error: %v", err)
+	}
+}
+
+func TestSQLiteStore_QueryReport(t *testing.T) {
+	store := newTestSQLite(t)
+	defer store.Close()
+
+	now := time.Now().UTC()
+	f1 := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, now.Add(-5*time.Minute))
+	f1.Protocol = 6
+	f1.Bytes = 10000
+	f1.AppProto = "HTTPS"
+	f1.AppCat = "Web"
+
+	f2 := makeTestFlow("10.0.1.2", "192.168.1.2", 12346, 53, now.Add(-3*time.Minute))
+	f2.Protocol = 17
+	f2.Bytes = 500
+	f2.AppProto = "DNS"
+	f2.AppCat = "Network Services"
+
+	if err := store.Insert([]model.Flow{f1, f2}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	rows, err := store.QueryReport(now.Add(-10*time.Minute), now, "app_proto")
+	if err != nil {
+		t.Fatalf("QueryReport failed: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("QueryReport returned %d rows, want 2", len(rows))
+	}
+
+	// HTTPS should be first (higher bytes)
+	if rows[0].GroupKey != "HTTPS" {
+		t.Errorf("rows[0].GroupKey = %q, want HTTPS", rows[0].GroupKey)
+	}
+	if rows[0].TotalBytes != 10000 {
+		t.Errorf("rows[0].TotalBytes = %d, want 10000", rows[0].TotalBytes)
+	}
+}
+
+func TestSQLiteStore_QueryReport_InvalidGroupBy(t *testing.T) {
+	store := newTestSQLite(t)
+	defer store.Close()
+
+	_, err := store.QueryReport(time.Now().Add(-time.Hour), time.Now(), "DROP TABLE flows")
+	if err == nil {
+		t.Fatal("QueryReport should reject invalid group-by columns")
+	}
+}
+
+func TestSQLiteStore_QueryTimeSeries(t *testing.T) {
+	store := newTestSQLite(t)
+	defer store.Close()
+
+	now := time.Now().UTC()
+	f1 := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 443, now.Add(-5*time.Minute))
+	f1.Bytes = 10000
+
+	if err := store.Insert([]model.Flow{f1}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	points, err := store.QueryTimeSeries(now.Add(-10*time.Minute), now, 300)
+	if err != nil {
+		t.Fatalf("QueryTimeSeries failed: %v", err)
+	}
+
+	if len(points) == 0 {
+		t.Fatal("QueryTimeSeries returned 0 points, want >= 1")
+	}
+
+	if points[0].TotalBytes != 10000 {
+		t.Errorf("points[0].TotalBytes = %d, want 10000", points[0].TotalBytes)
 	}
 }

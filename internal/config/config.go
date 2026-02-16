@@ -29,6 +29,7 @@ type StorageConfig struct {
 	SQLitePath         string        `yaml:"sqlite_path"`
 	SQLiteRetention    time.Duration `yaml:"sqlite_retention"`
 	PruneInterval      time.Duration `yaml:"prune_interval"`
+	GeoIPPath          string        `yaml:"geoip_path"` // optional path to CSV GeoIP database (e.g. IP2Location LITE)
 }
 
 // AnalysisConfig holds settings for the analysis engine.

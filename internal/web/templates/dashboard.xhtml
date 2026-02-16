@@ -1,4 +1,5 @@
 {{define "title"}}Dashboard{{end}}
+{{define "head"}}<meta http-equiv="refresh" content="30" />{{end}}
 {{define "content"}}
 <h1>Dashboard</h1>
 
@@ -20,7 +21,166 @@
     <div class="stat-label">Flows ({{.Window}})</div>
     <div class="stat-value">{{.FlowCount}}</div>
   </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Flows (last 60s)</div>
+    <div class="stat-value">{{.ActiveFlows}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Hosts</div>
+    <div class="stat-value"><a href="/hosts">{{.ActiveHosts}}</a></div>
+  </div>
 </div>
+
+{{if or .Latency.FlowsWithRTT .Latency.FlowsWithThru}}
+<div class="two-col">
+  {{if .Latency.FlowsWithThru}}
+  <div class="panel">
+    <h2>Throughput Percentiles</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Average</td><td>{{.Latency.AvgThru}}</td></tr>
+        <tr><td>p50 (Median)</td><td>{{.Latency.P50Thru}}</td></tr>
+        <tr><td>p95</td><td>{{.Latency.P95Thru}}</td></tr>
+        <tr><td>p99</td><td>{{.Latency.P99Thru}}</td></tr>
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.Latency.FlowsWithThru}} flows with duration &gt; 0</p>
+  </div>
+  {{end}}
+
+  {{if .Latency.FlowsWithRTT}}
+  <div class="panel">
+    <h2>RTT Latency Percentiles</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Average</td><td>{{.Latency.AvgRTT}}</td></tr>
+        <tr><td>p50 (Median)</td><td>{{.Latency.P50RTT}}</td></tr>
+        <tr><td>p95</td><td>{{.Latency.P95RTT}}</td></tr>
+        <tr><td>p99</td><td>{{.Latency.P99RTT}}</td></tr>
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.Latency.FlowsWithRTT}} stitched bidirectional flows</p>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{if .TCPHealth.TotalTCPFlows}}
+<div class="two-col">
+  <div class="panel">
+    <h2>TCP Health Summary</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Count</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>TCP Flows</td>
+          <td>{{.TCPHealth.TotalTCPFlows}}</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>Retransmissions</td>
+          <td>{{.TCPHealth.TotalRetrans}} ({{.TCPHealth.FlowsWithRetrans}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.RetransRate}}%</td>
+        </tr>
+        <tr>
+          <td>Out of Order</td>
+          <td>{{.TCPHealth.TotalOOO}} ({{.TCPHealth.FlowsWithOOO}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.OOORate}}%</td>
+        </tr>
+        <tr>
+          <td>Packet Loss</td>
+          <td>{{.TCPHealth.TotalLoss}} ({{.TCPHealth.FlowsWithLoss}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.LossRate}}%</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.TCPHealth.TotalTCPPackets}} TCP packets</p>
+  </div>
+
+  <div class="panel">
+    <h2>Top Affected TCP Flows</h2>
+    {{if .TCPHealth.TopRetransFlows}}
+    <table>
+      <thead>
+        <tr><th>Flow</th><th>Retrans</th><th>OOO</th><th>Loss</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        {{range .TCPHealth.TopRetransFlows}}
+        <tr>
+          <td>{{.SrcAddr}}:{{.SrcPort}} → {{.DstAddr}}:{{.DstPort}}</td>
+          <td>{{.Retrans}}</td>
+          <td>{{.OOO}}</td>
+          <td>{{.Loss}}</td>
+          <td>{{printf "%.2f" .RetransRate}}%</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No TCP quality issues detected.</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{if .VoIP.TotalVoIPFlows}}
+<div class="two-col">
+  <div class="panel">
+    <h2>VoIP Quality Summary</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>VoIP/RTP Flows</td><td>{{.VoIP.TotalVoIPFlows}}</td></tr>
+        {{if .VoIP.FlowsWithJitter}}
+        <tr><td>Avg Jitter</td><td>{{.VoIP.AvgJitter}}</td></tr>
+        <tr><td>p50 Jitter</td><td>{{.VoIP.P50Jitter}}</td></tr>
+        <tr><td>p95 Jitter</td><td>{{.VoIP.P95Jitter}}</td></tr>
+        {{end}}
+        {{if .VoIP.FlowsWithMOS}}
+        <tr><td>Avg MOS</td><td>{{.VoIP.AvgMOS}}</td></tr>
+        <tr><td>Min MOS</td><td>{{.VoIP.MinMOS}}</td></tr>
+        <tr><td>Flows Below MOS 3.5</td><td>{{.VoIP.FlowsBelowMOS35}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.VoIP.TotalVoIPFlows}} detected VoIP flows (UDP 10000–20000, SIP 5060/5061)</p>
+  </div>
+
+  <div class="panel">
+    <h2>Top VoIP Flows</h2>
+    {{if .VoIP.TopVoIPFlows}}
+    <table>
+      <thead>
+        <tr><th>Flow</th><th>Jitter</th><th>MOS</th><th>Loss</th><th>Packets</th></tr>
+      </thead>
+      <tbody>
+        {{range .VoIP.TopVoIPFlows}}
+        <tr>
+          <td>{{.SrcAddr}}:{{.SrcPort}} → {{.DstAddr}}:{{.DstPort}}</td>
+          <td>{{.Jitter}}</td>
+          <td><span class="mos-{{.MOSClass}}">{{.MOS}}</span></td>
+          <td>{{.Loss}}</td>
+          <td>{{.Packets}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No VoIP flows detected.</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
 
 <div class="two-col">
   <div class="panel">
@@ -76,29 +236,111 @@
   </div>
 </div>
 
-<div class="panel">
-  <h2>Protocol Breakdown</h2>
-  {{if .Protocols}}
-  <table>
-    <thead>
-      <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
-    </thead>
-    <tbody>
-      {{range .Protocols}}
-      <tr>
-        <td>{{.Name}}</td>
-        <td>{{formatBytes .Bytes}}</td>
-        <td>{{formatPkts .Packets}}</td>
-        <td>
-          <div class="bar-bg"><div class="bar-fill proto" style="width:{{.Pct}}%"></div></div>
-          {{.Pct}}%
-        </td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p class="empty">No flow data yet.</p>
-  {{end}}
+<div class="two-col">
+  <div class="panel">
+    <h2>L7 Application Protocols</h2>
+    {{if .AppProtocols}}
+    <table>
+      <thead>
+        <tr><th>Application</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .AppProtocols}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{.Flows}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill app" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2>Traffic Categories</h2>
+    {{if .Categories}}
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .Categories}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{.Flows}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill cat" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="panel">
+    <h2>Protocol Breakdown</h2>
+    {{if .Protocols}}
+    <table>
+      <thead>
+        <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .Protocols}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>{{formatPkts .Packets}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill proto" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2>Top Autonomous Systems</h2>
+    {{if .TopAS}}
+    <table>
+      <thead>
+        <tr><th>AS</th><th>Organisation</th><th>Bytes</th><th>Share</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopAS}}
+        <tr>
+          <td>{{if .ASN}}AS{{.ASN}}{{else}}—{{end}}</td>
+          <td>{{.Name}}</td>
+          <td>{{formatBytes .Bytes}}</td>
+          <td>
+            <div class="bar-bg"><div class="bar-fill as" style="width:{{.Pct}}%"></div></div>
+            {{.Pct}}%
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No flow data yet.</p>
+    {{end}}
+  </div>
 </div>
 {{end}}

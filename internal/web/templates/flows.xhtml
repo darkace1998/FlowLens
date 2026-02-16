@@ -1,4 +1,5 @@
 {{define "title"}}Flow Explorer{{end}}
+{{define "head"}}{{end}}
 {{define "content"}}
 <h1>Flow Explorer</h1>
 
@@ -20,11 +21,22 @@
       <th>Time</th>
       <th>Source</th>
       <th>Src Port</th>
+      <th>Src Country</th>
       <th>Destination</th>
       <th>Dst Port</th>
+      <th>Dst Country</th>
       <th>Protocol</th>
+      <th>Application</th>
+      <th>Category</th>
       <th>Bytes</th>
       <th>Packets</th>
+      <th>Throughput</th>
+      <th>RTT</th>
+      <th>Retrans</th>
+      <th>OOO</th>
+      <th>Loss</th>
+      <th>Jitter</th>
+      <th>MOS</th>
       <th>Duration</th>
       <th>Age</th>
     </tr>
@@ -35,11 +47,22 @@
       <td>{{.Timestamp}}</td>
       <td>{{.SrcAddr}}</td>
       <td>{{.SrcPort}}</td>
+      <td>{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
       <td>{{.DstAddr}}</td>
       <td>{{.DstPort}}</td>
+      <td>{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
       <td>{{.Protocol}}</td>
+      <td>{{.AppProto}}</td>
+      <td>{{.AppCategory}}</td>
       <td>{{.Bytes}}</td>
       <td>{{.Packets}}</td>
+      <td>{{.Throughput}}</td>
+      <td>{{.RTT}}</td>
+      <td>{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
+      <td>{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
+      <td>{{if .Loss}}{{.Loss}}{{else}}—{{end}}</td>
+      <td>{{.Jitter}}</td>
+      <td>{{if ne .MOS "—"}}<span class="mos-{{.MOSClass}}">{{.MOS}}</span>{{else}}—{{end}}</td>
       <td>{{.Duration}}</td>
       <td>{{.TimeAgo}}</td>
     </tr>

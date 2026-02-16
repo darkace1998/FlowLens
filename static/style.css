@@ -131,6 +131,9 @@ tr:hover td { background: var(--accent-light); }
   min-width: 2px;
 }
 .bar-fill.proto { background: var(--proto-bar); }
+.bar-fill.app { background: #6f42c1; }
+.bar-fill.cat { background: #e36209; }
+.bar-fill.as { background: #0366d6; }
 
 /* Filter bar */
 .filter-bar {
@@ -280,3 +283,67 @@ a:hover { text-decoration: underline; }
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* Reports */
+.report-form select {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: #fff;
+}
+.report-export {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.btn-export {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.8rem;
+}
+.btn-export:hover { opacity: 0.9; text-decoration: none; color: #fff; }
+.bar-fill.report { background: #6f42c1; }
+
+/* Trend chart (pure CSS bar chart) */
+.trend-chart { margin-top: 0.5rem; }
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+.trend-bar-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+.trend-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.2s;
+}
+.trend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+/* MOS quality indicators */
+.mos-good { color: #28a745; font-weight: 600; }
+.mos-fair { color: #dbab09; font-weight: 600; }
+.mos-poor { color: #e36209; font-weight: 600; }
+.mos-bad  { color: #cb2431; font-weight: 600; }

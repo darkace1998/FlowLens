@@ -114,6 +114,7 @@ func DecodeNetFlowV5(data []byte, exporterIP net.IP) ([]model.Flow, error) {
 			Duration:    duration,
 			ExporterIP:  exporterIP,
 		})
+		flows[len(flows)-1].Classify()
 	}
 
 	return flows, nil

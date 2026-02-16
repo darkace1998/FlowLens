@@ -35,6 +35,11 @@ const (
 	nfv9FieldIPv6FlowLabel  = 31
 	nfv9FieldDirection      = 61
 	nfv9FieldIPv6NextHop    = 62
+	// TCP quality fields (same IDs as IPFIX for v9-compatible exporters)
+	nfv9FieldTCPRetransmissionCount = 321
+	nfv9FieldTCPOutOfOrderCount     = 227
+	nfv9FieldPacketLossCount        = 233
+	nfv9FieldRTPJitter              = 387
 )
 
 // nfv9HeaderSize is the size of the NetFlow v9 packet header in bytes.
@@ -212,6 +217,7 @@ func decodeNFV9DataFlowSet(data []byte, sourceID uint32, templateID uint16,
 			f.Timestamp = baseTime.Add(-elapsed)
 		}
 
+		f.Classify()
 		flows = append(flows, f)
 	}
 
@@ -283,6 +289,14 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 			ctx.lastSwitched = binary.BigEndian.Uint32(data)
 			ctx.hasLast = true
 		}
+	case nfv9FieldTCPRetransmissionCount:
+		f.Retransmissions = uint32(readUintN(data))
+	case nfv9FieldTCPOutOfOrderCount:
+		f.OutOfOrder = uint32(readUintN(data))
+	case nfv9FieldPacketLossCount:
+		f.PacketLoss = uint32(readUintN(data))
+	case nfv9FieldRTPJitter:
+		f.JitterMicros = int64(readUintN(data))
 	}
 }
 

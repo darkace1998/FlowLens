@@ -8,22 +8,185 @@ import (
 
 // Flow represents a unified flow record decoded from any NetFlow/IPFIX version.
 type Flow struct {
-	Timestamp   time.Time
-	SrcAddr     net.IP
-	DstAddr     net.IP
-	SrcPort     uint16
-	DstPort     uint16
-	Protocol    uint8 // TCP=6, UDP=17, ICMP=1, etc.
-	Bytes       uint64
-	Packets     uint64
-	TCPFlags    uint8
-	ToS         uint8
-	InputIface  uint32
-	OutputIface uint32
-	SrcAS       uint32
-	DstAS       uint32
-	Duration    time.Duration
-	ExporterIP  net.IP // which device sent this flow
+	Timestamp    time.Time
+	SrcAddr      net.IP
+	DstAddr      net.IP
+	SrcPort      uint16
+	DstPort      uint16
+	Protocol     uint8 // TCP=6, UDP=17, ICMP=1, etc.
+	Bytes        uint64
+	Packets      uint64
+	TCPFlags     uint8
+	ToS          uint8
+	InputIface   uint32
+	OutputIface  uint32
+	SrcAS        uint32
+	DstAS        uint32
+	Duration     time.Duration
+	ExporterIP   net.IP // which device sent this flow
+	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
+	AppCat       string // traffic category (e.g. "Web", "Email")
+	RTTMicros      int64   // round-trip time in microseconds (0 = unknown)
+	ThroughputBPS  float64 // throughput in bits per second (0 = unknown)
+	Retransmissions uint32  // TCP retransmission count (from IPFIX IE 321 or heuristic)
+	OutOfOrder      uint32  // TCP out-of-order segment count
+	PacketLoss      uint32  // estimated packet loss count
+	JitterMicros    int64   // inter-packet jitter in microseconds (from IPFIX IE 387 or estimated)
+	MOS             float32 // Mean Opinion Score (1.0–4.41, 0 = not computed)
+}
+
+// CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
+// It should be called after all flow fields are set.
+func (f *Flow) CalcThroughput() {
+	if f.Duration > 0 {
+		f.ThroughputBPS = float64(f.Bytes*8) / f.Duration.Seconds()
+	}
+}
+
+// RetransmissionRate returns the ratio of retransmitted packets to total packets.
+// Returns 0 if there are no packets or no retransmissions.
+func (f *Flow) RetransmissionRate() float64 {
+	if f.Packets == 0 || f.Retransmissions == 0 {
+		return 0
+	}
+	return float64(f.Retransmissions) / float64(f.Packets) * 100
+}
+
+// PacketLossRate returns the estimated packet loss rate as a percentage.
+func (f *Flow) PacketLossRate() float64 {
+	if f.Packets == 0 || f.PacketLoss == 0 {
+		return 0
+	}
+	total := f.Packets + uint64(f.PacketLoss)
+	return float64(f.PacketLoss) / float64(total) * 100
+}
+
+// IsVoIP returns true if the flow is likely VoIP/RTP traffic based on port
+// heuristics: UDP in the common RTP range (10000–20000) or SIP (5060/5061).
+func (f *Flow) IsVoIP() bool {
+	if f.Protocol != 17 { // UDP only
+		return false
+	}
+	if f.SrcPort == 5060 || f.SrcPort == 5061 || f.DstPort == 5060 || f.DstPort == 5061 {
+		return true
+	}
+	port := f.DstPort
+	if f.SrcPort >= 10000 && f.SrcPort <= 20000 {
+		port = f.SrcPort
+	}
+	return port >= 10000 && port <= 20000
+}
+
+// CalcMOS estimates a Mean Opinion Score using a simplified ITU-T G.107
+// E-model. Inputs: jitter (microseconds), RTT (microseconds), packet loss (%).
+// Returns a value between 1.0 and 4.41 (max for a G.711 codec path).
+func CalcMOS(jitterUs int64, rttUs int64, lossPercent float64) float32 {
+	// R-value computation (simplified E-model).
+	r := 93.2 // base R-value for G.711
+
+	// Delay impairment (Id): effective one-way delay includes codec delay
+	// (≈10ms), one-way network delay (RTT/2), and jitter buffer (≈2× jitter).
+	codecDelay := 10.0
+	oneWayMs := float64(rttUs) / 2000.0
+	jitterBufMs := float64(jitterUs) / 500.0 // 2×jitter in ms
+	totalDelay := codecDelay + oneWayMs + jitterBufMs
+
+	// ITU-T G.107 §A.1: delay impairment factor Id.
+	if totalDelay > 177.3 {
+		id := 0.024*totalDelay + 0.11*(totalDelay-177.3)
+		r -= id
+	} else {
+		r -= 0.024 * totalDelay
+	}
+
+	// Equipment impairment for loss (Ie-eff).
+	// Using the ITU G.107 simplified formula with loss sensitivity.
+	if lossPercent > 0 {
+		burstR := 1.0 // burst ratio for random loss
+		ieLoss := 30.0 * (1.0 - 1.0/(1.0+lossPercent*burstR/4.0))
+		r -= ieLoss // loss reduces R
+	}
+
+	// Clamp R to [0, 93.2].
+	if r < 0 {
+		r = 0
+	}
+	if r > 93.2 {
+		r = 93.2
+	}
+
+	// Convert R-value to MOS using the ITU formula.
+	mos := 1.0 + 0.035*r + r*(r-60)*(100-r)*7e-6
+	if mos < 1.0 {
+		mos = 1.0
+	}
+	if mos > 4.41 {
+		mos = 4.41
+	}
+	return float32(mos)
+}
+
+// FlowKey returns a canonical 5-tuple key for flow stitching (always lower IP first).
+func FlowKey(srcIP, dstIP net.IP, srcPort, dstPort uint16, proto uint8) string {
+	s := SafeIPString(srcIP)
+	d := SafeIPString(dstIP)
+	// Canonical ordering: lower IP first, break ties on port.
+	if s > d || (s == d && srcPort > dstPort) {
+		s, d = d, s
+		srcPort, dstPort = dstPort, srcPort
+	}
+	return fmt.Sprintf("%s:%d-%s:%d/%d", s, srcPort, d, dstPort, proto)
+}
+
+// StitchFlows performs bidirectional flow correlation on a slice of flows.
+// For each pair sharing a 5-tuple reversal it estimates RTT from the timestamp
+// difference and computes throughput. Flows are modified in place.
+func StitchFlows(flows []Flow) {
+	type stitchEntry struct {
+		idx       int
+		timestamp time.Time
+	}
+	seen := make(map[string]*stitchEntry, len(flows))
+
+	for i := range flows {
+		f := &flows[i]
+		// Always compute throughput.
+		f.CalcThroughput()
+
+		key := FlowKey(f.SrcAddr, f.DstAddr, f.SrcPort, f.DstPort, f.Protocol)
+		if prev, ok := seen[key]; ok {
+			// Found the other direction — estimate RTT from timestamp delta.
+			delta := f.Timestamp.Sub(prev.timestamp)
+			if delta < 0 {
+				delta = -delta
+			}
+			rttMicros := delta.Microseconds()
+			if rttMicros > 0 && f.RTTMicros == 0 {
+				f.RTTMicros = rttMicros
+			}
+			if rttMicros > 0 && flows[prev.idx].RTTMicros == 0 {
+				flows[prev.idx].RTTMicros = rttMicros
+			}
+			// Update entry to latest.
+			prev.idx = i
+			prev.timestamp = f.Timestamp
+		} else {
+			seen[key] = &stitchEntry{idx: i, timestamp: f.Timestamp}
+		}
+	}
+}
+
+// Classify populates AppProto and AppCat using port-based heuristic detection,
+// computes ThroughputBPS, and estimates MOS for VoIP flows.
+// It should be called after all other flow fields have been set.
+func (f *Flow) Classify() {
+	f.AppProto = AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+	f.AppCat = AppCategory(f.AppProto)
+	f.CalcThroughput()
+	// Estimate MOS for VoIP flows that don't already have one.
+	if f.MOS == 0 && f.IsVoIP() {
+		f.MOS = CalcMOS(f.JitterMicros, f.RTTMicros, f.PacketLossRate())
+	}
 }
 
 // ProtocolName returns a human-readable name for common IP protocol numbers.
@@ -63,4 +226,187 @@ func SafeIPString(ip net.IP) string {
 		return "0.0.0.0"
 	}
 	return ip.String()
+}
+
+// AppProtocol returns a human-readable Layer-7 application protocol name
+// based on well-known port numbers and the L4 protocol. When the port is
+// not recognised, it returns "Other".
+func AppProtocol(proto uint8, srcPort, dstPort uint16) string {
+	// Use the lower (well-known) port as the indicator.
+	port := dstPort
+	if srcPort < dstPort {
+		port = srcPort
+	}
+
+	switch {
+	// DNS
+	case port == 53:
+		return "DNS"
+	// HTTP
+	case port == 80 || port == 8080 || port == 8000:
+		return "HTTP"
+	// HTTPS / TLS
+	case port == 443 || port == 8443:
+		return "HTTPS"
+	// SSH
+	case port == 22:
+		return "SSH"
+	// FTP
+	case port == 20 || port == 21:
+		return "FTP"
+	// SMTP
+	case port == 25 || port == 587 || port == 465:
+		return "SMTP"
+	// IMAP
+	case port == 143 || port == 993:
+		return "IMAP"
+	// POP3
+	case port == 110 || port == 995:
+		return "POP3"
+	// Telnet
+	case port == 23:
+		return "Telnet"
+	// RDP
+	case port == 3389:
+		return "RDP"
+	// MySQL
+	case port == 3306:
+		return "MySQL"
+	// PostgreSQL
+	case port == 5432:
+		return "PostgreSQL"
+	// Redis
+	case port == 6379:
+		return "Redis"
+	// MongoDB
+	case port == 27017:
+		return "MongoDB"
+	// NTP
+	case port == 123:
+		return "NTP"
+	// SNMP
+	case port == 161 || port == 162:
+		return "SNMP"
+	// LDAP
+	case port == 389 || port == 636:
+		return "LDAP"
+	// Syslog
+	case port == 514:
+		return "Syslog"
+	// DHCP
+	case port == 67 || port == 68:
+		return "DHCP"
+	// NetFlow / IPFIX
+	case port == 2055 || port == 4739 || port == 9996:
+		return "NetFlow"
+	// SMB
+	case port == 445 || port == 139:
+		return "SMB"
+	// SIP (VoIP signaling)
+	case port == 5060 || port == 5061:
+		return "SIP"
+	// ICMP family
+	case proto == 1 || proto == 58:
+		return "ICMP"
+	default:
+		return "Other"
+	}
+}
+
+// AppCategory returns a traffic category for the given L7 application protocol.
+func AppCategory(appProto string) string {
+	switch appProto {
+	case "HTTP", "HTTPS":
+		return "Web"
+	case "DNS", "NTP", "DHCP", "SNMP", "Syslog", "NetFlow":
+		return "Network Services"
+	case "SSH", "Telnet", "RDP", "SMB":
+		return "Remote Access"
+	case "SMTP", "IMAP", "POP3":
+		return "Email"
+	case "MySQL", "PostgreSQL", "Redis", "MongoDB":
+		return "Database"
+	case "FTP":
+		return "File Transfer"
+	case "LDAP":
+		return "Directory"
+	case "SIP":
+		return "Multimedia"
+	case "ICMP":
+		return "Network Services"
+	default:
+		return "Other"
+	}
+}
+
+// wellKnownAS maps common AS numbers to their organisation names.
+var wellKnownAS = map[uint32]string{
+	0:     "Private/Unknown",
+	13335: "Cloudflare",
+	15169: "Google",
+	16509: "Amazon (AWS)",
+	8075:  "Microsoft",
+	32934: "Facebook (Meta)",
+	20940: "Akamai",
+	14618: "Amazon",
+	16591: "Google Cloud",
+	36459: "GitHub",
+	54113: "Fastly",
+	13414: "Twitter (X)",
+	2906:  "Netflix",
+	714:   "Apple",
+	46489: "Twitch",
+	36183: "Akamai",
+	19551: "Incapsula",
+	14061: "DigitalOcean",
+	63949: "Linode (Akamai)",
+	24940: "Hetzner",
+	16276: "OVH",
+	396982: "Google Cloud",
+	8068:  "Microsoft (Azure)",
+	8069:  "Microsoft (Azure)",
+	3320:  "Deutsche Telekom",
+	3356:  "Lumen/CenturyLink",
+	6939:  "Hurricane Electric",
+	174:   "Cogent",
+	1299:  "Arelion (Telia)",
+	2914:  "NTT",
+	6461:  "Zayo",
+	7018:  "AT&T",
+	701:   "Verizon",
+	7922:  "Comcast",
+	22773: "Cox",
+	20115: "Charter",
+	6167:  "Verizon Business",
+	209:   "CenturyLink",
+	3257:  "GTT",
+	4134:  "ChinaNet",
+	4837:  "China Unicom",
+	4808:  "China Unicom",
+	9808:  "China Mobile",
+	17676: "SoftBank",
+	2516:  "KDDI",
+	4766:  "Korea Telecom",
+	9318:  "SK Broadband",
+	4755:  "Tata Communications",
+	9498:  "Bharti Airtel",
+	18881: "Telefônica Brasil",
+	28573: "Claro Brasil",
+	12322: "Free (France)",
+	5410:  "Bouygues Telecom",
+	15557: "SFR (France)",
+	6805:  "Telefónica Germany",
+	12876: "Scaleway",
+	197540: "Netcup",
+	47541: "Vkontakte",
+	13238: "Yandex",
+}
+
+// ASName returns a human-readable organisation name for common AS numbers.
+// If the AS number is not in the well-known list, it returns "AS<number>".
+func ASName(asn uint32) string {
+	if name, ok := wellKnownAS[asn]; ok {
+		return name
+	}
+	return fmt.Sprintf("AS%d", asn)
 }
