@@ -139,12 +139,12 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Integrate **gopacket / libpcap** for raw packet capture on configurable interfaces |
-| ❌ | Decode Ethernet → IP → TCP/UDP headers to produce flow-like records from packets |
-| ❌ | Add a **Capture** page where users can start/stop captures with BPF filter expressions |
-| ❌ | Store captured packets in **PCAP files** (ring-buffer of files with size/time rotation) |
-| ❌ | Allow **download of PCAP** files from the web UI |
-| ❌ | Add config section for capture interfaces, snap length, and BPF filters |
+| ✅ | Integrate raw packet capture on configurable interfaces (AF_PACKET on Linux) |
+| ✅ | Decode Ethernet → IP → TCP/UDP headers to produce flow-like records from packets |
+| ✅ | Add a **Capture** page where users can start/stop captures with BPF filter expressions |
+| ✅ | Store captured packets in **PCAP files** (ring-buffer of files with size/time rotation) |
+| ✅ | Allow **download of PCAP** files from the web UI |
+| ✅ | Add config section for capture interfaces, snap length, and BPF filters |
 
 ---
 

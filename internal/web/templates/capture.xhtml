@@ -1,0 +1,99 @@
+{{define "title"}}Capture{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>Packet Capture</h1>
+
+<div class="two-col">
+  <div class="panel">
+    <h2>Start New Capture</h2>
+    <form method="POST" action="/capture/start">
+      <table>
+        <tbody>
+          <tr>
+            <td><label for="device">Interface</label></td>
+            <td>
+              <select name="device" id="device">
+                {{range .Interfaces}}
+                <option value="{{.}}">{{.}}</option>
+                {{end}}
+                {{if not .Interfaces}}
+                <option value="">No interfaces configured</option>
+                {{end}}
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <td><label for="bpf">BPF Filter</label></td>
+            <td><input type="text" name="bpf" id="bpf" placeholder="e.g. tcp port 80" style="width:100%" /></td>
+          </tr>
+        </tbody>
+      </table>
+      <p><button type="submit"{{if not .Interfaces}} disabled{{end}}>Start Capture</button></p>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Active Sessions</h2>
+    {{if .Sessions}}
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Device</th><th>BPF</th><th>Packets</th><th>Started</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        {{range .Sessions}}
+        <tr>
+          <td>{{.ID}}</td>
+          <td>{{.Device}}</td>
+          <td>{{if .BPF}}{{.BPF}}{{else}}—{{end}}</td>
+          <td>{{.Packets}}</td>
+          <td>{{formatTime .StartTime}}</td>
+          <td>
+            {{if eq .State "running"}}
+              <span class="severity-badge severity-info">Running</span>
+            {{else}}
+              <span class="severity-badge severity-resolved">Stopped</span>
+            {{end}}
+          </td>
+          <td>
+            {{if eq .State "running"}}
+            <form method="POST" action="/capture/stop" style="display:inline">
+              <input type="hidden" name="id" value="{{.ID}}" />
+              <button type="submit">Stop</button>
+            </form>
+            {{else}}
+            —
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No capture sessions.</p>
+    {{end}}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>PCAP Files</h2>
+  {{if .Files}}
+  <table>
+    <thead>
+      <tr><th>Filename</th><th>Size</th><th>Modified</th><th>Download</th></tr>
+    </thead>
+    <tbody>
+      {{range .Files}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{formatBytes (uint64 .Size)}}</td>
+        <td>{{formatTime .ModTime}}</td>
+        <td><a href="/capture/download?file={{.Name}}">Download</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty">No PCAP files available.</p>
+  {{end}}
+</div>
+{{end}}

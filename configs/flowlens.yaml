@@ -34,3 +34,12 @@ analysis:
 web:
   listen: ":8080"             # HTTP listen address
   page_size: 50               # rows per page in flow explorer
+
+capture:
+  # interfaces:               # network interfaces available for capture
+  #   - eth0
+  #   - eth1
+  snaplen: 65535              # packet snapshot length
+  dir: "./captures"           # directory for PCAP files
+  max_size_mb: 100            # max PCAP file size before rotation (MB)
+  max_files: 10               # max number of PCAP files to keep

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/capture"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
@@ -1701,4 +1702,108 @@ func formatUptime(d time.Duration) string {
 		return fmt.Sprintf("%dm %ds", mins, secs)
 	}
 	return fmt.Sprintf("%ds", secs)
+}
+
+// --- Capture handlers ---
+
+// CapturePageData holds data for the capture page template.
+type CapturePageData struct {
+	Interfaces []string
+	Sessions   []capture.Session
+	Files      []capture.PcapFileInfo
+}
+
+func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
+	data := CapturePageData{}
+
+	if s.captureMgr != nil {
+		data.Interfaces = s.captureMgr.Interfaces()
+		data.Sessions = s.captureMgr.Sessions()
+		files, err := s.captureMgr.PcapFiles()
+		if err != nil {
+			logging.Default().Warn("Failed to list PCAP files: %v", err)
+		}
+		data.Files = files
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplCapture.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	device := r.FormValue("device")
+	bpf := r.FormValue("bpf")
+
+	if device == "" {
+		http.Error(w, "Device is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := s.captureMgr.Start(device, bpf)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to start capture: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/capture", http.StatusSeeOther)
+}
+
+func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.captureMgr.Stop(id); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to stop capture: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/capture", http.StatusSeeOther)
+}
+
+func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	filename := r.URL.Query().Get("file")
+	if filename == "" {
+		http.Error(w, "File parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	path, err := s.captureMgr.PcapFilePath(filename)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	http.ServeFile(w, r, path)
 }

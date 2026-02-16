@@ -1,10 +1,14 @@
 # Binary
+flowlens
 flowlens.exe
 
 # Database
 *.db
 *.db-wal
 *.db-shm
+
+# Captures
+captures/
 
 # IDE / editor
 .idea/

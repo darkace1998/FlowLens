@@ -14,6 +14,7 @@ type Config struct {
 	Storage   StorageConfig   `yaml:"storage"`
 	Analysis  AnalysisConfig  `yaml:"analysis"`
 	Web       WebConfig       `yaml:"web"`
+	Capture   CaptureConfig   `yaml:"capture"`
 }
 
 // CollectorConfig holds settings for the NetFlow/IPFIX collector.
@@ -58,6 +59,15 @@ type WebConfig struct {
 	PageSize int    `yaml:"page_size"`
 }
 
+// CaptureConfig holds settings for packet capture and PCAP storage.
+type CaptureConfig struct {
+	Interfaces []string `yaml:"interfaces"` // network interfaces available for capture (e.g. ["eth0", "eth1"])
+	SnapLen    int      `yaml:"snaplen"`    // packet snapshot length (default: 65535)
+	Dir        string   `yaml:"dir"`        // directory to store PCAP files (default: "./captures")
+	MaxSizeMB  int      `yaml:"max_size_mb"` // max PCAP file size in MB before rotation (default: 100)
+	MaxFiles   int      `yaml:"max_files"`   // max number of PCAP files to keep (default: 10)
+}
+
 // Defaults returns a Config populated with sensible default values.
 func Defaults() Config {
 	return Config{
@@ -81,6 +91,12 @@ func Defaults() Config {
 		Web: WebConfig{
 			Listen:   ":8080",
 			PageSize: 50,
+		},
+		Capture: CaptureConfig{
+			SnapLen:   65535,
+			Dir:       "./captures",
+			MaxSizeMB: 100,
+			MaxFiles:  10,
 		},
 	}
 }

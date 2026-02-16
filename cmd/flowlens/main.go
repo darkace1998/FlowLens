@@ -141,6 +141,9 @@ func main() {
 		}
 	}
 
+	// Initialise capture manager.
+	captureMgr := capture.NewManager(cfg.Capture)
+
 	// Start web server.
 	// Resolve static directory relative to binary location if "static" doesn't exist in CWD.
 	staticDir := "static"
@@ -152,7 +155,7 @@ func main() {
 			}
 		}
 	}
-	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine, geoLookup)
+	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine, geoLookup, captureMgr)
 	srv.SetAboutInfo(cfg, Version, time.Now())
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -172,6 +175,7 @@ func main() {
 	for _, src := range captureSources {
 		src.Stop()
 	}
+	captureMgr.StopAll()
 	handlerWg.Wait() // Wait for in-flight flow handlers to complete before closing storage.
 	engine.Stop()
 	if err := srv.Stop(); err != nil {

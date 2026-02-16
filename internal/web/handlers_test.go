@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/capture"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/model"
@@ -41,7 +42,7 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
 	return s, ringBuf
 }
 
@@ -54,7 +55,7 @@ func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil)
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
 	t.Cleanup(func() { sqlStore.Close() })
 	return s, ringBuf, sqlStore
 }
@@ -620,7 +621,7 @@ func TestAdvisories_WithEngine(t *testing.T) {
 	go engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil)
 
 	req := httptest.NewRequest("GET", "/advisories", nil)
 	w := httptest.NewRecorder()
@@ -1293,7 +1294,7 @@ func TestHandleMap_WithGeo(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1319,7 +1320,7 @@ func TestFlows_CountryColumns(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1342,7 +1343,7 @@ func TestHosts_CountryColumn(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1365,7 +1366,7 @@ func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 
 	flows := []model.Flow{
 		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
@@ -1378,5 +1379,147 @@ func TestBuildMapData(t *testing.T) {
 	}
 	if data.MappedHosts != 2 {
 		t.Errorf("MappedHosts = %d, want 2", data.MappedHosts)
+	}
+}
+
+func TestCapturePage_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Packet Capture") {
+		t.Error("response should contain 'Packet Capture'")
+	}
+	if !strings.Contains(body, "No capture sessions") {
+		t.Error("empty capture page should show 'No capture sessions'")
+	}
+}
+
+func TestCapturePage_WithManager(t *testing.T) {
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	capCfg := config.CaptureConfig{
+		Interfaces: []string{"eth0", "lo"},
+		Dir:        t.TempDir(),
+		SnapLen:    65535,
+		MaxSizeMB:  100,
+		MaxFiles:   10,
+	}
+	mgr := capture.NewManager(capCfg)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "eth0") {
+		t.Error("capture page should show configured interface eth0")
+	}
+	if !strings.Contains(body, "lo") {
+		t.Error("capture page should show configured interface lo")
+	}
+}
+
+func TestCaptureStart_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("device=eth0"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureStart_NoDevice(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCaptureStart_MethodNotAllowed(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture/start", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestCaptureStop_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("POST", "/capture/stop", strings.NewReader("id=cap-1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureDownload_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture/download?file=test.pcap", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureDownload_MissingFile(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture/download?file=nonexistent.pcap", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestCaptureDownload_NoFileParam(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture/download", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
