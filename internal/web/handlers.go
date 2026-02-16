@@ -229,7 +229,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		totalBytes += f.Bytes
 		totalPkts += f.Packets
 
-		src := safeIPString(f.SrcAddr)
+		src := model.SafeIPString(f.SrcAddr)
 		if e, ok := srcMap[src]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -237,7 +237,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 			srcMap[src] = &TalkerEntry{IP: src, Bytes: f.Bytes, Packets: f.Packets}
 		}
 
-		dst := safeIPString(f.DstAddr)
+		dst := model.SafeIPString(f.DstAddr)
 		if e, ok := dstMap[dst]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -386,8 +386,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	for _, f := range filtered[start:end] {
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp: f.Timestamp.Format("15:04:05"),
-			SrcAddr:   safeIPString(f.SrcAddr),
-			DstAddr:   safeIPString(f.DstAddr),
+			SrcAddr:   model.SafeIPString(f.SrcAddr),
+			DstAddr:   model.SafeIPString(f.DstAddr),
 			SrcPort:   f.SrcPort,
 			DstPort:   f.DstPort,
 			Protocol:  model.ProtocolName(f.Protocol),
@@ -473,14 +473,6 @@ func matchIP(ip net.IP, filter string) bool {
 	}
 	// Support prefix matching (e.g. "10.0.1")
 	return strings.HasPrefix(ip.String(), filter)
-}
-
-// safeIPString converts a net.IP to string, returning "0.0.0.0" for nil IPs.
-func safeIPString(ip net.IP) string {
-	if ip == nil {
-		return "0.0.0.0"
-	}
-	return ip.String()
 }
 
 // --- Advisories page ---
