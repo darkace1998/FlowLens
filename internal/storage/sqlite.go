@@ -65,7 +65,10 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		app_proto   TEXT NOT NULL DEFAULT '',
 		app_category TEXT NOT NULL DEFAULT '',
 		rtt_us      INTEGER NOT NULL DEFAULT 0,
-		throughput_bps REAL NOT NULL DEFAULT 0
+		throughput_bps REAL NOT NULL DEFAULT 0,
+		retransmissions INTEGER NOT NULL DEFAULT 0,
+		out_of_order    INTEGER NOT NULL DEFAULT 0,
+		packet_loss     INTEGER NOT NULL DEFAULT 0
 	)`
 	if _, err := db.Exec(createSQL); err != nil {
 		db.Close()
@@ -92,6 +95,13 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN throughput_bps REAL NOT NULL DEFAULT 0"); err != nil {
 		if !isColumnExistsError(err) {
 			logging.Default().Warn("Migration throughput_bps: %v", err)
+		}
+	}
+	for _, col := range []string{"retransmissions", "out_of_order", "packet_loss"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
 		}
 	}
 
@@ -130,8 +140,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 		(timestamp, src_addr, dst_addr, src_port, dst_port, protocol,
 		 bytes, packets, tcp_flags, tos, input_iface, output_iface,
 		 src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category,
-		 rtt_us, throughput_bps)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		 rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
@@ -160,6 +170,9 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 			f.AppCat,
 			f.RTTMicros,
 			f.ThroughputBPS,
+			f.Retransmissions,
+			f.OutOfOrder,
+			f.PacketLoss,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -178,7 +191,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 	query := "SELECT timestamp, src_addr, dst_addr, src_port, dst_port, protocol, " +
 		"bytes, packets, tcp_flags, tos, input_iface, output_iface, " +
 		"src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category, " +
-		"rtt_us, throughput_bps " +
+		"rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss " +
 		"FROM flows WHERE timestamp >= ? ORDER BY timestamp DESC"
 
 	var rows *sql.Rows
@@ -212,6 +225,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 			&exporterIP,
 			&f.AppProto, &f.AppCat,
 			&f.RTTMicros, &f.ThroughputBPS,
+			&f.Retransmissions, &f.OutOfOrder, &f.PacketLoss,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)

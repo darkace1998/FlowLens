@@ -265,3 +265,38 @@ func TestStitchFlows(t *testing.T) {
 		t.Errorf("RTTMicros = %d, want 500", rtt)
 	}
 }
+
+func TestRetransmissionRate(t *testing.T) {
+	f := Flow{Packets: 1000, Retransmissions: 50}
+	rate := f.RetransmissionRate()
+	if rate != 5.0 {
+		t.Errorf("RetransmissionRate = %f, want 5.0", rate)
+	}
+
+	// Zero packets should return 0.
+	f2 := Flow{Packets: 0, Retransmissions: 10}
+	if f2.RetransmissionRate() != 0 {
+		t.Error("RetransmissionRate with zero packets should be 0")
+	}
+
+	// Zero retransmissions should return 0.
+	f3 := Flow{Packets: 1000, Retransmissions: 0}
+	if f3.RetransmissionRate() != 0 {
+		t.Error("RetransmissionRate with zero retransmissions should be 0")
+	}
+}
+
+func TestPacketLossRate(t *testing.T) {
+	f := Flow{Packets: 950, PacketLoss: 50}
+	rate := f.PacketLossRate()
+	// 50 / (950 + 50) * 100 = 5.0
+	if rate != 5.0 {
+		t.Errorf("PacketLossRate = %f, want 5.0", rate)
+	}
+
+	// Zero loss should return 0.
+	f2 := Flow{Packets: 1000, PacketLoss: 0}
+	if f2.PacketLossRate() != 0 {
+		t.Error("PacketLossRate with zero loss should be 0")
+	}
+}

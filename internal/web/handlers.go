@@ -292,6 +292,35 @@ type LatencyStats struct {
 	FlowsWithThru int
 }
 
+// TCPHealthStats holds aggregate TCP quality metrics for the dashboard.
+type TCPHealthStats struct {
+	TotalTCPFlows      int
+	FlowsWithRetrans   int
+	FlowsWithOOO       int
+	FlowsWithLoss      int
+	TotalRetrans       uint64
+	TotalOOO           uint64
+	TotalLoss          uint64
+	TotalTCPPackets    uint64
+	RetransRate        float64 // percentage of TCP packets that are retransmissions
+	OOORate            float64 // percentage of TCP packets that are out-of-order
+	LossRate           float64 // percentage of packets lost
+	TopRetransFlows    []TCPFlowEntry
+}
+
+// TCPFlowEntry is a flow with TCP quality information for the dashboard.
+type TCPFlowEntry struct {
+	SrcAddr      string
+	DstAddr      string
+	SrcPort      uint16
+	DstPort      uint16
+	Retrans      uint32
+	OOO          uint32
+	Loss         uint32
+	Packets      uint64
+	RetransRate  float64
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -309,6 +338,7 @@ type DashboardData struct {
 	AppProtocols []AppProtoEntry
 	Categories   []CategoryEntry
 	Latency      LatencyStats
+	TCPHealth    TCPHealthStats
 }
 
 // --- Active Hosts data structures ---
@@ -509,6 +539,9 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	// Compute latency and throughput percentiles.
 	latencyStats := computeLatencyStats(flows)
 
+	// Compute TCP quality metrics.
+	tcpHealth := computeTCPHealthStats(flows)
+
 	return DashboardData{
 		TotalBytes:   totalBytes,
 		TotalPackets: totalPkts,
@@ -525,6 +558,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		AppProtocols: appProtocols,
 		Categories:   categories,
 		Latency:      latencyStats,
+		TCPHealth:    tcpHealth,
 	}
 }
 
@@ -602,6 +636,95 @@ func percentileFloat64(sorted []float64, pct int) float64 {
 	return sorted[idx]
 }
 
+// computeTCPHealthStats computes aggregate TCP quality metrics from flows.
+func computeTCPHealthStats(flows []model.Flow) TCPHealthStats {
+	stats := TCPHealthStats{}
+
+	type tcpFlowKey struct {
+		src, dst         string
+		srcPort, dstPort uint16
+	}
+	type aggStats struct {
+		retrans uint32
+		ooo     uint32
+		loss    uint32
+		packets uint64
+	}
+	agg := make(map[tcpFlowKey]*aggStats)
+
+	for _, f := range flows {
+		if f.Protocol != 6 { // TCP only
+			continue
+		}
+		stats.TotalTCPFlows++
+		stats.TotalTCPPackets += f.Packets
+		stats.TotalRetrans += uint64(f.Retransmissions)
+		stats.TotalOOO += uint64(f.OutOfOrder)
+		stats.TotalLoss += uint64(f.PacketLoss)
+
+		if f.Retransmissions > 0 {
+			stats.FlowsWithRetrans++
+		}
+		if f.OutOfOrder > 0 {
+			stats.FlowsWithOOO++
+		}
+		if f.PacketLoss > 0 {
+			stats.FlowsWithLoss++
+		}
+
+		// Aggregate for top-affected flows.
+		key := tcpFlowKey{
+			src: model.SafeIPString(f.SrcAddr), dst: model.SafeIPString(f.DstAddr),
+			srcPort: f.SrcPort, dstPort: f.DstPort,
+		}
+		if a, ok := agg[key]; ok {
+			a.retrans += f.Retransmissions
+			a.ooo += f.OutOfOrder
+			a.loss += f.PacketLoss
+			a.packets += f.Packets
+		} else {
+			agg[key] = &aggStats{
+				retrans: f.Retransmissions, ooo: f.OutOfOrder,
+				loss: f.PacketLoss, packets: f.Packets,
+			}
+		}
+	}
+
+	if stats.TotalTCPPackets > 0 {
+		stats.RetransRate = math.Round(float64(stats.TotalRetrans)/float64(stats.TotalTCPPackets)*10000) / 100
+		stats.OOORate = math.Round(float64(stats.TotalOOO)/float64(stats.TotalTCPPackets)*10000) / 100
+		total := stats.TotalTCPPackets + uint64(stats.TotalLoss)
+		stats.LossRate = math.Round(float64(stats.TotalLoss)/float64(total)*10000) / 100
+	}
+
+	// Build top retransmission flows.
+	var topFlows []TCPFlowEntry
+	for key, a := range agg {
+		if a.retrans > 0 || a.ooo > 0 || a.loss > 0 {
+			var rr float64
+			if a.packets > 0 {
+				rr = math.Round(float64(a.retrans)/float64(a.packets)*10000) / 100
+			}
+			topFlows = append(topFlows, TCPFlowEntry{
+				SrcAddr: key.src, DstAddr: key.dst,
+				SrcPort: key.srcPort, DstPort: key.dstPort,
+				Retrans: a.retrans, OOO: a.ooo, Loss: a.loss,
+				Packets: a.packets, RetransRate: rr,
+			})
+		}
+	}
+	sort.Slice(topFlows, func(i, j int) bool {
+		return topFlows[i].Retrans+topFlows[i].OOO+topFlows[i].Loss >
+			topFlows[j].Retrans+topFlows[j].OOO+topFlows[j].Loss
+	})
+	if len(topFlows) > 10 {
+		topFlows = topFlows[:10]
+	}
+	stats.TopRetransFlows = topFlows
+
+	return stats
+}
+
 func topN(m map[string]*TalkerEntry, totalBytes uint64, n int) []TalkerEntry {
 	entries := make([]TalkerEntry, 0, len(m))
 	for _, e := range m {
@@ -642,6 +765,9 @@ type FlowRow struct {
 	AppCategory string
 	Throughput  string
 	RTT         string
+	Retrans     uint32
+	OOO         uint32
+	Loss        uint32
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -734,6 +860,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			AppCategory: appCat,
 			Throughput:  formatThroughput(f.ThroughputBPS),
 			RTT:         formatRTT(f.RTTMicros),
+			Retrans:     f.Retransmissions,
+			OOO:         f.OutOfOrder,
+			Loss:        f.PacketLoss,
 		})
 	}
 

@@ -36,6 +36,11 @@ const (
 	ipfixFieldFlowEndSec       = 151
 	ipfixFieldFlowStartMilli   = 152
 	ipfixFieldFlowEndMilli     = 153
+	// TCP quality metrics (IANA IPFIX assignments)
+	ipfixFieldTCPRetransmissionCount = 321
+	ipfixFieldTCPSynTotalCount       = 322
+	ipfixFieldTCPOutOfOrderCount     = 227  // tcpSequenceNumberLoss in various implementations
+	ipfixFieldPacketLossCount        = 233  // postPacketDeltaCount or vendor-specific loss
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).
@@ -319,5 +324,14 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 			ctx.flowEndMilli = binary.BigEndian.Uint64(data)
 			ctx.hasEndMilli = true
 		}
+	case ipfixFieldTCPRetransmissionCount:
+		f.Retransmissions = uint32(readUintN(data))
+	case ipfixFieldTCPSynTotalCount:
+		// SYN count can inform quality analysis; store as informational.
+		// Currently no dedicated field — could be used for SYN flood detection.
+	case ipfixFieldTCPOutOfOrderCount:
+		f.OutOfOrder = uint32(readUintN(data))
+	case ipfixFieldPacketLossCount:
+		f.PacketLoss = uint32(readUintN(data))
 	}
 }

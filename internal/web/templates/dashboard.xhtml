@@ -71,6 +71,66 @@
 </div>
 {{end}}
 
+{{if .TCPHealth.TotalTCPFlows}}
+<div class="two-col">
+  <div class="panel">
+    <h2>TCP Health Summary</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Count</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>TCP Flows</td>
+          <td>{{.TCPHealth.TotalTCPFlows}}</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>Retransmissions</td>
+          <td>{{.TCPHealth.TotalRetrans}} ({{.TCPHealth.FlowsWithRetrans}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.RetransRate}}%</td>
+        </tr>
+        <tr>
+          <td>Out of Order</td>
+          <td>{{.TCPHealth.TotalOOO}} ({{.TCPHealth.FlowsWithOOO}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.OOORate}}%</td>
+        </tr>
+        <tr>
+          <td>Packet Loss</td>
+          <td>{{.TCPHealth.TotalLoss}} ({{.TCPHealth.FlowsWithLoss}} flows)</td>
+          <td>{{printf "%.2f" .TCPHealth.LossRate}}%</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="flow-summary">Based on {{.TCPHealth.TotalTCPPackets}} TCP packets</p>
+  </div>
+
+  <div class="panel">
+    <h2>Top Affected TCP Flows</h2>
+    {{if .TCPHealth.TopRetransFlows}}
+    <table>
+      <thead>
+        <tr><th>Flow</th><th>Retrans</th><th>OOO</th><th>Loss</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        {{range .TCPHealth.TopRetransFlows}}
+        <tr>
+          <td>{{.SrcAddr}}:{{.SrcPort}} → {{.DstAddr}}:{{.DstPort}}</td>
+          <td>{{.Retrans}}</td>
+          <td>{{.OOO}}</td>
+          <td>{{.Loss}}</td>
+          <td>{{printf "%.2f" .RetransRate}}%</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No TCP quality issues detected.</p>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 <div class="two-col">
   <div class="panel">
     <h2>Top Sources</h2>

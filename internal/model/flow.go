@@ -26,8 +26,11 @@ type Flow struct {
 	ExporterIP   net.IP // which device sent this flow
 	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
 	AppCat       string // traffic category (e.g. "Web", "Email")
-	RTTMicros    int64  // round-trip time in microseconds (0 = unknown)
-	ThroughputBPS float64 // throughput in bits per second (0 = unknown)
+	RTTMicros      int64   // round-trip time in microseconds (0 = unknown)
+	ThroughputBPS  float64 // throughput in bits per second (0 = unknown)
+	Retransmissions uint32  // TCP retransmission count (from IPFIX IE 321 or heuristic)
+	OutOfOrder      uint32  // TCP out-of-order segment count
+	PacketLoss      uint32  // estimated packet loss count
 }
 
 // CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
@@ -36,6 +39,24 @@ func (f *Flow) CalcThroughput() {
 	if f.Duration > 0 {
 		f.ThroughputBPS = float64(f.Bytes*8) / f.Duration.Seconds()
 	}
+}
+
+// RetransmissionRate returns the ratio of retransmitted packets to total packets.
+// Returns 0 if there are no packets or no retransmissions.
+func (f *Flow) RetransmissionRate() float64 {
+	if f.Packets == 0 || f.Retransmissions == 0 {
+		return 0
+	}
+	return float64(f.Retransmissions) / float64(f.Packets) * 100
+}
+
+// PacketLossRate returns the estimated packet loss rate as a percentage.
+func (f *Flow) PacketLossRate() float64 {
+	if f.Packets == 0 || f.PacketLoss == 0 {
+		return 0
+	}
+	total := f.Packets + uint64(f.PacketLoss)
+	return float64(f.PacketLoss) / float64(total) * 100
 }
 
 // FlowKey returns a canonical 5-tuple key for flow stitching (always lower IP first).

@@ -904,3 +904,102 @@ func TestPercentileInt64(t *testing.T) {
 		t.Errorf("percentile of empty = %d, want 0", empty)
 	}
 }
+
+func TestComputeTCPHealthStats(t *testing.T) {
+	flows := []model.Flow{
+		{Protocol: 6, Packets: 1000, Retransmissions: 50, OutOfOrder: 10, PacketLoss: 5,
+			SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"), SrcPort: 12345, DstPort: 80},
+		{Protocol: 6, Packets: 500, Retransmissions: 0, OutOfOrder: 0, PacketLoss: 0,
+			SrcAddr: net.ParseIP("10.0.0.3"), DstAddr: net.ParseIP("10.0.0.4"), SrcPort: 12346, DstPort: 443},
+		{Protocol: 17, Packets: 200, Retransmissions: 0, OutOfOrder: 0, PacketLoss: 0,
+			SrcAddr: net.ParseIP("10.0.0.5"), DstAddr: net.ParseIP("10.0.0.6"), SrcPort: 53, DstPort: 12347},
+	}
+
+	stats := computeTCPHealthStats(flows)
+
+	if stats.TotalTCPFlows != 2 {
+		t.Errorf("TotalTCPFlows = %d, want 2", stats.TotalTCPFlows)
+	}
+	if stats.FlowsWithRetrans != 1 {
+		t.Errorf("FlowsWithRetrans = %d, want 1", stats.FlowsWithRetrans)
+	}
+	if stats.FlowsWithOOO != 1 {
+		t.Errorf("FlowsWithOOO = %d, want 1", stats.FlowsWithOOO)
+	}
+	if stats.FlowsWithLoss != 1 {
+		t.Errorf("FlowsWithLoss = %d, want 1", stats.FlowsWithLoss)
+	}
+	if stats.TotalRetrans != 50 {
+		t.Errorf("TotalRetrans = %d, want 50", stats.TotalRetrans)
+	}
+	if stats.TotalOOO != 10 {
+		t.Errorf("TotalOOO = %d, want 10", stats.TotalOOO)
+	}
+	if stats.TotalLoss != 5 {
+		t.Errorf("TotalLoss = %d, want 5", stats.TotalLoss)
+	}
+	if stats.TotalTCPPackets != 1500 {
+		t.Errorf("TotalTCPPackets = %d, want 1500", stats.TotalTCPPackets)
+	}
+	// retrans rate: 50/1500 * 100 = 3.33%
+	if stats.RetransRate < 3.3 || stats.RetransRate > 3.4 {
+		t.Errorf("RetransRate = %f, want ~3.33", stats.RetransRate)
+	}
+	if len(stats.TopRetransFlows) != 1 {
+		t.Errorf("TopRetransFlows len = %d, want 1", len(stats.TopRetransFlows))
+	}
+}
+
+func TestDashboard_TCPHealthWidget(t *testing.T) {
+	s, rb := newTestServer(t)
+	f := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f.Retransmissions = 10
+	f.OutOfOrder = 3
+	f.PacketLoss = 2
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "TCP Health Summary") {
+		t.Error("dashboard should show 'TCP Health Summary' when TCP flows exist")
+	}
+	if !strings.Contains(body, "Retransmissions") {
+		t.Error("dashboard should show 'Retransmissions' in TCP Health widget")
+	}
+	if !strings.Contains(body, "Out of Order") {
+		t.Error("dashboard should show 'Out of Order' in TCP Health widget")
+	}
+}
+
+func TestFlows_TCPQualityColumns(t *testing.T) {
+	s, rb := newTestServer(t)
+	f := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f.Retransmissions = 5
+	f.OutOfOrder = 2
+	f.PacketLoss = 1
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Retrans") {
+		t.Error("flows page should show 'Retrans' column header")
+	}
+	if !strings.Contains(body, "OOO") {
+		t.Error("flows page should show 'OOO' column header")
+	}
+	if !strings.Contains(body, "Loss") {
+		t.Error("flows page should show 'Loss' column header")
+	}
+}
