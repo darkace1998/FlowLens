@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -32,7 +33,11 @@ func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisCon
 
 	// We need at least 2 sample windows in the baseline to compute meaningful stats.
 	// Since the ring buffer only holds ~10 min of data, use what we have.
-	allFlows, _ := store.Recent(10*time.Minute, 0)
+	allFlows, err := store.Recent(10*time.Minute, 0)
+	if err != nil {
+		logging.Default().Error("AnomalyDetector: failed to query recent flows: %v", err)
+		return nil
+	}
 	if len(allFlows) == 0 {
 		return nil
 	}

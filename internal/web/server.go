@@ -2,6 +2,7 @@ package web
 
 import (
 	"embed"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -23,6 +24,12 @@ type Server struct {
 	mux      *http.ServeMux
 	srv      *http.Server
 
+	// Pre-parsed templates
+	tmplDashboard  *template.Template
+	tmplFlows      *template.Template
+	tmplAdvisories *template.Template
+	tmplAbout      *template.Template
+
 	// About page info
 	fullCfg   config.Config
 	version   string
@@ -38,6 +45,12 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 		engine:   engine,
 		mux:      http.NewServeMux(),
 	}
+
+	// Parse templates once at startup.
+	s.tmplDashboard = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/dashboard.xhtml"))
+	s.tmplFlows = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/flows.xhtml"))
+	s.tmplAdvisories = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/advisories.xhtml"))
+	s.tmplAbout = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/about.xhtml"))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)

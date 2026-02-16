@@ -52,7 +52,7 @@
   <a href="/flows?page={{sub .Page 1}}{{if .FilterSrcIP}}&amp;src_ip={{.FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{.FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{.FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{.FilterProtocol}}{{end}}">&#171; Prev</a>
   {{end}}
 
-  {{range seq 1 .TotalPages}}
+  {{range pageWindow $.Page $.TotalPages}}
     {{if eq . $.Page}}
       <span class="page-current">{{.}}</span>
     {{else}}

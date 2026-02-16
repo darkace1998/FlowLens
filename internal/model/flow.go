@@ -56,3 +56,11 @@ func (f Flow) String() string {
 		f.Bytes, f.Packets,
 	)
 }
+
+// SafeIPString converts a net.IP to string, returning "0.0.0.0" for nil IPs.
+func SafeIPString(ip net.IP) string {
+	if ip == nil {
+		return "0.0.0.0"
+	}
+	return ip.String()
+}

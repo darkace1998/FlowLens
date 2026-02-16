@@ -68,6 +68,10 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		return nil, fmt.Errorf("creating timestamp index: %w", err)
 	}
 
+	// SQLite uses file-level locking; limit to one open connection to avoid
+	// SQLITE_BUSY errors from concurrent writers.
+	db.SetMaxOpenConns(1)
+
 	s := &SQLiteStore{
 		db:            db,
 		retention:     retention,
@@ -103,8 +107,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 	for _, f := range flows {
 		_, err := stmt.Exec(
 			f.Timestamp.UTC(),
-			f.SrcAddr.String(),
-			f.DstAddr.String(),
+			model.SafeIPString(f.SrcAddr),
+			model.SafeIPString(f.DstAddr),
 			f.SrcPort,
 			f.DstPort,
 			f.Protocol,
@@ -117,7 +121,7 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 			f.SrcAS,
 			f.DstAS,
 			f.Duration.Nanoseconds(),
-			f.ExporterIP.String(),
+			model.SafeIPString(f.ExporterIP),
 		)
 		if err != nil {
 			tx.Rollback()
