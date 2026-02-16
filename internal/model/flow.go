@@ -410,3 +410,19 @@ func ASName(asn uint32) string {
 	}
 	return fmt.Sprintf("AS%d", asn)
 }
+
+// InterfaceName returns a human-readable name for an interface index using the
+// provided ifIndex→name mapping. If the index is not in the map, it returns
+// "if<index>" (e.g. "if3").
+func InterfaceName(ifIndex uint32, names map[string]string) string {
+	if names != nil {
+		key := fmt.Sprintf("%d", ifIndex)
+		if name, ok := names[key]; ok {
+			return name
+		}
+	}
+	if ifIndex == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("if%d", ifIndex)
+}

@@ -382,6 +382,16 @@ type VoIPFlowEntry struct {
 	Packets  uint64
 }
 
+// InterfaceEntry represents a network interface's share of traffic.
+type InterfaceEntry struct {
+	Index   uint32
+	Name    string
+	Bytes   uint64
+	Packets uint64
+	Flows   int
+	Pct     float64
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -401,6 +411,8 @@ type DashboardData struct {
 	Latency      LatencyStats
 	TCPHealth    TCPHealthStats
 	VoIP         VoIPStats
+	Interfaces   []InterfaceEntry
+	IfaceFilter  string // current interface filter value (from query param)
 }
 
 // --- Active Hosts data structures ---
@@ -450,7 +462,23 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// Stitch bidirectional flows to compute RTT estimates.
 	model.StitchFlows(flows)
 
-	data := buildDashboardData(flows, window)
+	// Apply interface filter if specified.
+	ifaceFilter := r.URL.Query().Get("iface")
+	if ifaceFilter != "" {
+		var filtered []model.Flow
+		ifVal, err := strconv.ParseUint(ifaceFilter, 10, 32)
+		if err == nil {
+			for _, f := range flows {
+				if f.InputIface == uint32(ifVal) || f.OutputIface == uint32(ifVal) {
+					filtered = append(filtered, f)
+				}
+			}
+			flows = filtered
+		}
+	}
+
+	data := buildDashboardData(flows, window, s.fullCfg.Collector.InterfaceNames)
+	data.IfaceFilter = ifaceFilter
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplDashboard.ExecuteTemplate(w, "layout", data); err != nil {
@@ -458,7 +486,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData {
+func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map[string]string) DashboardData {
 	var totalBytes, totalPkts uint64
 	srcMap := make(map[string]*TalkerEntry)
 	dstMap := make(map[string]*TalkerEntry)
@@ -467,6 +495,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	asMap := make(map[uint32]*ASEntry)
 	appProtoMap := make(map[string]*AppProtoEntry)
 	categoryMap := make(map[string]*CategoryEntry)
+	ifaceMap := make(map[uint32]*InterfaceEntry)
 
 	now := time.Now()
 	activeFlows := 0
@@ -563,6 +592,26 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 				Flows:   1,
 			}
 		}
+
+		// Aggregate by interface (input and output).
+		for _, ifIdx := range []uint32{f.InputIface, f.OutputIface} {
+			if ifIdx == 0 {
+				continue
+			}
+			if e, ok := ifaceMap[ifIdx]; ok {
+				e.Bytes += f.Bytes
+				e.Packets += f.Packets
+				e.Flows++
+			} else {
+				ifaceMap[ifIdx] = &InterfaceEntry{
+					Index:   ifIdx,
+					Name:    model.InterfaceName(ifIdx, ifaceNames),
+					Bytes:   f.Bytes,
+					Packets: f.Packets,
+					Flows:   1,
+				}
+			}
+		}
 	}
 
 	topSrc := topN(srcMap, totalBytes, 10)
@@ -602,6 +651,14 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	}
 	sort.Slice(categories, func(i, j int) bool { return categories[i].Bytes > categories[j].Bytes })
 
+	// Build interface list (sorted by bytes).
+	interfaces := make([]InterfaceEntry, 0, len(ifaceMap))
+	for _, e := range ifaceMap {
+		e.Pct = pctOf(e.Bytes, totalBytes)
+		interfaces = append(interfaces, *e)
+	}
+	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Bytes > interfaces[j].Bytes })
+
 	// Compute latency and throughput percentiles.
 	latencyStats := computeLatencyStats(flows)
 
@@ -629,6 +686,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 		Latency:      latencyStats,
 		TCPHealth:    tcpHealth,
 		VoIP:         voipStats,
+		Interfaces:   interfaces,
 	}
 }
 

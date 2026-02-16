@@ -382,3 +382,31 @@ func TestSIPDetection(t *testing.T) {
 		t.Errorf("AppCategory(SIP) = %q, want Multimedia", got)
 	}
 }
+
+func TestInterfaceName(t *testing.T) {
+	names := map[string]string{
+		"1": "eth0",
+		"2": "GigabitEthernet0/1",
+	}
+
+	tests := []struct {
+		ifIndex uint32
+		names   map[string]string
+		want    string
+	}{
+		{1, names, "eth0"},
+		{2, names, "GigabitEthernet0/1"},
+		{3, names, "if3"},
+		{0, names, "—"},
+		{1, nil, "if1"},
+		{0, nil, "—"},
+		{99, map[string]string{}, "if99"},
+	}
+
+	for _, tt := range tests {
+		got := InterfaceName(tt.ifIndex, tt.names)
+		if got != tt.want {
+			t.Errorf("InterfaceName(%d, ...) = %q, want %q", tt.ifIndex, got, tt.want)
+		}
+	}
+}

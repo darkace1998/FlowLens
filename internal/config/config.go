@@ -18,9 +18,21 @@ type Config struct {
 
 // CollectorConfig holds settings for the NetFlow/IPFIX collector.
 type CollectorConfig struct {
-	NetFlowPort int `yaml:"netflow_port"`
-	IPFIXPort   int `yaml:"ipfix_port"`
-	BufferSize  int `yaml:"buffer_size"`
+	NetFlowPort    int               `yaml:"netflow_port"`
+	IPFIXPort      int               `yaml:"ipfix_port"`
+	BufferSize     int               `yaml:"buffer_size"`
+	InterfaceNames map[string]string `yaml:"interface_names"` // ifIndex → human-readable name (e.g. "1": "eth0")
+	Interfaces     []InterfaceConfig `yaml:"interfaces"`      // multiple collector instances bound to different addresses
+}
+
+// InterfaceConfig defines a single collector listener bound to a specific address/port.
+type InterfaceConfig struct {
+	Name    string `yaml:"name"`    // human-readable name (e.g. "WAN", "LAN", "Mirror")
+	Listen  string `yaml:"listen"`  // bind address (e.g. ":2055", "192.168.1.1:4739")
+	Type    string `yaml:"type"`    // "netflow" (default), "mirror", or "tap"
+	Device  string `yaml:"device"`  // network device for mirror/tap mode (e.g. "eth1", "tap0")
+	BPF     string `yaml:"bpf"`     // optional BPF filter for mirror/tap capture
+	SnapLen int    `yaml:"snaplen"` // packet snapshot length for mirror/tap (default: 65535)
 }
 
 // StorageConfig holds settings for flow data storage.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/capture"
 	"github.com/darkace1998/FlowLens/internal/collector"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/geo"
@@ -72,6 +74,44 @@ func main() {
 		}
 	}()
 
+	// Start additional collector instances from Interfaces config.
+	var captureSources []*capture.Source
+	for _, ifCfg := range cfg.Collector.Interfaces {
+		switch ifCfg.Type {
+		case "mirror", "tap":
+			src := capture.NewSource(ifCfg, handler)
+			captureSources = append(captureSources, src)
+			go func(s *capture.Source, name string) {
+				if err := s.Start(); err != nil {
+					log.Error("Capture source %q error: %v", name, err)
+				}
+			}(src, ifCfg.Name)
+			log.Info("Started %s capture on %s (%s)", ifCfg.Type, ifCfg.Device, ifCfg.Name)
+		case "netflow", "":
+			// Additional NetFlow/IPFIX listener — parse the listen address.
+			if ifCfg.Listen != "" {
+				extraCfg := cfg.Collector
+				// Parse port from listen address.
+				_, portStr, _ := splitHostPort(ifCfg.Listen)
+				if portStr != "" {
+					port := 0
+					fmt.Sscanf(portStr, "%d", &port)
+					if port > 0 {
+						extraCfg.NetFlowPort = port
+						extraCfg.IPFIXPort = 0
+						extraColl := collector.New(extraCfg, handler)
+						go func(name string) {
+							if err := extraColl.Start(); err != nil {
+								log.Error("Collector %q error: %v", name, err)
+							}
+						}(ifCfg.Name)
+						log.Info("Started additional collector on %s (%s)", ifCfg.Listen, ifCfg.Name)
+					}
+				}
+			}
+		}
+	}
+
 	// Register all analysis modules.
 	engine := analysis.NewEngine(cfg.Analysis, ringBuf,
 		analysis.AnomalyDetector{},
@@ -126,6 +166,9 @@ func main() {
 
 	log.Info("Shutting down…")
 	coll.Stop()
+	for _, src := range captureSources {
+		src.Stop()
+	}
 	handlerWg.Wait() // Wait for in-flight flow handlers to complete before closing storage.
 	engine.Stop()
 	if err := srv.Stop(); err != nil {
@@ -133,4 +176,9 @@ func main() {
 	}
 
 	log.Info("FlowLens stopped.")
+}
+
+// splitHostPort wraps net.SplitHostPort for address parsing.
+func splitHostPort(addr string) (string, string, error) {
+	return net.SplitHostPort(addr)
 }

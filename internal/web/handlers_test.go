@@ -229,7 +229,7 @@ func TestBuildDashboardData(t *testing.T) {
 		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
 	}
 
-	data := buildDashboardData(flows, 10*time.Minute)
+	data := buildDashboardData(flows, 10*time.Minute, nil)
 
 	if data.TotalBytes != 15200 {
 		t.Errorf("TotalBytes = %d, want 15200", data.TotalBytes)
@@ -280,6 +280,71 @@ func TestBuildDashboardData(t *testing.T) {
 	// Top AS: all flows have DstAS=65001
 	if len(data.TopAS) < 1 {
 		t.Fatal("TopAS should have at least 1 entry")
+	}
+}
+
+func TestBuildDashboardData_InterfaceStats(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+	}
+	// All test flows have InputIface=1, OutputIface=2
+
+	names := map[string]string{
+		"1": "eth0",
+		"2": "WAN",
+	}
+	data := buildDashboardData(flows, 10*time.Minute, names)
+
+	if len(data.Interfaces) != 2 {
+		t.Fatalf("Interfaces count = %d, want 2", len(data.Interfaces))
+	}
+
+	// Find interface entries by index.
+	ifaceByIndex := make(map[uint32]InterfaceEntry)
+	for _, e := range data.Interfaces {
+		ifaceByIndex[e.Index] = e
+	}
+
+	eth0 := ifaceByIndex[1]
+	if eth0.Name != "eth0" {
+		t.Errorf("Interface 1 name = %q, want eth0", eth0.Name)
+	}
+	if eth0.Flows != 2 {
+		t.Errorf("Interface 1 flows = %d, want 2", eth0.Flows)
+	}
+
+	wan := ifaceByIndex[2]
+	if wan.Name != "WAN" {
+		t.Errorf("Interface 2 name = %q, want WAN", wan.Name)
+	}
+}
+
+func TestDashboard_InterfaceFilter(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	f1 := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f1.InputIface = 1
+	f1.OutputIface = 2
+	f2 := makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100)
+	f2.InputIface = 3
+	f2.OutputIface = 4
+	rb.Insert([]model.Flow{f1, f2})
+
+	// Filter by interface 1 — should only show f1.
+	req := httptest.NewRequest("GET", "/?iface=1", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "10.0.1.1") {
+		t.Error("filtered dashboard should contain 10.0.1.1")
+	}
+	if !strings.Contains(body, "Clear interface filter") {
+		t.Error("filtered dashboard should show 'Clear interface filter' link")
 	}
 }
 

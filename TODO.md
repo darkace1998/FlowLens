@@ -127,11 +127,11 @@
 |--------|------|
 | ✅ | `InputIface` and `OutputIface` stored per flow |
 | ✅ | Dual-port listening (NetFlow + IPFIX simultaneously) |
-| ❌ | Add **interface name resolution** via SNMP (map ifIndex → interface name/description) |
-| ❌ | Add per-interface traffic views on the dashboard (filter/group by interface) |
-| ❌ | Support **mirror/SPAN port** ingestion via raw packet capture (libpcap/gopacket) |
-| ❌ | Support **TAP** interfaces as packet sources alongside flow collection |
-| ❌ | Allow multiple collector instances bound to different interfaces in config |
+| ✅ | Add **interface name resolution** via config (map ifIndex → interface name/description) |
+| ✅ | Add per-interface traffic views on the dashboard (filter/group by interface) |
+| ✅ | Support **mirror/SPAN port** ingestion via raw packet capture (AF_PACKET) |
+| ✅ | Support **TAP** interfaces as packet sources alongside flow collection |
+| ✅ | Allow multiple collector instances bound to different interfaces in config |
 
 ---
 

@@ -290,6 +290,34 @@
   </div>
 </div>
 
+{{if .Interfaces}}
+<div class="panel">
+  <h2>Traffic by Interface{{if .IfaceFilter}} <span class="filter-badge">Filtered: if{{.IfaceFilter}}</span>{{end}}</h2>
+  <table>
+    <thead>
+      <tr><th>Interface</th><th>Index</th><th>Bytes</th><th>Packets</th><th>Flows</th><th>Share</th><th>Filter</th></tr>
+    </thead>
+    <tbody>
+      {{range .Interfaces}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Index}}</td>
+        <td>{{formatBytes .Bytes}}</td>
+        <td>{{formatPkts .Packets}}</td>
+        <td>{{.Flows}}</td>
+        <td>
+          <div class="bar-bg"><div class="bar-fill iface" style="width:{{.Pct}}%"></div></div>
+          {{.Pct}}%
+        </td>
+        <td><a href="/?iface={{.Index}}">view</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{if .IfaceFilter}}<p><a href="/">Clear interface filter</a></p>{{end}}
+</div>
+{{end}}
+
 <div class="two-col">
   <div class="panel">
     <h2>Protocol Breakdown</h2>
