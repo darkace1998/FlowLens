@@ -168,11 +168,11 @@
 |--------|------|
 | ✅ | Server-rendered XHTML templates (layout, dashboard, flows, advisories, about) |
 | ✅ | Minimal CSS stylesheet |
-| ❌ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) |
-| ❌ | Add **auto-refresh** for live dashboard updates |
-| ❌ | Add **dark mode** toggle with CSS custom properties |
-| ❌ | Improve **responsive design** for mobile and tablet viewports |
-| ❌ | Add **favicon** and proper meta tags |
+| ✅ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) |
+| ✅ | Add **auto-refresh** for live dashboard updates |
+| ✅ | Add **dark mode** toggle with CSS custom properties |
+| ✅ | Improve **responsive design** for mobile and tablet viewports |
+| ✅ | Add **favicon** and proper meta tags |
 
 ---
 

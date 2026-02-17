@@ -1576,3 +1576,150 @@ func TestCaptureDownload_NoFileParam(t *testing.T) {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
+
+func TestBuildChartData(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+
+	data := buildDashboardData(flows, 10*time.Minute, nil)
+
+	// Protocol chart data should have at least TCP and UDP
+	if len(data.ChartProtoLabels) == 0 {
+		t.Error("ChartProtoLabels should not be empty with flows")
+	}
+	if len(data.ChartProtoLabels) != len(data.ChartProtoValues) {
+		t.Error("ChartProtoLabels and ChartProtoValues length mismatch")
+	}
+
+	// Top talkers chart
+	if len(data.ChartTalkerLabels) == 0 {
+		t.Error("ChartTalkerLabels should not be empty with flows")
+	}
+	if len(data.ChartTalkerLabels) != len(data.ChartTalkerValues) {
+		t.Error("ChartTalkerLabels and ChartTalkerValues length mismatch")
+	}
+
+	// Time chart
+	if len(data.ChartTimeLabels) != 20 {
+		t.Errorf("ChartTimeLabels = %d, want 20 buckets", len(data.ChartTimeLabels))
+	}
+	if len(data.ChartTimeLabels) != len(data.ChartTimeValues) {
+		t.Error("ChartTimeLabels and ChartTimeValues length mismatch")
+	}
+}
+
+func TestBuildChartData_Empty(t *testing.T) {
+	data := buildDashboardData(nil, 10*time.Minute, nil)
+
+	if data.ChartProtoLabels != nil {
+		t.Error("ChartProtoLabels should be nil with no flows")
+	}
+	if data.ChartTalkerLabels != nil {
+		t.Error("ChartTalkerLabels should be nil with no flows")
+	}
+	if data.ChartTimeLabels != nil {
+		t.Error("ChartTimeLabels should be nil with no flows")
+	}
+}
+
+func TestDashboard_ChartScripts(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "chart.js") {
+		t.Error("dashboard should include Chart.js CDN script")
+	}
+	if !strings.Contains(body, "protoChart") {
+		t.Error("dashboard should contain protocol chart canvas")
+	}
+	if !strings.Contains(body, "thruChart") {
+		t.Error("dashboard should contain throughput chart canvas")
+	}
+	if !strings.Contains(body, "talkersChart") {
+		t.Error("dashboard should contain talkers chart canvas")
+	}
+}
+
+func TestDashboard_AutoRefresh(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "countdown") {
+		t.Error("dashboard should have auto-refresh countdown element")
+	}
+	if !strings.Contains(body, "location.reload") {
+		t.Error("dashboard should have JS auto-refresh logic")
+	}
+	// Should NOT have the old meta refresh
+	if strings.Contains(body, `http-equiv="refresh"`) {
+		t.Error("dashboard should not use meta http-equiv refresh anymore")
+	}
+}
+
+func TestLayout_DarkModeToggle(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "toggleDarkMode") {
+		t.Error("layout should have dark mode toggle function")
+	}
+	if !strings.Contains(body, "dark-toggle") {
+		t.Error("layout should have dark mode toggle button")
+	}
+	if !strings.Contains(body, "flowlens-dark") {
+		t.Error("layout should persist dark mode in localStorage")
+	}
+}
+
+func TestLayout_MetaTags(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, `name="viewport"`) {
+		t.Error("layout should have viewport meta tag")
+	}
+	if !strings.Contains(body, `name="description"`) {
+		t.Error("layout should have description meta tag")
+	}
+	if !strings.Contains(body, `name="theme-color"`) {
+		t.Error("layout should have theme-color meta tag")
+	}
+	if !strings.Contains(body, `rel="icon"`) {
+		t.Error("layout should have a favicon")
+	}
+}
+
+func TestLayout_ResponsiveNav(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/about", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "nav-toggle") {
+		t.Error("layout should have hamburger menu button")
+	}
+	if !strings.Contains(body, "nav-links") {
+		t.Error("layout should have nav-links container")
+	}
+}

@@ -414,6 +414,14 @@ type DashboardData struct {
 	VoIP         VoIPStats
 	Interfaces   []InterfaceEntry
 	IfaceFilter  string // current interface filter value (from query param)
+
+	// Chart data for interactive Chart.js visualizations.
+	ChartProtoLabels  []string
+	ChartProtoValues  []uint64
+	ChartTalkerLabels []string
+	ChartTalkerValues []uint64
+	ChartTimeLabels   []string
+	ChartTimeValues   []uint64
 }
 
 // --- Active Hosts data structures ---
@@ -671,26 +679,106 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 	// Compute VoIP quality metrics.
 	voipStats := computeVoIPStats(flows)
 
+	// Build chart data for interactive visualizations.
+	chartProtoLabels, chartProtoValues := buildChartProto(protocols)
+	chartTalkerLabels, chartTalkerValues := buildChartTalkers(topSrc)
+	chartTimeLabels, chartTimeValues := buildChartTime(flows, window)
+
 	return DashboardData{
-		TotalBytes:   totalBytes,
-		TotalPackets: totalPkts,
-		BPS:          formatBPS(totalBytes, window),
-		PPS:          formatPPS(totalPkts, window),
-		FlowCount:    len(flows),
-		ActiveFlows:  activeFlows,
-		ActiveHosts:  len(uniqueHosts),
-		Window:       window,
-		TopSrc:       topSrc,
-		TopDst:       topDst,
-		Protocols:    protocols,
-		TopAS:        topAS,
-		AppProtocols: appProtocols,
-		Categories:   categories,
-		Latency:      latencyStats,
-		TCPHealth:    tcpHealth,
-		VoIP:         voipStats,
-		Interfaces:   interfaces,
+		TotalBytes:        totalBytes,
+		TotalPackets:      totalPkts,
+		BPS:               formatBPS(totalBytes, window),
+		PPS:               formatPPS(totalPkts, window),
+		FlowCount:         len(flows),
+		ActiveFlows:       activeFlows,
+		ActiveHosts:       len(uniqueHosts),
+		Window:            window,
+		TopSrc:            topSrc,
+		TopDst:            topDst,
+		Protocols:         protocols,
+		TopAS:             topAS,
+		AppProtocols:      appProtocols,
+		Categories:        categories,
+		Latency:           latencyStats,
+		TCPHealth:         tcpHealth,
+		VoIP:              voipStats,
+		Interfaces:        interfaces,
+		ChartProtoLabels:  chartProtoLabels,
+		ChartProtoValues:  chartProtoValues,
+		ChartTalkerLabels: chartTalkerLabels,
+		ChartTalkerValues: chartTalkerValues,
+		ChartTimeLabels:   chartTimeLabels,
+		ChartTimeValues:   chartTimeValues,
 	}
+}
+
+// buildChartProto returns labels and values for the protocol distribution chart.
+func buildChartProto(protocols []ProtocolEntry) ([]string, []uint64) {
+	if len(protocols) == 0 {
+		return nil, nil
+	}
+	labels := make([]string, len(protocols))
+	values := make([]uint64, len(protocols))
+	for i, p := range protocols {
+		labels[i] = p.Name
+		values[i] = p.Bytes
+	}
+	return labels, values
+}
+
+// buildChartTalkers returns labels and values for the top talkers bar chart.
+func buildChartTalkers(topSrc []TalkerEntry) ([]string, []uint64) {
+	if len(topSrc) == 0 {
+		return nil, nil
+	}
+	n := len(topSrc)
+	if n > 8 {
+		n = 8
+	}
+	labels := make([]string, n)
+	values := make([]uint64, n)
+	for i := 0; i < n; i++ {
+		labels[i] = topSrc[i].IP
+		values[i] = topSrc[i].Bytes
+	}
+	return labels, values
+}
+
+// buildChartTime buckets flows by time for the throughput-over-time chart.
+func buildChartTime(flows []model.Flow, window time.Duration) ([]string, []uint64) {
+	if len(flows) == 0 {
+		return nil, nil
+	}
+	const numBuckets = 20
+	bucketDur := window / numBuckets
+	if bucketDur < time.Second {
+		bucketDur = time.Second
+	}
+
+	now := time.Now()
+	labels := make([]string, numBuckets)
+	values := make([]uint64, numBuckets)
+
+	for i := 0; i < numBuckets; i++ {
+		t := now.Add(-window).Add(time.Duration(i) * bucketDur).Add(bucketDur / 2)
+		labels[i] = t.Format("15:04")
+	}
+
+	for _, f := range flows {
+		age := now.Sub(f.Timestamp)
+		if age < 0 || age > window {
+			continue
+		}
+		idx := int((window - age) / bucketDur)
+		if idx >= numBuckets {
+			idx = numBuckets - 1
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		values[idx] += f.Bytes
+	}
+	return labels, values
 }
 
 // computeLatencyStats calculates percentile-based latency/throughput statistics.
