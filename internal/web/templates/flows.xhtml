@@ -32,6 +32,8 @@
       <th>Packets</th>
       <th>Throughput</th>
       <th>RTT</th>
+      <th>In Iface</th>
+      <th>Out Iface</th>
       <th>Retrans</th>
       <th>OOO</th>
       <th>Loss</th>
@@ -58,6 +60,8 @@
       <td>{{.Packets}}</td>
       <td>{{.Throughput}}</td>
       <td>{{.RTT}}</td>
+      <td>{{.InIface}}</td>
+      <td>{{.OutIface}}</td>
       <td>{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
       <td>{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
       <td>{{if .Loss}}{{.Loss}}{{else}}—{{end}}</td>

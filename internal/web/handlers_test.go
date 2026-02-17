@@ -1362,6 +1362,37 @@ func TestHosts_CountryColumn(t *testing.T) {
 	}
 }
 
+func TestFlows_InterfaceColumns(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+	s.fullCfg.Collector.InterfaceNames = map[string]string{
+		"1": "eth0",
+		"2": "GigabitEthernet0/1",
+	}
+
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "In Iface") {
+		t.Error("flows page should show 'In Iface' column header")
+	}
+	if !strings.Contains(body, "Out Iface") {
+		t.Error("flows page should show 'Out Iface' column header")
+	}
+	if !strings.Contains(body, "eth0") {
+		t.Error("flows page should show resolved interface name 'eth0' for InputIface=1")
+	}
+	if !strings.Contains(body, "GigabitEthernet0/1") {
+		t.Error("flows page should show resolved interface name 'GigabitEthernet0/1' for OutputIface=2")
+	}
+}
+
 func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
