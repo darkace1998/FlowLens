@@ -162,15 +162,14 @@
 
 ---
 
-## 12. HTML5 Web User Interface
+## 12.  Web User Interface
 
 | Status | Task |
 |--------|------|
 | ✅ | Server-rendered XHTML templates (layout, dashboard, flows, advisories, about) |
 | ✅ | Minimal CSS stylesheet |
-| ❌ | Migrate templates from XHTML to **HTML5** with semantic elements (`<section>`, `<nav>`, `<main>`, `<article>`) |
-| ❌ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) using a lightweight JS charting library (e.g., Chart.js or uPlot) |
-| ❌ | Add **auto-refresh** via JavaScript `fetch()` polling or WebSocket for live dashboard updates |
+| ❌ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) |
+| ❌ | Add **auto-refresh** for live dashboard updates |
 | ❌ | Add **dark mode** toggle with CSS custom properties |
 | ❌ | Improve **responsive design** for mobile and tablet viewports |
 | ❌ | Add **favicon** and proper meta tags |
