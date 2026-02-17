@@ -1,6 +1,7 @@
 collector:
   netflow_port: 2055          # UDP port for NetFlow v5/v9
   ipfix_port: 4739            # UDP port for IPFIX
+  sflow_port: 6343            # UDP port for sFlow v5
   buffer_size: 65535          # UDP read buffer size in bytes
   # interface_names:          # optional ifIndex → name mapping for dashboard display
   #   "1": "eth0"

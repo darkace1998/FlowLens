@@ -155,10 +155,10 @@
 | ✅ | NetFlow v5 decoder |
 | ✅ | NetFlow v9 decoder (template-based) |
 | ✅ | IPFIX (v10) decoder (template-based) |
-| ❌ | Implement **sFlow v5** decoder (RFC 3176) — sample-based flow records |
-| ❌ | Add config for sFlow listen port (default 6343) |
-| ❌ | Support **sFlow counter samples** for interface utilization |
-| ❌ | Show exporter source in Flow Explorer (which device/interface exported each flow) |
+| ✅ | Implement **sFlow v5** decoder (RFC 3176) — sample-based flow records |
+| ✅ | Add config for sFlow listen port (default 6343) |
+| ✅ | Support **sFlow counter samples** for interface utilization |
+| ✅ | Show exporter source in Flow Explorer (which device/interface exported each flow) |
 
 ---
 

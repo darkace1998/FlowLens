@@ -1041,6 +1041,7 @@ type FlowRow struct {
 	DstCountry  string
 	InIface     string
 	OutIface    string
+	Exporter    string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1150,6 +1151,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			DstCountry:  dstCountry,
 			InIface:     model.InterfaceName(f.InputIface, s.fullCfg.Collector.InterfaceNames),
 			OutIface:    model.InterfaceName(f.OutputIface, s.fullCfg.Collector.InterfaceNames),
+			Exporter:    model.SafeIPString(f.ExporterIP),
 		})
 	}
 

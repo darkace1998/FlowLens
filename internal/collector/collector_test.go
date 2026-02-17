@@ -336,3 +336,112 @@ func TestCollector_MixedV5V9IPFIX(t *testing.T) {
 		t.Errorf("IPFIX flow Bytes = %d, want 25000", received[2].Bytes)
 	}
 }
+
+func TestCollector_SFlowOnDedicatedPort(t *testing.T) {
+	var mu sync.Mutex
+	var received []model.Flow
+	var counterReceived []SFlowCounterSample
+
+	handler := func(flows []model.Flow) {
+		mu.Lock()
+		received = append(received, flows...)
+		mu.Unlock()
+	}
+	counterHandler := func(counters []SFlowCounterSample) {
+		mu.Lock()
+		counterReceived = append(counterReceived, counters...)
+		mu.Unlock()
+	}
+
+	// Find a free port for sFlow.
+	l, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	sflowPort := l.LocalAddr().(*net.UDPAddr).Port
+	l.Close()
+
+	cfg := config.CollectorConfig{
+		NetFlowPort: 0,         // OS-assigned
+		SFlowPort:   sflowPort, // use the free port we found
+		BufferSize:  65535,
+	}
+
+	c := New(cfg, handler)
+	c.SetCounterHandler(counterHandler)
+
+	go func() {
+		_ = c.Start()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	addrs := c.Addrs()
+	if len(addrs) < 2 {
+		t.Fatalf("expected at least 2 listeners (netflow + sflow), got %d", len(addrs))
+	}
+	defer c.Stop()
+
+	// Find the sFlow port (last address).
+	actualSFlowPort := addrs[len(addrs)-1].(*net.UDPAddr).Port
+
+	// Build and send an sFlow datagram with a flow sample and a counter sample.
+	rawPkt := buildEtherIPv4TCP(net.ParseIP("10.1.0.1"), net.ParseIP("10.2.0.1"), 12345, 443)
+	flowSample := buildSFlowFlowSample(10, 3, 4, rawPkt)
+	counterSample := buildSFlowCounterSample(5, 1000000000, 100000, 200000, 1000, 2000)
+	datagram := buildSFlowDatagram(net.ParseIP("10.0.0.1"), flowSample, counterSample)
+
+	sConn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: actualSFlowPort,
+	})
+	if err != nil {
+		t.Fatalf("failed to dial sFlow port: %v", err)
+	}
+	defer sConn.Close()
+
+	if _, err := sConn.Write(datagram); err != nil {
+		t.Fatalf("failed to send sFlow datagram: %v", err)
+	}
+
+	// Wait for flows and counters.
+	deadline := time.After(3 * time.Second)
+	for {
+		mu.Lock()
+		gotFlows := len(received) >= 1
+		gotCounters := len(counterReceived) >= 1
+		mu.Unlock()
+		if gotFlows && gotCounters {
+			break
+		}
+		select {
+		case <-deadline:
+			mu.Lock()
+			t.Fatalf("timed out: flows=%d counters=%d, want 1 each", len(received), len(counterReceived))
+			mu.Unlock()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	f := received[0]
+	if f.DstPort != 443 {
+		t.Errorf("sFlow flow DstPort = %d, want 443", f.DstPort)
+	}
+	if f.InputIface != 3 {
+		t.Errorf("sFlow flow InputIface = %d, want 3", f.InputIface)
+	}
+	if !f.ExporterIP.Equal(net.ParseIP("127.0.0.1").To4()) {
+		t.Errorf("sFlow flow ExporterIP = %s, want 127.0.0.1", f.ExporterIP)
+	}
+
+	cs := counterReceived[0]
+	if cs.IfIndex != 5 {
+		t.Errorf("sFlow counter IfIndex = %d, want 5", cs.IfIndex)
+	}
+	if cs.InOctets != 100000 {
+		t.Errorf("sFlow counter InOctets = %d, want 100000", cs.InOctets)
+	}
+}

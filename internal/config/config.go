@@ -17,10 +17,11 @@ type Config struct {
 	Capture   CaptureConfig   `yaml:"capture"`
 }
 
-// CollectorConfig holds settings for the NetFlow/IPFIX collector.
+// CollectorConfig holds settings for the NetFlow/IPFIX/sFlow collector.
 type CollectorConfig struct {
 	NetFlowPort    int               `yaml:"netflow_port"`
 	IPFIXPort      int               `yaml:"ipfix_port"`
+	SFlowPort      int               `yaml:"sflow_port"`     // UDP port for sFlow v5 (default: 6343)
 	BufferSize     int               `yaml:"buffer_size"`
 	InterfaceNames map[string]string `yaml:"interface_names"` // ifIndex → human-readable name (e.g. "1": "eth0")
 	Interfaces     []InterfaceConfig `yaml:"interfaces"`      // multiple collector instances bound to different addresses
@@ -74,6 +75,7 @@ func Defaults() Config {
 		Collector: CollectorConfig{
 			NetFlowPort: 2055,
 			IPFIXPort:   4739,
+			SFlowPort:   6343,
 			BufferSize:  65535,
 		},
 		Storage: StorageConfig{

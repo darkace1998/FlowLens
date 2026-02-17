@@ -1393,6 +1393,28 @@ func TestFlows_InterfaceColumns(t *testing.T) {
 	}
 }
 
+func TestFlows_ExporterColumn(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "Exporter") {
+		t.Error("flows page should show 'Exporter' column header")
+	}
+	// makeTestFlow sets ExporterIP = 10.0.0.1
+	if !strings.Contains(body, "10.0.0.1") {
+		t.Error("flows page should show exporter IP '10.0.0.1'")
+	}
+}
+
 func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
