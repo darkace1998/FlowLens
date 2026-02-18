@@ -33,6 +33,12 @@ type Flow struct {
 	PacketLoss      uint32  // estimated packet loss count
 	JitterMicros    int64   // inter-packet jitter in microseconds (from IPFIX IE 387 or estimated)
 	MOS             float32 // Mean Opinion Score (1.0–4.41, 0 = not computed)
+
+	// Layer-2 fields
+	SrcMAC    net.HardwareAddr // source MAC address (6 bytes)
+	DstMAC    net.HardwareAddr // destination MAC address (6 bytes)
+	VLAN      uint16           // 802.1Q VLAN ID (0 = untagged)
+	EtherType uint16           // Ethernet type field (0x0800=IPv4, 0x86DD=IPv6, etc.)
 }
 
 // CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
@@ -425,4 +431,34 @@ func InterfaceName(ifIndex uint32, names map[string]string) string {
 		return "—"
 	}
 	return fmt.Sprintf("if%d", ifIndex)
+}
+
+// FormatMAC returns a human-readable MAC address string, or "—" if empty/nil.
+func FormatMAC(mac net.HardwareAddr) string {
+	if len(mac) == 0 {
+		return "—"
+	}
+	return mac.String()
+}
+
+// FormatEtherType returns a human-readable name for common EtherType values.
+func FormatEtherType(et uint16) string {
+	switch et {
+	case 0x0800:
+		return "IPv4"
+	case 0x86DD:
+		return "IPv6"
+	case 0x0806:
+		return "ARP"
+	case 0x8100:
+		return "802.1Q"
+	case 0x8847:
+		return "MPLS"
+	case 0x88CC:
+		return "LLDP"
+	case 0:
+		return "—"
+	default:
+		return fmt.Sprintf("0x%04X", et)
+	}
 }

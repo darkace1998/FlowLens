@@ -198,12 +198,12 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Extend `Flow` struct with **L2 fields**: `SrcMAC`, `DstMAC`, `VLAN`, `EtherType` |
-| ❌ | Parse L2 fields from IPFIX IEs (IE 56 `sourceMacAddress`, IE 80 `destinationMacAddress`, IE 58 `vlanId`) |
-| ❌ | Parse L2 from raw packet captures (gopacket Ethernet layer) |
-| ❌ | Add **VLAN statistics** view (traffic per VLAN, top hosts per VLAN) |
-| ❌ | Add MAC address tables and L2 topology awareness |
-| ❌ | Store L2 metadata in SQLite |
+| ✅ | Extend `Flow` struct with **L2 fields**: `SrcMAC`, `DstMAC`, `VLAN`, `EtherType` |
+| ✅ | Parse L2 fields from IPFIX IEs (IE 56 `sourceMacAddress`, IE 80 `destinationMacAddress`, IE 58 `vlanId`) |
+| ✅ | Parse L2 from raw packet captures (gopacket Ethernet layer) |
+| ✅ | Add **VLAN statistics** view (traffic per VLAN, top hosts per VLAN) |
+| ✅ | Add MAC address tables and L2 topology awareness |
+| ✅ | Store L2 metadata in SQLite |
 
 ---
 

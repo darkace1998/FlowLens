@@ -37,6 +37,8 @@ type Server struct {
 	tmplReports    *template.Template
 	tmplMap        *template.Template
 	tmplCapture    *template.Template
+	tmplVLANs      *template.Template
+	tmplMACs       *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -65,6 +67,8 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplReports = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/reports.xhtml"))
 	s.tmplMap = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/map.xhtml"))
 	s.tmplCapture = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/capture.xhtml"))
+	s.tmplVLANs = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/vlans.xhtml"))
+	s.tmplMACs = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/macs.xhtml"))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
@@ -78,6 +82,8 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/capture/start", s.handleCaptureStart)
 	s.mux.HandleFunc("/capture/stop", s.handleCaptureStop)
 	s.mux.HandleFunc("/capture/download", s.handleCaptureDownload)
+	s.mux.HandleFunc("/vlans", s.handleVLANs)
+	s.mux.HandleFunc("/macs", s.handleMACs)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	s.srv = &http.Server{

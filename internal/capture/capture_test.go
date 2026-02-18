@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"bytes"
 	"net"
 	"testing"
 	"time"
@@ -116,6 +117,19 @@ func TestDecodeEthernet_TCPv4(t *testing.T) {
 	if f.AppProto != "HTTPS" {
 		t.Errorf("AppProto = %q, want HTTPS", f.AppProto)
 	}
+	// L2 fields should be populated from Ethernet header.
+	if len(f.SrcMAC) != 6 {
+		t.Errorf("SrcMAC length = %d, want 6", len(f.SrcMAC))
+	}
+	if len(f.DstMAC) != 6 {
+		t.Errorf("DstMAC length = %d, want 6", len(f.DstMAC))
+	}
+	if f.EtherType != 0x0800 {
+		t.Errorf("EtherType = 0x%04X, want 0x0800 (IPv4)", f.EtherType)
+	}
+	if f.VLAN != 0 {
+		t.Errorf("VLAN = %d, want 0 (untagged)", f.VLAN)
+	}
 }
 
 func TestDecodeEthernet_UDPv4(t *testing.T) {
@@ -208,6 +222,20 @@ func TestDecodeEthernet_VLAN(t *testing.T) {
 	}
 	if f.DstPort != 80 {
 		t.Errorf("DstPort = %d, want 80", f.DstPort)
+	}
+	if f.VLAN != 10 {
+		t.Errorf("VLAN = %d, want 10", f.VLAN)
+	}
+	if f.EtherType != 0x0800 {
+		t.Errorf("EtherType = 0x%04X, want 0x0800", f.EtherType)
+	}
+	expectedSrcMAC := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	if !bytes.Equal(f.SrcMAC, expectedSrcMAC) {
+		t.Errorf("SrcMAC = %s, want %s", f.SrcMAC, expectedSrcMAC)
+	}
+	expectedDstMAC := net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	if !bytes.Equal(f.DstMAC, expectedDstMAC) {
+		t.Errorf("DstMAC = %s, want %s", f.DstMAC, expectedDstMAC)
 	}
 }
 

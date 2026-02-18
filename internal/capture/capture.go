@@ -69,26 +69,42 @@ func decodeEthernet(data []byte, timestamp time.Time) (model.Flow, bool) {
 	}
 
 	// Ethernet header: 6 dst + 6 src + 2 ethertype.
+	dstMAC := make(net.HardwareAddr, 6)
+	srcMAC := make(net.HardwareAddr, 6)
+	copy(dstMAC, data[0:6])
+	copy(srcMAC, data[6:12])
 	etherType := uint16(data[12])<<8 | uint16(data[13])
 
 	offset := 14
+	var vlanID uint16
 	// Handle 802.1Q VLAN tag.
 	if etherType == 0x8100 {
 		if len(data) < 18 {
 			return model.Flow{}, false
 		}
+		vlanID = (uint16(data[14])<<8 | uint16(data[15])) & 0x0FFF
 		etherType = uint16(data[16])<<8 | uint16(data[17])
 		offset = 18
 	}
 
+	var f model.Flow
+	var ok bool
 	switch etherType {
 	case 0x0800: // IPv4
-		return decodeIPv4(data[offset:], timestamp)
+		f, ok = decodeIPv4(data[offset:], timestamp)
 	case 0x86DD: // IPv6
-		return decodeIPv6(data[offset:], timestamp)
+		f, ok = decodeIPv6(data[offset:], timestamp)
 	default:
 		return model.Flow{}, false
 	}
+
+	if ok {
+		f.SrcMAC = srcMAC
+		f.DstMAC = dstMAC
+		f.VLAN = vlanID
+		f.EtherType = etherType
+	}
+	return f, ok
 }
 
 // decodeIPv4 parses an IPv4 packet and extracts flow fields.

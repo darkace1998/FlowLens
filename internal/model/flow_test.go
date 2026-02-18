@@ -410,3 +410,41 @@ func TestInterfaceName(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatMAC(t *testing.T) {
+	tests := []struct {
+		mac  net.HardwareAddr
+		want string
+	}{
+		{nil, "—"},
+		{net.HardwareAddr{}, "—"},
+		{net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}, "aa:bb:cc:dd:ee:ff"},
+		{net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, "00:00:00:00:00:00"},
+	}
+	for _, tt := range tests {
+		got := FormatMAC(tt.mac)
+		if got != tt.want {
+			t.Errorf("FormatMAC(%v) = %q, want %q", tt.mac, got, tt.want)
+		}
+	}
+}
+
+func TestFormatEtherType(t *testing.T) {
+	tests := []struct {
+		et   uint16
+		want string
+	}{
+		{0x0800, "IPv4"},
+		{0x86DD, "IPv6"},
+		{0x0806, "ARP"},
+		{0x8100, "802.1Q"},
+		{0, "—"},
+		{0x1234, "0x1234"},
+	}
+	for _, tt := range tests {
+		got := FormatEtherType(tt.et)
+		if got != tt.want {
+			t.Errorf("FormatEtherType(0x%04X) = %q, want %q", tt.et, got, tt.want)
+		}
+	}
+}

@@ -1723,3 +1723,91 @@ func TestLayout_ResponsiveNav(t *testing.T) {
 		t.Error("layout should have nav-links container")
 	}
 }
+
+func TestVLANsPage(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	// Insert a flow with VLAN
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.VLAN = 100
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/vlans", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("VLANs page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "VLAN Statistics") {
+		t.Error("response should contain 'VLAN Statistics'")
+	}
+	if !strings.Contains(body, "100") {
+		t.Error("response should contain VLAN ID 100")
+	}
+}
+
+func TestMACsPage(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/macs", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("MACs page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "MAC Address Table") {
+		t.Error("response should contain 'MAC Address Table'")
+	}
+	if !strings.Contains(body, "aa:bb:cc:dd:ee:ff") {
+		t.Error("response should contain source MAC address")
+	}
+	if !strings.Contains(body, "11:22:33:44:55:66") {
+		t.Error("response should contain destination MAC address")
+	}
+}
+
+func TestFlows_L2Columns(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	f.VLAN = 200
+	f.EtherType = 0x0800
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("Flows page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "aa:bb:cc:dd:ee:ff") {
+		t.Error("flows page should show source MAC")
+	}
+	if !strings.Contains(body, "11:22:33:44:55:66") {
+		t.Error("flows page should show destination MAC")
+	}
+	if !strings.Contains(body, "200") {
+		t.Error("flows page should show VLAN ID")
+	}
+	if !strings.Contains(body, "IPv4") {
+		t.Error("flows page should show EtherType name")
+	}
+}

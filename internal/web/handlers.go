@@ -1130,6 +1130,10 @@ type FlowRow struct {
 	InIface     string
 	OutIface    string
 	Exporter    string
+	SrcMAC      string
+	DstMAC      string
+	VLAN        uint16
+	EtherType   string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1240,6 +1244,10 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			InIface:     model.InterfaceName(f.InputIface, s.fullCfg.Collector.InterfaceNames),
 			OutIface:    model.InterfaceName(f.OutputIface, s.fullCfg.Collector.InterfaceNames),
 			Exporter:    model.SafeIPString(f.ExporterIP),
+			SrcMAC:      model.FormatMAC(f.SrcMAC),
+			DstMAC:      model.FormatMAC(f.DstMAC),
+			VLAN:        f.VLAN,
+			EtherType:   model.FormatEtherType(f.EtherType),
 		})
 	}
 
@@ -1900,4 +1908,200 @@ func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	http.ServeFile(w, r, path)
+}
+
+// --- VLAN Statistics ---
+
+// VLANEntry holds traffic statistics for a single VLAN.
+type VLANEntry struct {
+	ID       uint16
+	Bytes    uint64
+	Packets  uint64
+	Flows    int
+	BytesStr string
+	PktsStr  string
+	TopHosts []VLANHost
+}
+
+// VLANHost represents a host seen in a VLAN.
+type VLANHost struct {
+	Addr     string
+	Bytes    uint64
+	BytesStr string
+}
+
+// VLANPageData holds data for the VLAN statistics page.
+type VLANPageData struct {
+	VLANs      []VLANEntry
+	TotalVLANs int
+}
+
+func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("VLAN query error: %v", err)
+		return
+	}
+
+	type vlanAgg struct {
+		bytes   uint64
+		packets uint64
+		flows   int
+		hosts   map[string]uint64
+	}
+	vlans := make(map[uint16]*vlanAgg)
+
+	for _, f := range allFlows {
+		vid := f.VLAN
+		agg, ok := vlans[vid]
+		if !ok {
+			agg = &vlanAgg{hosts: make(map[string]uint64)}
+			vlans[vid] = agg
+		}
+		agg.bytes += f.Bytes
+		agg.packets += f.Packets
+		agg.flows++
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		agg.hosts[src] += f.Bytes
+		agg.hosts[dst] += f.Bytes
+	}
+
+	var entries []VLANEntry
+	for vid, agg := range vlans {
+		e := VLANEntry{
+			ID:       vid,
+			Bytes:    agg.bytes,
+			Packets:  agg.packets,
+			Flows:    agg.flows,
+			BytesStr: formatBytes(agg.bytes),
+			PktsStr:  formatPkts(agg.packets),
+		}
+		// Top 5 hosts by bytes
+		var hosts []VLANHost
+		for addr, b := range agg.hosts {
+			hosts = append(hosts, VLANHost{Addr: addr, Bytes: b, BytesStr: formatBytes(b)})
+		}
+		sort.Slice(hosts, func(i, j int) bool { return hosts[i].Bytes > hosts[j].Bytes })
+		if len(hosts) > 5 {
+			hosts = hosts[:5]
+		}
+		e.TopHosts = hosts
+		entries = append(entries, e)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := VLANPageData{
+		VLANs:      entries,
+		TotalVLANs: len(entries),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplVLANs.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("VLAN template error: %v", err)
+	}
+}
+
+// --- MAC Address Table ---
+
+// MACEntry represents a MAC address seen in traffic.
+type MACEntry struct {
+	MAC      string
+	IPs      []string
+	VLAN     uint16
+	Bytes    uint64
+	Packets  uint64
+	BytesStr string
+	PktsStr  string
+}
+
+// MACPageData holds data for the MAC address table page.
+type MACPageData struct {
+	MACs      []MACEntry
+	TotalMACs int
+}
+
+func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("MAC query error: %v", err)
+		return
+	}
+
+	type macAgg struct {
+		ips     map[string]bool
+		vlan    uint16
+		bytes   uint64
+		packets uint64
+	}
+	macs := make(map[string]*macAgg)
+
+	for _, f := range allFlows {
+		srcMAC := model.FormatMAC(f.SrcMAC)
+		dstMAC := model.FormatMAC(f.DstMAC)
+		srcIP := model.SafeIPString(f.SrcAddr)
+		dstIP := model.SafeIPString(f.DstAddr)
+
+		if srcMAC != "—" {
+			agg, ok := macs[srcMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[srcMAC] = agg
+			}
+			agg.ips[srcIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+		if dstMAC != "—" {
+			agg, ok := macs[dstMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[dstMAC] = agg
+			}
+			agg.ips[dstIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+	}
+
+	var entries []MACEntry
+	for mac, agg := range macs {
+		ips := make([]string, 0, len(agg.ips))
+		for ip := range agg.ips {
+			ips = append(ips, ip)
+		}
+		sort.Strings(ips)
+		entries = append(entries, MACEntry{
+			MAC:      mac,
+			IPs:      ips,
+			VLAN:     agg.vlan,
+			Bytes:    agg.bytes,
+			Packets:  agg.packets,
+			BytesStr: formatBytes(agg.bytes),
+			PktsStr:  formatPkts(agg.packets),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := MACPageData{
+		MACs:      entries,
+		TotalMACs: len(entries),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplMACs.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("MAC template error: %v", err)
+	}
 }

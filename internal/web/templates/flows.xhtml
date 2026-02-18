@@ -35,6 +35,10 @@
       <th>In Iface</th>
       <th>Out Iface</th>
       <th>Exporter</th>
+      <th>Src MAC</th>
+      <th>Dst MAC</th>
+      <th>VLAN</th>
+      <th>EtherType</th>
       <th>Retrans</th>
       <th>OOO</th>
       <th>Loss</th>
@@ -64,6 +68,10 @@
       <td>{{.InIface}}</td>
       <td>{{.OutIface}}</td>
       <td>{{if ne .Exporter "0.0.0.0"}}{{.Exporter}}{{else}}—{{end}}</td>
+      <td>{{.SrcMAC}}</td>
+      <td>{{.DstMAC}}</td>
+      <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
+      <td>{{.EtherType}}</td>
       <td>{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
       <td>{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
       <td>{{if .Loss}}{{.Loss}}{{else}}—{{end}}</td>
