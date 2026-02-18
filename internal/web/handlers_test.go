@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/capture"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/model"
@@ -41,7 +42,7 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
 	return s, ringBuf
 }
 
@@ -54,7 +55,7 @@ func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil)
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
 	t.Cleanup(func() { sqlStore.Close() })
 	return s, ringBuf, sqlStore
 }
@@ -229,7 +230,7 @@ func TestBuildDashboardData(t *testing.T) {
 		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
 	}
 
-	data := buildDashboardData(flows, 10*time.Minute)
+	data := buildDashboardData(flows, 10*time.Minute, nil)
 
 	if data.TotalBytes != 15200 {
 		t.Errorf("TotalBytes = %d, want 15200", data.TotalBytes)
@@ -280,6 +281,71 @@ func TestBuildDashboardData(t *testing.T) {
 	// Top AS: all flows have DstAS=65001
 	if len(data.TopAS) < 1 {
 		t.Fatal("TopAS should have at least 1 entry")
+	}
+}
+
+func TestBuildDashboardData_InterfaceStats(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+	}
+	// All test flows have InputIface=1, OutputIface=2
+
+	names := map[string]string{
+		"1": "eth0",
+		"2": "WAN",
+	}
+	data := buildDashboardData(flows, 10*time.Minute, names)
+
+	if len(data.Interfaces) != 2 {
+		t.Fatalf("Interfaces count = %d, want 2", len(data.Interfaces))
+	}
+
+	// Find interface entries by index.
+	ifaceByIndex := make(map[uint32]InterfaceEntry)
+	for _, e := range data.Interfaces {
+		ifaceByIndex[e.Index] = e
+	}
+
+	eth0 := ifaceByIndex[1]
+	if eth0.Name != "eth0" {
+		t.Errorf("Interface 1 name = %q, want eth0", eth0.Name)
+	}
+	if eth0.Flows != 2 {
+		t.Errorf("Interface 1 flows = %d, want 2", eth0.Flows)
+	}
+
+	wan := ifaceByIndex[2]
+	if wan.Name != "WAN" {
+		t.Errorf("Interface 2 name = %q, want WAN", wan.Name)
+	}
+}
+
+func TestDashboard_InterfaceFilter(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	f1 := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f1.InputIface = 1
+	f1.OutputIface = 2
+	f2 := makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100)
+	f2.InputIface = 3
+	f2.OutputIface = 4
+	rb.Insert([]model.Flow{f1, f2})
+
+	// Filter by interface 1 — should only show f1.
+	req := httptest.NewRequest("GET", "/?iface=1", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "10.0.1.1") {
+		t.Error("filtered dashboard should contain 10.0.1.1")
+	}
+	if !strings.Contains(body, "Clear interface filter") {
+		t.Error("filtered dashboard should show 'Clear interface filter' link")
 	}
 }
 
@@ -555,7 +621,7 @@ func TestAdvisories_WithEngine(t *testing.T) {
 	go engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil)
 
 	req := httptest.NewRequest("GET", "/advisories", nil)
 	w := httptest.NewRecorder()
@@ -1228,7 +1294,7 @@ func TestHandleMap_WithGeo(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1254,7 +1320,7 @@ func TestFlows_CountryColumns(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1277,7 +1343,7 @@ func TestHosts_CountryColumn(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1296,11 +1362,64 @@ func TestHosts_CountryColumn(t *testing.T) {
 	}
 }
 
+func TestFlows_InterfaceColumns(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+	s.fullCfg.Collector.InterfaceNames = map[string]string{
+		"1": "eth0",
+		"2": "GigabitEthernet0/1",
+	}
+
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "In Iface") {
+		t.Error("flows page should show 'In Iface' column header")
+	}
+	if !strings.Contains(body, "Out Iface") {
+		t.Error("flows page should show 'Out Iface' column header")
+	}
+	if !strings.Contains(body, "eth0") {
+		t.Error("flows page should show resolved interface name 'eth0' for InputIface=1")
+	}
+	if !strings.Contains(body, "GigabitEthernet0/1") {
+		t.Error("flows page should show resolved interface name 'GigabitEthernet0/1' for OutputIface=2")
+	}
+}
+
+func TestFlows_ExporterColumn(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "Exporter") {
+		t.Error("flows page should show 'Exporter' column header")
+	}
+	// makeTestFlow sets ExporterIP = 10.0.0.1
+	if !strings.Contains(body, "10.0.0.1") {
+		t.Error("flows page should show exporter IP '10.0.0.1'")
+	}
+}
+
 func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
 
 	flows := []model.Flow{
 		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
@@ -1313,5 +1432,382 @@ func TestBuildMapData(t *testing.T) {
 	}
 	if data.MappedHosts != 2 {
 		t.Errorf("MappedHosts = %d, want 2", data.MappedHosts)
+	}
+}
+
+func TestCapturePage_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Packet Capture") {
+		t.Error("response should contain 'Packet Capture'")
+	}
+	if !strings.Contains(body, "No capture sessions") {
+		t.Error("empty capture page should show 'No capture sessions'")
+	}
+}
+
+func TestCapturePage_WithManager(t *testing.T) {
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	capCfg := config.CaptureConfig{
+		Interfaces: []string{"eth0", "lo"},
+		Dir:        t.TempDir(),
+		SnapLen:    65535,
+		MaxSizeMB:  100,
+		MaxFiles:   10,
+	}
+	mgr := capture.NewManager(capCfg)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "eth0") {
+		t.Error("capture page should show configured interface eth0")
+	}
+	if !strings.Contains(body, "lo") {
+		t.Error("capture page should show configured interface lo")
+	}
+}
+
+func TestCaptureStart_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("device=eth0"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureStart_NoDevice(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCaptureStart_MethodNotAllowed(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture/start", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestCaptureStop_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("POST", "/capture/stop", strings.NewReader("id=cap-1"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureDownload_NilManager(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/capture/download?file=test.pcap", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCaptureDownload_MissingFile(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture/download?file=nonexistent.pcap", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestCaptureDownload_NoFileParam(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+
+	req := httptest.NewRequest("GET", "/capture/download", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestBuildChartData(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+
+	data := buildDashboardData(flows, 10*time.Minute, nil)
+
+	// Protocol chart data should have at least TCP and UDP
+	if len(data.ChartProtoLabels) == 0 {
+		t.Error("ChartProtoLabels should not be empty with flows")
+	}
+	if len(data.ChartProtoLabels) != len(data.ChartProtoValues) {
+		t.Error("ChartProtoLabels and ChartProtoValues length mismatch")
+	}
+
+	// Top talkers chart
+	if len(data.ChartTalkerLabels) == 0 {
+		t.Error("ChartTalkerLabels should not be empty with flows")
+	}
+	if len(data.ChartTalkerLabels) != len(data.ChartTalkerValues) {
+		t.Error("ChartTalkerLabels and ChartTalkerValues length mismatch")
+	}
+
+	// Time chart
+	if len(data.ChartTimeLabels) != 20 {
+		t.Errorf("ChartTimeLabels = %d, want 20 buckets", len(data.ChartTimeLabels))
+	}
+	if len(data.ChartTimeLabels) != len(data.ChartTimeValues) {
+		t.Error("ChartTimeLabels and ChartTimeValues length mismatch")
+	}
+}
+
+func TestBuildChartData_Empty(t *testing.T) {
+	data := buildDashboardData(nil, 10*time.Minute, nil)
+
+	if data.ChartProtoLabels != nil {
+		t.Error("ChartProtoLabels should be nil with no flows")
+	}
+	if data.ChartTalkerLabels != nil {
+		t.Error("ChartTalkerLabels should be nil with no flows")
+	}
+	if data.ChartTimeLabels != nil {
+		t.Error("ChartTimeLabels should be nil with no flows")
+	}
+}
+
+func TestDashboard_ChartScripts(t *testing.T) {
+	s, rb := newTestServer(t)
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+	rb.Insert([]model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "chart.js") {
+		t.Error("dashboard should include Chart.js CDN script")
+	}
+	if !strings.Contains(body, "protoChart") {
+		t.Error("dashboard should contain protocol chart canvas")
+	}
+	if !strings.Contains(body, "thruChart") {
+		t.Error("dashboard should contain throughput chart canvas")
+	}
+	if !strings.Contains(body, "talkersChart") {
+		t.Error("dashboard should contain talkers chart canvas")
+	}
+}
+
+func TestDashboard_AutoRefresh(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "countdown") {
+		t.Error("dashboard should have auto-refresh countdown element")
+	}
+	if !strings.Contains(body, "location.reload") {
+		t.Error("dashboard should have JS auto-refresh logic")
+	}
+	// Should NOT have the old meta refresh
+	if strings.Contains(body, `http-equiv="refresh"`) {
+		t.Error("dashboard should not use meta http-equiv refresh anymore")
+	}
+}
+
+func TestLayout_DarkModeToggle(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "toggleDarkMode") {
+		t.Error("layout should have dark mode toggle function")
+	}
+	if !strings.Contains(body, "dark-toggle") {
+		t.Error("layout should have dark mode toggle button")
+	}
+	if !strings.Contains(body, "flowlens-dark") {
+		t.Error("layout should persist dark mode in localStorage")
+	}
+}
+
+func TestLayout_MetaTags(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, `name="viewport"`) {
+		t.Error("layout should have viewport meta tag")
+	}
+	if !strings.Contains(body, `name="description"`) {
+		t.Error("layout should have description meta tag")
+	}
+	if !strings.Contains(body, `name="theme-color"`) {
+		t.Error("layout should have theme-color meta tag")
+	}
+	if !strings.Contains(body, `rel="icon"`) {
+		t.Error("layout should have a favicon")
+	}
+}
+
+func TestLayout_ResponsiveNav(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/about", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+	body := w.Body.String()
+
+	if !strings.Contains(body, "nav-toggle") {
+		t.Error("layout should have hamburger menu button")
+	}
+	if !strings.Contains(body, "nav-links") {
+		t.Error("layout should have nav-links container")
+	}
+}
+
+func TestVLANsPage(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	// Insert a flow with VLAN
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.VLAN = 100
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/vlans", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("VLANs page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "VLAN Statistics") {
+		t.Error("response should contain 'VLAN Statistics'")
+	}
+	if !strings.Contains(body, "100") {
+		t.Error("response should contain VLAN ID 100")
+	}
+}
+
+func TestMACsPage(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/macs", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("MACs page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "MAC Address Table") {
+		t.Error("response should contain 'MAC Address Table'")
+	}
+	if !strings.Contains(body, "aa:bb:cc:dd:ee:ff") {
+		t.Error("response should contain source MAC address")
+	}
+	if !strings.Contains(body, "11:22:33:44:55:66") {
+		t.Error("response should contain destination MAC address")
+	}
+}
+
+func TestFlows_L2Columns(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	f := makeTestFlow("10.0.0.1", "10.0.0.2", 80, 443, 6, 1000, 10)
+	f.SrcMAC = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	f.DstMAC = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	f.VLAN = 200
+	f.EtherType = 0x0800
+	ringBuf.Insert([]model.Flow{f})
+	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("Flows page status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "aa:bb:cc:dd:ee:ff") {
+		t.Error("flows page should show source MAC")
+	}
+	if !strings.Contains(body, "11:22:33:44:55:66") {
+		t.Error("flows page should show destination MAC")
+	}
+	if !strings.Contains(body, "200") {
+		t.Error("flows page should show VLAN ID")
+	}
+	if !strings.Contains(body, "IPv4") {
+		t.Error("flows page should show EtherType name")
 	}
 }

@@ -127,11 +127,11 @@
 |--------|------|
 | ✅ | `InputIface` and `OutputIface` stored per flow |
 | ✅ | Dual-port listening (NetFlow + IPFIX simultaneously) |
-| ❌ | Add **interface name resolution** via SNMP (map ifIndex → interface name/description) |
-| ❌ | Add per-interface traffic views on the dashboard (filter/group by interface) |
-| ❌ | Support **mirror/SPAN port** ingestion via raw packet capture (libpcap/gopacket) |
-| ❌ | Support **TAP** interfaces as packet sources alongside flow collection |
-| ❌ | Allow multiple collector instances bound to different interfaces in config |
+| ✅ | Add **interface name resolution** via config (map ifIndex → interface name/description) |
+| ✅ | Add per-interface traffic views on the dashboard (filter/group by interface) |
+| ✅ | Support **mirror/SPAN port** ingestion via raw packet capture (AF_PACKET) |
+| ✅ | Support **TAP** interfaces as packet sources alongside flow collection |
+| ✅ | Allow multiple collector instances bound to different interfaces in config |
 
 ---
 
@@ -139,12 +139,12 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Integrate **gopacket / libpcap** for raw packet capture on configurable interfaces |
-| ❌ | Decode Ethernet → IP → TCP/UDP headers to produce flow-like records from packets |
-| ❌ | Add a **Capture** page where users can start/stop captures with BPF filter expressions |
-| ❌ | Store captured packets in **PCAP files** (ring-buffer of files with size/time rotation) |
-| ❌ | Allow **download of PCAP** files from the web UI |
-| ❌ | Add config section for capture interfaces, snap length, and BPF filters |
+| ✅ | Integrate raw packet capture on configurable interfaces (AF_PACKET on Linux) |
+| ✅ | Decode Ethernet → IP → TCP/UDP headers to produce flow-like records from packets |
+| ✅ | Add a **Capture** page where users can start/stop captures with BPF filter expressions |
+| ✅ | Store captured packets in **PCAP files** (ring-buffer of files with size/time rotation) |
+| ✅ | Allow **download of PCAP** files from the web UI |
+| ✅ | Add config section for capture interfaces, snap length, and BPF filters |
 
 ---
 
@@ -155,25 +155,24 @@
 | ✅ | NetFlow v5 decoder |
 | ✅ | NetFlow v9 decoder (template-based) |
 | ✅ | IPFIX (v10) decoder (template-based) |
-| ❌ | Implement **sFlow v5** decoder (RFC 3176) — sample-based flow records |
-| ❌ | Add config for sFlow listen port (default 6343) |
-| ❌ | Support **sFlow counter samples** for interface utilization |
-| ❌ | Show exporter source in Flow Explorer (which device/interface exported each flow) |
+| ✅ | Implement **sFlow v5** decoder (RFC 3176) — sample-based flow records |
+| ✅ | Add config for sFlow listen port (default 6343) |
+| ✅ | Support **sFlow counter samples** for interface utilization |
+| ✅ | Show exporter source in Flow Explorer (which device/interface exported each flow) |
 
 ---
 
-## 12. HTML5 Web User Interface
+## 12.  Web User Interface
 
 | Status | Task |
 |--------|------|
 | ✅ | Server-rendered XHTML templates (layout, dashboard, flows, advisories, about) |
 | ✅ | Minimal CSS stylesheet |
-| ❌ | Migrate templates from XHTML to **HTML5** with semantic elements (`<section>`, `<nav>`, `<main>`, `<article>`) |
-| ❌ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) using a lightweight JS charting library (e.g., Chart.js or uPlot) |
-| ❌ | Add **auto-refresh** via JavaScript `fetch()` polling or WebSocket for live dashboard updates |
-| ❌ | Add **dark mode** toggle with CSS custom properties |
-| ❌ | Improve **responsive design** for mobile and tablet viewports |
-| ❌ | Add **favicon** and proper meta tags |
+| ✅ | Add **interactive charts** (throughput over time, protocol pie, top talkers bar) |
+| ✅ | Add **auto-refresh** for live dashboard updates |
+| ✅ | Add **dark mode** toggle with CSS custom properties |
+| ✅ | Improve **responsive design** for mobile and tablet viewports |
+| ✅ | Add **favicon** and proper meta tags |
 
 ---
 
@@ -199,12 +198,12 @@
 
 | Status | Task |
 |--------|------|
-| ❌ | Extend `Flow` struct with **L2 fields**: `SrcMAC`, `DstMAC`, `VLAN`, `EtherType` |
-| ❌ | Parse L2 fields from IPFIX IEs (IE 56 `sourceMacAddress`, IE 80 `destinationMacAddress`, IE 58 `vlanId`) |
-| ❌ | Parse L2 from raw packet captures (gopacket Ethernet layer) |
-| ❌ | Add **VLAN statistics** view (traffic per VLAN, top hosts per VLAN) |
-| ❌ | Add MAC address tables and L2 topology awareness |
-| ❌ | Store L2 metadata in SQLite |
+| ✅ | Extend `Flow` struct with **L2 fields**: `SrcMAC`, `DstMAC`, `VLAN`, `EtherType` |
+| ✅ | Parse L2 fields from IPFIX IEs (IE 56 `sourceMacAddress`, IE 80 `destinationMacAddress`, IE 58 `vlanId`) |
+| ✅ | Parse L2 from raw packet captures (gopacket Ethernet layer) |
+| ✅ | Add **VLAN statistics** view (traffic per VLAN, top hosts per VLAN) |
+| ✅ | Add MAC address tables and L2 topology awareness |
+| ✅ | Store L2 metadata in SQLite |
 
 ---
 

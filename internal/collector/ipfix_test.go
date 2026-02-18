@@ -393,3 +393,60 @@ func TestDecodeIPFIX_EnterpriseField(t *testing.T) {
 		t.Errorf("Protocol = %d, want 6", f.Protocol)
 	}
 }
+
+func TestDecodeIPFIX_L2Fields(t *testing.T) {
+	// Template with L2 fields: srcIP(4), dstIP(4), proto(1), srcMAC(6), dstMAC(6), vlanId(2)
+	tmplFields := []ipfixTemplateField{
+		{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+		{ID: ipfixFieldDestIPv4Addr, Length: 4},
+		{ID: ipfixFieldProtocolID, Length: 1},
+		{ID: ipfixFieldOctetDeltaCount, Length: 4},
+		{ID: ipfixFieldPacketDeltaCount, Length: 4},
+		{ID: ipfixFieldSourceMacAddress, Length: 6},
+		{ID: ipfixFieldDestMacAddress, Length: 6},
+		{ID: ipfixFieldVlanId, Length: 2},
+	}
+	tmplSet := buildIPFIXTemplateSet(256, tmplFields)
+
+	// Build data record
+	dataFields := make([]byte, 0, 4+4+1+4+4+6+6+2)
+	dataFields = append(dataFields, net.ParseIP("192.168.1.1").To4()...)
+	dataFields = append(dataFields, net.ParseIP("10.0.0.1").To4()...)
+	dataFields = append(dataFields, 6) // TCP
+	b4 := make([]byte, 4)
+	binary.BigEndian.PutUint32(b4, 5000)
+	dataFields = append(dataFields, b4...) // bytes
+	binary.BigEndian.PutUint32(b4, 50)
+	dataFields = append(dataFields, b4...) // packets
+	dataFields = append(dataFields, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff) // srcMAC
+	dataFields = append(dataFields, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66) // dstMAC
+	b2 := make([]byte, 2)
+	binary.BigEndian.PutUint16(b2, 100)
+	dataFields = append(dataFields, b2...) // VLAN ID
+	dataSet := buildIPFIXDataSet(256, dataFields)
+
+	msg := buildIPFIXPacket(1, uint32(time.Now().Unix()), tmplSet, dataSet)
+	cache := NewIPFIXTemplateCache()
+	flows, err := DecodeIPFIX(msg, net.ParseIP("10.0.0.1"), cache)
+	if err != nil {
+		t.Fatalf("DecodeIPFIX error: %v", err)
+	}
+
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+
+	f := flows[0]
+	expectedSrcMAC := net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+	expectedDstMAC := net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+
+	if f.SrcMAC.String() != expectedSrcMAC.String() {
+		t.Errorf("SrcMAC = %s, want %s", f.SrcMAC, expectedSrcMAC)
+	}
+	if f.DstMAC.String() != expectedDstMAC.String() {
+		t.Errorf("DstMAC = %s, want %s", f.DstMAC, expectedDstMAC)
+	}
+	if f.VLAN != 100 {
+		t.Errorf("VLAN = %d, want 100", f.VLAN)
+	}
+}

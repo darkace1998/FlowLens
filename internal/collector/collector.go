@@ -17,11 +17,13 @@ type FlowHandler func(flows []model.Flow)
 
 // Collector listens for NetFlow/IPFIX packets on UDP and decodes them.
 type Collector struct {
-	cfg        config.CollectorConfig
-	handler    FlowHandler
-	conns      []*net.UDPConn
-	nfv9Cache  *NFV9TemplateCache
-	ipfixCache *IPFIXTemplateCache
+	cfg            config.CollectorConfig
+	handler        FlowHandler
+	counterHandler CounterHandler
+	conns          []*net.UDPConn
+	sflowConns     []*net.UDPConn
+	nfv9Cache      *NFV9TemplateCache
+	ipfixCache     *IPFIXTemplateCache
 }
 
 // New creates a new Collector with the given config and flow handler.
@@ -34,8 +36,13 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 	}
 }
 
-// Start begins listening for NetFlow/IPFIX packets on the configured UDP ports.
-// It listens on both NetFlowPort and IPFIXPort (if configured and different).
+// SetCounterHandler registers a callback for sFlow counter samples.
+func (c *Collector) SetCounterHandler(h CounterHandler) {
+	c.counterHandler = h
+}
+
+// Start begins listening for NetFlow/IPFIX/sFlow packets on the configured UDP ports.
+// It listens on NetFlowPort, IPFIXPort (if configured and different), and SFlowPort.
 // It blocks until all connections are closed or an unrecoverable error occurs.
 func (c *Collector) Start() error {
 	if c.cfg.NetFlowPort < 0 || c.cfg.NetFlowPort > 65535 {
@@ -43,6 +50,9 @@ func (c *Collector) Start() error {
 	}
 	if c.cfg.IPFIXPort < 0 || c.cfg.IPFIXPort > 65535 {
 		return fmt.Errorf("invalid IPFIX port: %d (must be 0–65535)", c.cfg.IPFIXPort)
+	}
+	if c.cfg.SFlowPort < 0 || c.cfg.SFlowPort > 65535 {
+		return fmt.Errorf("invalid sFlow port: %d (must be 0–65535)", c.cfg.SFlowPort)
 	}
 
 	ports := []int{c.cfg.NetFlowPort}
@@ -67,14 +77,46 @@ func (c *Collector) Start() error {
 		logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", port)
 	}
 
+	// Start sFlow listener on a separate port if configured and not overlapping.
+	if c.cfg.SFlowPort > 0 {
+		sflowOverlap := false
+		for _, p := range ports {
+			if c.cfg.SFlowPort == p {
+				sflowOverlap = true
+				break
+			}
+		}
+		if !sflowOverlap {
+			sConn, err := net.ListenUDP("udp", &net.UDPAddr{Port: c.cfg.SFlowPort})
+			if err != nil {
+				logging.Default().Warn("Failed to start sFlow listener on port %d: %v", c.cfg.SFlowPort, err)
+			} else {
+				if err := sConn.SetReadBuffer(c.cfg.BufferSize); err != nil {
+					logging.Default().Warn("Failed to set UDP read buffer to %d on sFlow port %d: %v", c.cfg.BufferSize, c.cfg.SFlowPort, err)
+				}
+				c.sflowConns = append(c.sflowConns, sConn)
+				logging.Default().Info("Collector listening on UDP :%d (sFlow v5)", c.cfg.SFlowPort)
+			}
+		}
+	}
+
 	// Run a read loop for each connection; block until all finish.
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(c.conns))
+	errCh := make(chan error, len(c.conns)+len(c.sflowConns))
 	for _, conn := range c.conns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
 			if err := c.readLoop(conn); err != nil {
+				errCh <- err
+			}
+		}(conn)
+	}
+	for _, conn := range c.sflowConns {
+		wg.Add(1)
+		go func(conn *net.UDPConn) {
+			defer wg.Done()
+			if err := c.sflowReadLoop(conn); err != nil {
 				errCh <- err
 			}
 		}(conn)
@@ -120,6 +162,39 @@ func (c *Collector) readLoop(conn *net.UDPConn) error {
 	}
 }
 
+// sflowReadLoop reads and processes sFlow packets from a dedicated UDP connection.
+func (c *Collector) sflowReadLoop(conn *net.UDPConn) error {
+	buf := make([]byte, c.cfg.BufferSize)
+	for {
+		n, remoteAddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			logging.Default().Error("sFlow UDP read error: %v", err)
+			continue
+		}
+
+		data := make([]byte, n)
+		copy(data, buf[:n])
+
+		exporterIP := remoteAddr.IP
+
+		flows, counters, err := DecodeSFlow(data, exporterIP)
+		if err != nil {
+			logging.Default().Warn("Failed to decode sFlow from %s: %v", remoteAddr, err)
+			continue
+		}
+
+		if c.handler != nil && len(flows) > 0 {
+			c.handler(flows)
+		}
+		if c.counterHandler != nil && len(counters) > 0 {
+			c.counterHandler(counters)
+		}
+	}
+}
+
 // decodePacket auto-detects the NetFlow/IPFIX version and dispatches to the appropriate decoder.
 func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, error) {
 	if len(data) < 2 {
@@ -146,6 +221,10 @@ func (c *Collector) Stop() {
 		conn.Close()
 	}
 	c.conns = nil
+	for _, conn := range c.sflowConns {
+		conn.Close()
+	}
+	c.sflowConns = nil
 }
 
 // Addr returns the local address of the first listener,
@@ -157,11 +236,14 @@ func (c *Collector) Addr() net.Addr {
 	return nil
 }
 
-// Addrs returns the local addresses of all listeners.
+// Addrs returns the local addresses of all listeners (NetFlow/IPFIX and sFlow).
 func (c *Collector) Addrs() []net.Addr {
-	addrs := make([]net.Addr, len(c.conns))
-	for i, conn := range c.conns {
-		addrs[i] = conn.LocalAddr()
+	addrs := make([]net.Addr, 0, len(c.conns)+len(c.sflowConns))
+	for _, conn := range c.conns {
+		addrs = append(addrs, conn.LocalAddr())
+	}
+	for _, conn := range c.sflowConns {
+		addrs = append(addrs, conn.LocalAddr())
 	}
 	return addrs
 }

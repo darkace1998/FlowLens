@@ -14,13 +14,27 @@ type Config struct {
 	Storage   StorageConfig   `yaml:"storage"`
 	Analysis  AnalysisConfig  `yaml:"analysis"`
 	Web       WebConfig       `yaml:"web"`
+	Capture   CaptureConfig   `yaml:"capture"`
 }
 
-// CollectorConfig holds settings for the NetFlow/IPFIX collector.
+// CollectorConfig holds settings for the NetFlow/IPFIX/sFlow collector.
 type CollectorConfig struct {
-	NetFlowPort int `yaml:"netflow_port"`
-	IPFIXPort   int `yaml:"ipfix_port"`
-	BufferSize  int `yaml:"buffer_size"`
+	NetFlowPort    int               `yaml:"netflow_port"`
+	IPFIXPort      int               `yaml:"ipfix_port"`
+	SFlowPort      int               `yaml:"sflow_port"`     // UDP port for sFlow v5 (default: 6343)
+	BufferSize     int               `yaml:"buffer_size"`
+	InterfaceNames map[string]string `yaml:"interface_names"` // ifIndex → human-readable name (e.g. "1": "eth0")
+	Interfaces     []InterfaceConfig `yaml:"interfaces"`      // multiple collector instances bound to different addresses
+}
+
+// InterfaceConfig defines a single collector listener bound to a specific address/port.
+type InterfaceConfig struct {
+	Name    string `yaml:"name"`    // human-readable name (e.g. "WAN", "LAN", "Mirror")
+	Listen  string `yaml:"listen"`  // bind address (e.g. ":2055", "192.168.1.1:4739")
+	Type    string `yaml:"type"`    // "netflow" (default), "mirror", or "tap"
+	Device  string `yaml:"device"`  // network device for mirror/tap mode (e.g. "eth1", "tap0")
+	BPF     string `yaml:"bpf"`     // optional BPF filter for mirror/tap capture
+	SnapLen int    `yaml:"snaplen"` // packet snapshot length for mirror/tap (default: 65535)
 }
 
 // StorageConfig holds settings for flow data storage.
@@ -46,12 +60,22 @@ type WebConfig struct {
 	PageSize int    `yaml:"page_size"`
 }
 
+// CaptureConfig holds settings for packet capture and PCAP storage.
+type CaptureConfig struct {
+	Interfaces []string `yaml:"interfaces"` // network interfaces available for capture (e.g. ["eth0", "eth1"])
+	SnapLen    int      `yaml:"snaplen"`    // packet snapshot length (default: 65535)
+	Dir        string   `yaml:"dir"`        // directory to store PCAP files (default: "./captures")
+	MaxSizeMB  int      `yaml:"max_size_mb"` // max PCAP file size in MB before rotation (default: 100)
+	MaxFiles   int      `yaml:"max_files"`   // max number of PCAP files to keep (default: 10)
+}
+
 // Defaults returns a Config populated with sensible default values.
 func Defaults() Config {
 	return Config{
 		Collector: CollectorConfig{
 			NetFlowPort: 2055,
 			IPFIXPort:   4739,
+			SFlowPort:   6343,
 			BufferSize:  65535,
 		},
 		Storage: StorageConfig{
@@ -69,6 +93,12 @@ func Defaults() Config {
 		Web: WebConfig{
 			Listen:   ":8080",
 			PageSize: 50,
+		},
+		Capture: CaptureConfig{
+			SnapLen:   65535,
+			Dir:       "./captures",
+			MaxSizeMB: 100,
+			MaxFiles:  10,
 		},
 	}
 }

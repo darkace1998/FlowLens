@@ -1,7 +1,10 @@
 {{define "title"}}Dashboard{{end}}
-{{define "head"}}<meta http-equiv="refresh" content="30" />{{end}}
+{{define "head"}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{{end}}
 {{define "content"}}
 <h1>Dashboard</h1>
+<div class="refresh-indicator">Auto-refresh in <span id="countdown">30</span>s</div>
 
 <div class="stats-grid">
   <div class="stat-card">
@@ -290,6 +293,34 @@
   </div>
 </div>
 
+{{if .Interfaces}}
+<div class="panel">
+  <h2>Traffic by Interface{{if .IfaceFilter}} <span class="filter-badge">Filtered: if{{.IfaceFilter}}</span>{{end}}</h2>
+  <table>
+    <thead>
+      <tr><th>Interface</th><th>Index</th><th>Bytes</th><th>Packets</th><th>Flows</th><th>Share</th><th>Filter</th></tr>
+    </thead>
+    <tbody>
+      {{range .Interfaces}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Index}}</td>
+        <td>{{formatBytes .Bytes}}</td>
+        <td>{{formatPkts .Packets}}</td>
+        <td>{{.Flows}}</td>
+        <td>
+          <div class="bar-bg"><div class="bar-fill iface" style="width:{{.Pct}}%"></div></div>
+          {{.Pct}}%
+        </td>
+        <td><a href="/?iface={{.Index}}">view</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{if .IfaceFilter}}<p><a href="/">Clear interface filter</a></p>{{end}}
+</div>
+{{end}}
+
 <div class="two-col">
   <div class="panel">
     <h2>Protocol Breakdown</h2>
@@ -343,4 +374,95 @@
     {{end}}
   </div>
 </div>
+
+{{if .ChartProtoLabels}}
+<div class="two-col">
+  <div class="panel">
+    <h2>Protocol Distribution</h2>
+    <div class="chart-container"><canvas id="protoChart"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>Top Talkers</h2>
+    <div class="chart-container"><canvas id="talkersChart"></canvas></div>
+  </div>
+</div>
+{{end}}
+
+{{if .ChartTimeLabels}}
+<div class="panel">
+  <h2>Throughput Over Time</h2>
+  <div class="chart-container chart-container-sm"><canvas id="thruChart"></canvas></div>
+</div>
+{{end}}
+
+<script>
+(function(){
+  // Auto-refresh with countdown (preserves scroll position)
+  var secs=30,el=document.getElementById('countdown');
+  if(el){
+    setInterval(function(){
+      secs--;
+      if(el)el.textContent=secs;
+      if(secs<=0){
+        try{sessionStorage.setItem('flowlens-scroll',window.scrollY)}catch(e){}
+        location.reload();
+      }
+    },1000);
+  }
+  try{
+    var sy=sessionStorage.getItem('flowlens-scroll');
+    if(sy){window.scrollTo(0,parseInt(sy,10));sessionStorage.removeItem('flowlens-scroll')}
+  }catch(e){}
+
+  // Charts (only if Chart.js loaded)
+  if(typeof Chart==='undefined')return;
+  var darkMode=false;
+  try{darkMode=localStorage.getItem('flowlens-dark')==='1'}catch(e){}
+  var gridColor=darkMode?'rgba(139,148,158,0.2)':'rgba(0,0,0,0.1)';
+  var textColor=darkMode?'#8b949e':'#586069';
+  Chart.defaults.color=textColor;
+  Chart.defaults.borderColor=gridColor;
+
+  {{if .ChartProtoLabels}}
+  new Chart(document.getElementById('protoChart'),{
+    type:'doughnut',
+    data:{labels:[{{range $i,$l := .ChartProtoLabels}}{{if $i}},{{end}}"{{$l}}"{{end}}],
+    datasets:[{data:[{{range $i,$v := .ChartProtoValues}}{{if $i}},{{end}}{{$v}}{{end}}],
+    backgroundColor:['#0366d6','#28a745','#e36209','#6f42c1','#d73a49','#dbab09','#24292e','#586069']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'}}}
+  });
+  new Chart(document.getElementById('talkersChart'),{
+    type:'bar',
+    data:{labels:[{{range $i,$l := .ChartTalkerLabels}}{{if $i}},{{end}}"{{$l}}"{{end}}],
+    datasets:[{label:'Bytes',data:[{{range $i,$v := .ChartTalkerValues}}{{if $i}},{{end}}{{$v}}{{end}}],
+    backgroundColor:'#0366d6'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{x:{ticks:{callback:function(v){
+      if(v>=1e9)return(v/1e9).toFixed(1)+'G';
+      if(v>=1e6)return(v/1e6).toFixed(1)+'M';
+      if(v>=1e3)return(v/1e3).toFixed(1)+'K';
+      return v;
+    }}}}}
+  });
+  {{end}}
+
+  {{if .ChartTimeLabels}}
+  new Chart(document.getElementById('thruChart'),{
+    type:'line',
+    data:{labels:[{{range $i,$l := .ChartTimeLabels}}{{if $i}},{{end}}"{{$l}}"{{end}}],
+    datasets:[{label:'Bytes',data:[{{range $i,$v := .ChartTimeValues}}{{if $i}},{{end}}{{$v}}{{end}}],
+    borderColor:'#0366d6',backgroundColor:'rgba(3,102,214,0.1)',fill:true,tension:0.3,pointRadius:1}]},
+    options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{y:{ticks:{callback:function(v){
+      if(v>=1e9)return(v/1e9).toFixed(1)+'G';
+      if(v>=1e6)return(v/1e6).toFixed(1)+'M';
+      if(v>=1e3)return(v/1e3).toFixed(1)+'K';
+      return v;
+    }}}}}
+  });
+  {{end}}
+})();
+</script>
 {{end}}

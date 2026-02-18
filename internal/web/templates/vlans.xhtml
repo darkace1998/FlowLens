@@ -1,0 +1,37 @@
+{{define "title"}}VLAN Statistics{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>VLAN Statistics</h1>
+<p class="flow-summary">{{.TotalVLANs}} VLANs observed</p>
+
+{{if .VLANs}}
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>VLAN ID</th>
+      <th>Bytes</th>
+      <th>Packets</th>
+      <th>Flows</th>
+      <th>Top Hosts</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .VLANs}}
+    <tr>
+      <td>{{if .ID}}{{.ID}}{{else}}Untagged{{end}}</td>
+      <td>{{.BytesStr}}</td>
+      <td>{{.PktsStr}}</td>
+      <td>{{.Flows}}</td>
+      <td>
+        {{range .TopHosts}}
+          <span class="tag">{{.Addr}} ({{.BytesStr}})</span>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty">No VLAN data available.</p>
+{{end}}
+{{end}}

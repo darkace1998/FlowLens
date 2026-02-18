@@ -123,3 +123,66 @@ func TestLoadInvalidYAML(t *testing.T) {
 		t.Fatal("expected error for invalid YAML, got nil")
 	}
 }
+
+func TestLoadInterfaceNames(t *testing.T) {
+	yamlContent := `
+collector:
+  netflow_port: 2055
+  interface_names:
+    "1": "eth0"
+    "2": "GigabitEthernet0/1"
+  interfaces:
+    - name: "Mirror Port"
+      type: mirror
+      device: eth1
+      snaplen: 1500
+    - name: "Remote Site"
+      type: netflow
+      listen: ":9996"
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "iface.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(cfg.Collector.InterfaceNames) != 2 {
+		t.Fatalf("InterfaceNames count = %d, want 2", len(cfg.Collector.InterfaceNames))
+	}
+	if cfg.Collector.InterfaceNames["1"] != "eth0" {
+		t.Errorf("InterfaceNames[1] = %q, want eth0", cfg.Collector.InterfaceNames["1"])
+	}
+	if cfg.Collector.InterfaceNames["2"] != "GigabitEthernet0/1" {
+		t.Errorf("InterfaceNames[2] = %q, want GigabitEthernet0/1", cfg.Collector.InterfaceNames["2"])
+	}
+
+	if len(cfg.Collector.Interfaces) != 2 {
+		t.Fatalf("Interfaces count = %d, want 2", len(cfg.Collector.Interfaces))
+	}
+	iface0 := cfg.Collector.Interfaces[0]
+	if iface0.Name != "Mirror Port" {
+		t.Errorf("Interfaces[0].Name = %q, want Mirror Port", iface0.Name)
+	}
+	if iface0.Type != "mirror" {
+		t.Errorf("Interfaces[0].Type = %q, want mirror", iface0.Type)
+	}
+	if iface0.Device != "eth1" {
+		t.Errorf("Interfaces[0].Device = %q, want eth1", iface0.Device)
+	}
+	if iface0.SnapLen != 1500 {
+		t.Errorf("Interfaces[0].SnapLen = %d, want 1500", iface0.SnapLen)
+	}
+
+	iface1 := cfg.Collector.Interfaces[1]
+	if iface1.Type != "netflow" {
+		t.Errorf("Interfaces[1].Type = %q, want netflow", iface1.Type)
+	}
+	if iface1.Listen != ":9996" {
+		t.Errorf("Interfaces[1].Listen = %q, want :9996", iface1.Listen)
+	}
+}

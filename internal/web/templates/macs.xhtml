@@ -1,0 +1,37 @@
+{{define "title"}}MAC Address Table{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>MAC Address Table</h1>
+<p class="flow-summary">{{.TotalMACs}} MAC addresses observed</p>
+
+{{if .MACs}}
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>MAC Address</th>
+      <th>Associated IPs</th>
+      <th>VLAN</th>
+      <th>Bytes</th>
+      <th>Packets</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .MACs}}
+    <tr>
+      <td><code>{{.MAC}}</code></td>
+      <td>
+        {{range .IPs}}
+          <span class="tag">{{.}}</span>
+        {{end}}
+      </td>
+      <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
+      <td>{{.BytesStr}}</td>
+      <td>{{.PktsStr}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty">No MAC address data available. L2 data requires IPFIX IE 56/80 or packet capture.</p>
+{{end}}
+{{end}}

@@ -1,7 +1,24 @@
 collector:
   netflow_port: 2055          # UDP port for NetFlow v5/v9
   ipfix_port: 4739            # UDP port for IPFIX
+  sflow_port: 6343            # UDP port for sFlow v5
   buffer_size: 65535          # UDP read buffer size in bytes
+  # interface_names:          # optional ifIndex → name mapping for dashboard display
+  #   "1": "eth0"
+  #   "2": "eth1"
+  #   "3": "GigabitEthernet0/1"
+  # interfaces:               # optional additional collector instances
+  #   - name: "WAN Mirror"
+  #     type: mirror           # "mirror" or "tap" for raw packet capture
+  #     device: eth1           # network device to capture from
+  #     snaplen: 65535         # packet snapshot length
+  #     bpf: ""                # optional BPF filter
+  #   - name: "TAP Port"
+  #     type: tap
+  #     device: tap0
+  #   - name: "Remote Site"
+  #     type: netflow           # additional NetFlow/IPFIX listener
+  #     listen: ":9996"
 
 storage:
   ring_buffer_duration: 10m   # how long to keep flows in memory
@@ -18,3 +35,12 @@ analysis:
 web:
   listen: ":8080"             # HTTP listen address
   page_size: 50               # rows per page in flow explorer
+
+capture:
+  # interfaces:               # network interfaces available for capture
+  #   - eth0
+  #   - eth1
+  snaplen: 65535              # packet snapshot length
+  dir: "./captures"           # directory for PCAP files
+  max_size_mb: 100            # max PCAP file size before rotation (MB)
+  max_files: 10               # max number of PCAP files to keep

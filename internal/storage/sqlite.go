@@ -70,7 +70,11 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		out_of_order    INTEGER NOT NULL DEFAULT 0,
 		packet_loss     INTEGER NOT NULL DEFAULT 0,
 		jitter_us       INTEGER NOT NULL DEFAULT 0,
-		mos             REAL NOT NULL DEFAULT 0
+		mos             REAL NOT NULL DEFAULT 0,
+		src_mac         TEXT NOT NULL DEFAULT '',
+		dst_mac         TEXT NOT NULL DEFAULT '',
+		vlan_id         INTEGER NOT NULL DEFAULT 0,
+		ether_type      INTEGER NOT NULL DEFAULT 0
 	)`
 	if _, err := db.Exec(createSQL); err != nil {
 		db.Close()
@@ -116,6 +120,20 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 			logging.Default().Warn("Migration mos: %v", err)
 		}
 	}
+	for _, col := range []string{"src_mac", "dst_mac"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	for _, col := range []string{"vlan_id", "ether_type"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {
@@ -153,8 +171,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 		 bytes, packets, tcp_flags, tos, input_iface, output_iface,
 		 src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category,
 		 rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss,
-		 jitter_us, mos)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		 jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
@@ -188,6 +206,10 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 			f.PacketLoss,
 			f.JitterMicros,
 			f.MOS,
+			model.FormatMAC(f.SrcMAC),
+			model.FormatMAC(f.DstMAC),
+			f.VLAN,
+			f.EtherType,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -207,7 +229,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		"bytes, packets, tcp_flags, tos, input_iface, output_iface, " +
 		"src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category, " +
 		"rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss, " +
-		"jitter_us, mos " +
+		"jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type " +
 		"FROM flows WHERE timestamp >= ? ORDER BY timestamp DESC"
 
 	var rows *sql.Rows
@@ -228,6 +250,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		var f model.Flow
 		var ts time.Time
 		var srcAddr, dstAddr, exporterIP string
+		var srcMAC, dstMAC string
 		var durationNs int64
 
 		err := rows.Scan(
@@ -243,6 +266,8 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 			&f.RTTMicros, &f.ThroughputBPS,
 			&f.Retransmissions, &f.OutOfOrder, &f.PacketLoss,
 			&f.JitterMicros, &f.MOS,
+			&srcMAC, &dstMAC,
+			&f.VLAN, &f.EtherType,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
@@ -253,6 +278,12 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		f.DstAddr = net.ParseIP(dstAddr)
 		f.ExporterIP = net.ParseIP(exporterIP)
 		f.Duration = time.Duration(durationNs)
+		if srcMAC != "" && srcMAC != "—" {
+			f.SrcMAC, _ = net.ParseMAC(srcMAC)
+		}
+		if dstMAC != "" && dstMAC != "—" {
+			f.DstMAC, _ = net.ParseMAC(dstMAC)
+		}
 		flows = append(flows, f)
 	}
 

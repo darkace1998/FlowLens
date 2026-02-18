@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+	"github.com/darkace1998/FlowLens/internal/capture"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
@@ -382,6 +383,16 @@ type VoIPFlowEntry struct {
 	Packets  uint64
 }
 
+// InterfaceEntry represents a network interface's share of traffic.
+type InterfaceEntry struct {
+	Index   uint32
+	Name    string
+	Bytes   uint64
+	Packets uint64
+	Flows   int
+	Pct     float64
+}
+
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
 	TotalBytes   uint64
@@ -401,6 +412,16 @@ type DashboardData struct {
 	Latency      LatencyStats
 	TCPHealth    TCPHealthStats
 	VoIP         VoIPStats
+	Interfaces   []InterfaceEntry
+	IfaceFilter  string // current interface filter value (from query param)
+
+	// Chart data for interactive Chart.js visualizations.
+	ChartProtoLabels  []string
+	ChartProtoValues  []uint64
+	ChartTalkerLabels []string
+	ChartTalkerValues []uint64
+	ChartTimeLabels   []string
+	ChartTimeValues   []uint64
 }
 
 // --- Active Hosts data structures ---
@@ -450,7 +471,25 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// Stitch bidirectional flows to compute RTT estimates.
 	model.StitchFlows(flows)
 
-	data := buildDashboardData(flows, window)
+	// Apply interface filter if specified.
+	ifaceFilter := r.URL.Query().Get("iface")
+	if ifaceFilter != "" {
+		var filtered []model.Flow
+		ifVal, err := strconv.ParseUint(ifaceFilter, 10, 32)
+		if err == nil {
+			for _, f := range flows {
+				if f.InputIface == uint32(ifVal) || f.OutputIface == uint32(ifVal) {
+					filtered = append(filtered, f)
+				}
+			}
+			flows = filtered
+		} else {
+			logging.Default().Warn("Invalid interface filter %q: %v", ifaceFilter, err)
+		}
+	}
+
+	data := buildDashboardData(flows, window, s.fullCfg.Collector.InterfaceNames)
+	data.IfaceFilter = ifaceFilter
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplDashboard.ExecuteTemplate(w, "layout", data); err != nil {
@@ -458,7 +497,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData {
+func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map[string]string) DashboardData {
 	var totalBytes, totalPkts uint64
 	srcMap := make(map[string]*TalkerEntry)
 	dstMap := make(map[string]*TalkerEntry)
@@ -467,6 +506,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	asMap := make(map[uint32]*ASEntry)
 	appProtoMap := make(map[string]*AppProtoEntry)
 	categoryMap := make(map[string]*CategoryEntry)
+	ifaceMap := make(map[uint32]*InterfaceEntry)
 
 	now := time.Now()
 	activeFlows := 0
@@ -563,6 +603,26 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 				Flows:   1,
 			}
 		}
+
+		// Aggregate by interface (input and output).
+		for _, ifIdx := range []uint32{f.InputIface, f.OutputIface} {
+			if ifIdx == 0 {
+				continue
+			}
+			if e, ok := ifaceMap[ifIdx]; ok {
+				e.Bytes += f.Bytes
+				e.Packets += f.Packets
+				e.Flows++
+			} else {
+				ifaceMap[ifIdx] = &InterfaceEntry{
+					Index:   ifIdx,
+					Name:    model.InterfaceName(ifIdx, ifaceNames),
+					Bytes:   f.Bytes,
+					Packets: f.Packets,
+					Flows:   1,
+				}
+			}
+		}
 	}
 
 	topSrc := topN(srcMap, totalBytes, 10)
@@ -602,6 +662,14 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	}
 	sort.Slice(categories, func(i, j int) bool { return categories[i].Bytes > categories[j].Bytes })
 
+	// Build interface list (sorted by bytes).
+	interfaces := make([]InterfaceEntry, 0, len(ifaceMap))
+	for _, e := range ifaceMap {
+		e.Pct = pctOf(e.Bytes, totalBytes)
+		interfaces = append(interfaces, *e)
+	}
+	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Bytes > interfaces[j].Bytes })
+
 	// Compute latency and throughput percentiles.
 	latencyStats := computeLatencyStats(flows)
 
@@ -611,25 +679,106 @@ func buildDashboardData(flows []model.Flow, window time.Duration) DashboardData 
 	// Compute VoIP quality metrics.
 	voipStats := computeVoIPStats(flows)
 
+	// Build chart data for interactive visualizations.
+	chartProtoLabels, chartProtoValues := buildChartProto(protocols)
+	chartTalkerLabels, chartTalkerValues := buildChartTalkers(topSrc)
+	chartTimeLabels, chartTimeValues := buildChartTime(flows, window)
+
 	return DashboardData{
-		TotalBytes:   totalBytes,
-		TotalPackets: totalPkts,
-		BPS:          formatBPS(totalBytes, window),
-		PPS:          formatPPS(totalPkts, window),
-		FlowCount:    len(flows),
-		ActiveFlows:  activeFlows,
-		ActiveHosts:  len(uniqueHosts),
-		Window:       window,
-		TopSrc:       topSrc,
-		TopDst:       topDst,
-		Protocols:    protocols,
-		TopAS:        topAS,
-		AppProtocols: appProtocols,
-		Categories:   categories,
-		Latency:      latencyStats,
-		TCPHealth:    tcpHealth,
-		VoIP:         voipStats,
+		TotalBytes:        totalBytes,
+		TotalPackets:      totalPkts,
+		BPS:               formatBPS(totalBytes, window),
+		PPS:               formatPPS(totalPkts, window),
+		FlowCount:         len(flows),
+		ActiveFlows:       activeFlows,
+		ActiveHosts:       len(uniqueHosts),
+		Window:            window,
+		TopSrc:            topSrc,
+		TopDst:            topDst,
+		Protocols:         protocols,
+		TopAS:             topAS,
+		AppProtocols:      appProtocols,
+		Categories:        categories,
+		Latency:           latencyStats,
+		TCPHealth:         tcpHealth,
+		VoIP:              voipStats,
+		Interfaces:        interfaces,
+		ChartProtoLabels:  chartProtoLabels,
+		ChartProtoValues:  chartProtoValues,
+		ChartTalkerLabels: chartTalkerLabels,
+		ChartTalkerValues: chartTalkerValues,
+		ChartTimeLabels:   chartTimeLabels,
+		ChartTimeValues:   chartTimeValues,
 	}
+}
+
+// buildChartProto returns labels and values for the protocol distribution chart.
+func buildChartProto(protocols []ProtocolEntry) ([]string, []uint64) {
+	if len(protocols) == 0 {
+		return nil, nil
+	}
+	labels := make([]string, len(protocols))
+	values := make([]uint64, len(protocols))
+	for i, p := range protocols {
+		labels[i] = p.Name
+		values[i] = p.Bytes
+	}
+	return labels, values
+}
+
+// buildChartTalkers returns labels and values for the top talkers bar chart.
+func buildChartTalkers(topSrc []TalkerEntry) ([]string, []uint64) {
+	if len(topSrc) == 0 {
+		return nil, nil
+	}
+	n := len(topSrc)
+	if n > 8 {
+		n = 8
+	}
+	labels := make([]string, n)
+	values := make([]uint64, n)
+	for i := 0; i < n; i++ {
+		labels[i] = topSrc[i].IP
+		values[i] = topSrc[i].Bytes
+	}
+	return labels, values
+}
+
+// buildChartTime buckets flows by time for the throughput-over-time chart.
+func buildChartTime(flows []model.Flow, window time.Duration) ([]string, []uint64) {
+	if len(flows) == 0 {
+		return nil, nil
+	}
+	const numBuckets = 20
+	bucketDur := window / numBuckets
+	if bucketDur < time.Second {
+		bucketDur = time.Second
+	}
+
+	now := time.Now()
+	labels := make([]string, numBuckets)
+	values := make([]uint64, numBuckets)
+
+	for i := 0; i < numBuckets; i++ {
+		t := now.Add(-window).Add(time.Duration(i) * bucketDur).Add(bucketDur / 2)
+		labels[i] = t.Format("15:04")
+	}
+
+	for _, f := range flows {
+		age := now.Sub(f.Timestamp)
+		if age < 0 || age > window {
+			continue
+		}
+		idx := int((window - age) / bucketDur)
+		if idx >= numBuckets {
+			idx = numBuckets - 1
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		values[idx] += f.Bytes
+	}
+	return labels, values
 }
 
 // computeLatencyStats calculates percentile-based latency/throughput statistics.
@@ -978,6 +1127,13 @@ type FlowRow struct {
 	MOSClass    string
 	SrcCountry  string
 	DstCountry  string
+	InIface     string
+	OutIface    string
+	Exporter    string
+	SrcMAC      string
+	DstMAC      string
+	VLAN        uint16
+	EtherType   string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1085,6 +1241,13 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			MOSClass:    mosQuality(f.MOS),
 			SrcCountry:  srcCountry,
 			DstCountry:  dstCountry,
+			InIface:     model.InterfaceName(f.InputIface, s.fullCfg.Collector.InterfaceNames),
+			OutIface:    model.InterfaceName(f.OutputIface, s.fullCfg.Collector.InterfaceNames),
+			Exporter:    model.SafeIPString(f.ExporterIP),
+			SrcMAC:      model.FormatMAC(f.SrcMAC),
+			DstMAC:      model.FormatMAC(f.DstMAC),
+			VLAN:        f.VLAN,
+			EtherType:   model.FormatEtherType(f.EtherType),
 		})
 	}
 
@@ -1641,4 +1804,304 @@ func formatUptime(d time.Duration) string {
 		return fmt.Sprintf("%dm %ds", mins, secs)
 	}
 	return fmt.Sprintf("%ds", secs)
+}
+
+// --- Capture handlers ---
+
+// CapturePageData holds data for the capture page template.
+type CapturePageData struct {
+	Interfaces []string
+	Sessions   []capture.Session
+	Files      []capture.PcapFileInfo
+}
+
+func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
+	data := CapturePageData{}
+
+	if s.captureMgr != nil {
+		data.Interfaces = s.captureMgr.Interfaces()
+		data.Sessions = s.captureMgr.Sessions()
+		files, err := s.captureMgr.PcapFiles()
+		if err != nil {
+			logging.Default().Warn("Failed to list PCAP files: %v", err)
+		}
+		data.Files = files
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplCapture.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	device := r.FormValue("device")
+	bpf := r.FormValue("bpf")
+
+	if device == "" {
+		http.Error(w, "Device is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := s.captureMgr.Start(device, bpf)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to start capture: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/capture", http.StatusSeeOther)
+}
+
+func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.captureMgr.Stop(id); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to stop capture: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/capture", http.StatusSeeOther)
+}
+
+func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
+	if s.captureMgr == nil {
+		http.Error(w, "Capture not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	filename := r.URL.Query().Get("file")
+	if filename == "" {
+		http.Error(w, "File parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	path, err := s.captureMgr.PcapFilePath(filename)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	http.ServeFile(w, r, path)
+}
+
+// --- VLAN Statistics ---
+
+// VLANEntry holds traffic statistics for a single VLAN.
+type VLANEntry struct {
+	ID       uint16
+	Bytes    uint64
+	Packets  uint64
+	Flows    int
+	BytesStr string
+	PktsStr  string
+	TopHosts []VLANHost
+}
+
+// VLANHost represents a host seen in a VLAN.
+type VLANHost struct {
+	Addr     string
+	Bytes    uint64
+	BytesStr string
+}
+
+// VLANPageData holds data for the VLAN statistics page.
+type VLANPageData struct {
+	VLANs      []VLANEntry
+	TotalVLANs int
+}
+
+func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("VLAN query error: %v", err)
+		return
+	}
+
+	type vlanAgg struct {
+		bytes   uint64
+		packets uint64
+		flows   int
+		hosts   map[string]uint64
+	}
+	vlans := make(map[uint16]*vlanAgg)
+
+	for _, f := range allFlows {
+		vid := f.VLAN
+		agg, ok := vlans[vid]
+		if !ok {
+			agg = &vlanAgg{hosts: make(map[string]uint64)}
+			vlans[vid] = agg
+		}
+		agg.bytes += f.Bytes
+		agg.packets += f.Packets
+		agg.flows++
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		agg.hosts[src] += f.Bytes
+		agg.hosts[dst] += f.Bytes
+	}
+
+	var entries []VLANEntry
+	for vid, agg := range vlans {
+		e := VLANEntry{
+			ID:       vid,
+			Bytes:    agg.bytes,
+			Packets:  agg.packets,
+			Flows:    agg.flows,
+			BytesStr: formatBytes(agg.bytes),
+			PktsStr:  formatPkts(agg.packets),
+		}
+		// Top 5 hosts by bytes
+		var hosts []VLANHost
+		for addr, b := range agg.hosts {
+			hosts = append(hosts, VLANHost{Addr: addr, Bytes: b, BytesStr: formatBytes(b)})
+		}
+		sort.Slice(hosts, func(i, j int) bool { return hosts[i].Bytes > hosts[j].Bytes })
+		if len(hosts) > 5 {
+			hosts = hosts[:5]
+		}
+		e.TopHosts = hosts
+		entries = append(entries, e)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := VLANPageData{
+		VLANs:      entries,
+		TotalVLANs: len(entries),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplVLANs.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("VLAN template error: %v", err)
+	}
+}
+
+// --- MAC Address Table ---
+
+// MACEntry represents a MAC address seen in traffic.
+type MACEntry struct {
+	MAC      string
+	IPs      []string
+	VLAN     uint16
+	Bytes    uint64
+	Packets  uint64
+	BytesStr string
+	PktsStr  string
+}
+
+// MACPageData holds data for the MAC address table page.
+type MACPageData struct {
+	MACs      []MACEntry
+	TotalMACs int
+}
+
+func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("MAC query error: %v", err)
+		return
+	}
+
+	type macAgg struct {
+		ips     map[string]bool
+		vlan    uint16
+		bytes   uint64
+		packets uint64
+	}
+	macs := make(map[string]*macAgg)
+
+	for _, f := range allFlows {
+		srcMAC := model.FormatMAC(f.SrcMAC)
+		dstMAC := model.FormatMAC(f.DstMAC)
+		srcIP := model.SafeIPString(f.SrcAddr)
+		dstIP := model.SafeIPString(f.DstAddr)
+
+		if srcMAC != "—" {
+			agg, ok := macs[srcMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[srcMAC] = agg
+			}
+			agg.ips[srcIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+		if dstMAC != "—" {
+			agg, ok := macs[dstMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[dstMAC] = agg
+			}
+			agg.ips[dstIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+	}
+
+	var entries []MACEntry
+	for mac, agg := range macs {
+		ips := make([]string, 0, len(agg.ips))
+		for ip := range agg.ips {
+			ips = append(ips, ip)
+		}
+		sort.Strings(ips)
+		entries = append(entries, MACEntry{
+			MAC:      mac,
+			IPs:      ips,
+			VLAN:     agg.vlan,
+			Bytes:    agg.bytes,
+			Packets:  agg.packets,
+			BytesStr: formatBytes(agg.bytes),
+			PktsStr:  formatPkts(agg.packets),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := MACPageData{
+		MACs:      entries,
+		TotalMACs: len(entries),
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplMACs.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("MAC template error: %v", err)
+	}
 }

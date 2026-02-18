@@ -45,6 +45,11 @@ const (
 	ipfixFieldTCPOutOfOrderCount     = 227 // vendor-specific out-of-order counter (not in base IANA registry)
 	ipfixFieldPacketLossCount        = 233 // vendor-specific packet loss counter (not in base IANA registry)
 	ipfixFieldRTPJitter              = 387 // transportRtpJitterMean (IANA IPFIX IE 387) in microseconds
+
+	// Layer-2 fields (IANA IPFIX assignments).
+	ipfixFieldSourceMacAddress       = 56  // sourceMacAddress — 6 bytes
+	ipfixFieldVlanId                 = 58  // vlanId — 2 bytes
+	ipfixFieldDestMacAddress         = 80  // destinationMacAddress — 6 bytes
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).
@@ -339,5 +344,19 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 		f.PacketLoss = uint32(readUintN(data))
 	case ipfixFieldRTPJitter:
 		f.JitterMicros = int64(readUintN(data))
+	case ipfixFieldSourceMacAddress:
+		if len(data) == 6 {
+			f.SrcMAC = make(net.HardwareAddr, 6)
+			copy(f.SrcMAC, data)
+		}
+	case ipfixFieldDestMacAddress:
+		if len(data) == 6 {
+			f.DstMAC = make(net.HardwareAddr, 6)
+			copy(f.DstMAC, data)
+		}
+	case ipfixFieldVlanId:
+		if len(data) == 2 {
+			f.VLAN = binary.BigEndian.Uint16(data)
+		}
 	}
 }
