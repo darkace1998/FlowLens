@@ -7,6 +7,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
+	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -26,7 +27,7 @@ const unreachableMaxBytes = 200
 
 // Analyze returns advisories about destinations that appear unreachable.
 func (UnreachableDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("UnreachableDetector: failed to query recent flows: %v", err)
 		return nil
@@ -54,14 +55,14 @@ func (UnreachableDetector) Analyze(store *storage.RingBuffer, cfg config.Analysi
 			continue
 		}
 
-		dk := dstKey{ip: f.DstAddr.String(), port: f.DstPort}
+		dk := dstKey{ip: model.SafeIPString(f.DstAddr), port: f.DstPort}
 		s, ok := dsts[dk]
 		if !ok {
 			s = &dstStats{sources: make(map[string]struct{})}
 			dsts[dk] = s
 		}
 		s.totalFlows++
-		s.sources[f.SrcAddr.String()] = struct{}{}
+		s.sources[model.SafeIPString(f.SrcAddr)] = struct{}{}
 
 		if f.Bytes <= unreachableMaxBytes {
 			s.tinyFlows++

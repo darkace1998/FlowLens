@@ -25,7 +25,7 @@ const mosCriticalThreshold = 3.0
 
 // Analyze inspects recent VoIP flows and flags those with degraded quality.
 func (VoIPQualityDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("VoIPQualityDetector: failed to query recent flows: %v", err)
 		return nil

@@ -33,7 +33,8 @@ func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisCon
 
 	// We need at least 2 sample windows in the baseline to compute meaningful stats.
 	// Since the ring buffer only holds ~10 min of data, use what we have.
-	allFlows, err := store.Recent(10*time.Minute, 0)
+	window := queryWindow(cfg)
+	allFlows, err := store.Recent(window, 0)
 	if err != nil {
 		logging.Default().Error("AnomalyDetector: failed to query recent flows: %v", err)
 		return nil
@@ -45,7 +46,7 @@ func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisCon
 	now := time.Now()
 	currentCutoff := now.Add(-sampleWindow)
 	// Use the remaining flows as the baseline.
-	baselineCutoff := now.Add(-10 * time.Minute)
+	baselineCutoff := now.Add(-window)
 
 	var currentBytes, currentPkts uint64
 	var currentCount int
@@ -57,7 +58,7 @@ func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisCon
 
 	// Divide all flows into the current window and baseline buckets.
 	// Each bucket is one sample-window wide.
-	bucketCount := int(10*time.Minute/sampleWindow) - 1
+	bucketCount := int(window/sampleWindow) - 1
 	if bucketCount < 1 {
 		bucketCount = 1
 	}
