@@ -1,180 +1,348 @@
 # FlowLens — Bug & Issue Report
 
-Full codebase analysis performed against the current `main` branch plus the dual-port collector fix.
+Full codebase analysis performed against the current `main` branch.  
+Last updated: 2026-02-26.
 
 ---
 
-## 1. RingBuffer `ring_buffer_duration` config is ignored
+## 1. RingBuffer `ring_buffer_duration` config partially ignored
 
 **Severity:** Medium  
-**File:** `cmd/flowlens/main.go:41`, `internal/config/config.go:28`
+**Files:** `cmd/flowlens/main.go:46`, `internal/analysis/*.go`
 
-The config has a `ring_buffer_duration` setting (default 10 min), but `NewRingBuffer` only takes a `capacity` (number of records). The duration from config is never passed to the ring buffer:
+The ring buffer capacity is still hardcoded at 10,000 records:
 
 ```go
-// main.go:41 — hardcoded 10,000 records, duration config ignored
+// main.go:46 — hardcoded 10,000 records, no config option for capacity
 ringBuf := storage.NewRingBuffer(10000)
 ```
 
-Additionally, the dashboard and flow explorer both hardcode a 10-minute window:
+Web handlers now correctly use the `ring_buffer_duration` config for their query window (e.g. `handlers.go:460–463`), but:
 
-```go
-// handlers.go:177
-flows, err := s.ringBuf.Recent(10*time.Minute, 0)
+1. **Ring buffer capacity** has no config option and remains hardcoded. In high-flow-rate environments, 10,000 records may be consumed in seconds, giving an effective window much shorter than the configured duration.
+2. **All 11 analysis modules** still hardcode `10*time.Minute` (see bug #13 below).
 
-// handlers.go:333
-allFlows, err := s.ringBuf.Recent(10*time.Minute, 0)
-```
-
-The `ring_buffer_duration` config value has no effect anywhere — neither on the ring buffer size nor on the query window.
+The web handler fix is confirmed (the dashboard uses `s.fullCfg.Storage.RingBufferDuration`), but the architectural gap between record-count capacity and time-based duration remains.
 
 ---
 
-## 2. Nil-pointer panic on flows with nil SrcAddr or DstAddr
+## 2. Nil-pointer on nil IP addresses in SQLite and web handlers
 
 **Severity:** High  
-**Files:** `internal/web/handlers.go:209,219`, `internal/analysis/toptalkers.go:39`, `internal/analysis/scanner.go:39`, and many others
+**Files:** `internal/storage/sqlite.go:185–199`, `internal/web/handlers.go:1323`
 
-If a decoded flow has a `nil` `SrcAddr` or `DstAddr` (e.g. the template didn't include an IP address field), calling `.String()` on a nil `net.IP` returns `"<nil>"`. While this won't panic, it will produce misleading dashboard entries and corrupt aggregation maps with a `"<nil>"` key. The `matchIP` filter function also doesn't guard against nil IPs.
+The `SQLiteStore.Insert` method now correctly uses `model.SafeIPString()` for `SrcAddr`, `DstAddr`, and `ExporterIP`. The `matchIP` filter function now guards against nil IPs. These fixes prevent the original crash and nil key issues in the storage and web layers.
 
-More critically, in `SQLiteStore.Insert`, calling `f.SrcAddr.String()` or `f.ExporterIP.String()` on a nil IP **will panic**:
-
-```go
-// sqlite.go:105-106
-f.SrcAddr.String(), // panics if SrcAddr is nil
-f.DstAddr.String(), // panics if DstAddr is nil
-```
-
-This can happen with NetFlow v9/IPFIX templates that omit IP address fields.
+However, multiple analysis modules still call `.String()` directly on potentially nil IPs — see bug #14 below.
 
 ---
 
 ## 3. NetFlow v9 padding calculation may skip valid FlowSets
 
 **Severity:** Low  
-**File:** `internal/collector/netflowv9.go:136-138`
+**File:** `internal/collector/netflowv9.go:139–141`
 
-After processing each FlowSet, the decoder aligns to a 4-byte boundary:
+The decoder now correctly advances by `flowSetLen` only, with a comment documenting that RFC 3954 `flowSetLen` already includes padding:
 
 ```go
+// RFC 3954: flowSetLen already includes any padding bytes for
+// 4-byte alignment, so no additional padding adjustment is needed.
 offset += flowSetLen
-if offset%4 != 0 {
-    offset += 4 - (offset % 4)
-}
 ```
-
-However, according to RFC 3954, the `flowSetLen` field already includes any padding bytes needed for 4-byte alignment. This means the code may over-skip bytes when `flowSetLen` is already properly aligned but the manual padding calculation adds extra bytes. In practice this rarely causes issues because most implementations align FlowSet lengths, but it deviates from the RFC.
 
 ---
 
 ## 4. Web server serves static files from a relative path
 
 **Severity:** Medium  
-**File:** `cmd/flowlens/main.go:84`
+**File:** `cmd/flowlens/main.go:149–157`
+
+The static directory is now resolved relative to the binary's location when the CWD-relative `"static"` path doesn't exist:
 
 ```go
-srv := web.NewServer(cfg.Web, ringBuf, sqlStore, "static", engine)
+staticDir := "static"
+if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+    if exe, err := os.Executable(); err == nil {
+        candidate := filepath.Join(filepath.Dir(exe), "static")
+        if _, err := os.Stat(candidate); err == nil {
+            staticDir = candidate
+        }
+    }
+}
 ```
-
-The static directory is hardcoded as a relative path `"static"`. If the binary is run from a different working directory, the static files (CSS) won't be found, and the web UI will render without styles. The Dockerfile handles this by setting `WORKDIR /app`, but running the binary directly from a different directory will break styling.
 
 ---
 
 ## 5. Templates are re-parsed on every HTTP request
 
 **Severity:** Low  
-**File:** `internal/web/handlers.go:186-191,388-393,472-477,546-551`
+**File:** `internal/web/server.go:62–71`
 
-Every dashboard, flows, advisories, and about request re-parses templates from the embedded filesystem:
+Templates are now parsed once at startup and stored on the `Server` struct:
 
 ```go
-tmpl, err := template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, ...)
+s.tmplDashboard = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, ...))
+s.tmplFlows = template.Must(...)
+// ... (10 templates total)
 ```
 
-While the templates are embedded (so no disk I/O), parsing and compiling templates on every request wastes CPU. Templates should be parsed once at server startup and reused.
+All handlers use the pre-parsed templates via `s.tmplXxx.ExecuteTemplate(w, "layout", data)`.
 
 ---
 
 ## 6. `RingBuffer.Recent()` assumes chronological insertion order
 
 **Severity:** Medium  
-**File:** `internal/storage/ringbuffer.go:52-66`
+**File:** `internal/storage/ringbuffer.go:56`
 
-`Recent()` walks backwards from the head and **breaks** as soon as it finds a flow with a timestamp before the cutoff:
+`Recent()` now uses `continue` instead of `break`, scanning all valid entries rather than short-circuiting on the first out-of-order timestamp:
 
 ```go
 if f.Timestamp.Before(cutoff) {
-    break  // stops scanning entirely
+    continue // was: break
 }
 ```
-
-If flows arrive out of chronological order (e.g., delayed NetFlow exports, template-cached v9 records decoded later), this early-break may miss valid recent flows that were inserted earlier in the buffer but have more recent timestamps. The ring buffer is insertion-ordered, not timestamp-ordered, so the early-break optimization is incorrect for out-of-order data.
 
 ---
 
 ## 7. Analysis engine ignores errors from `store.Recent()`
 
 **Severity:** Low  
-**Files:** `internal/analysis/toptalkers.go:28`, `scanner.go:20`, `protocol.go:29`, `anomaly.go:35`, `dns.go:26`, `asymmetry.go:53`, `retransmission.go:28`, `unreachable.go:28`, `newtalker.go:31`, `portconcentration.go:25`
+**Files:** `internal/analysis/*.go` (all 11 analyzers)
 
-Every analyzer discards the error from `store.Recent()`:
+All analyzers now check and log errors from `store.Recent()`:
 
 ```go
-flows, _ := store.Recent(10*time.Minute, 0)
+flows, err := store.Recent(10*time.Minute, 0)
+if err != nil {
+    logging.Default().Error("TopTalkers: failed to query recent flows: %v", err)
+    return nil
+}
 ```
-
-While `RingBuffer.Recent()` currently always returns nil error, the `Storage` interface contract allows errors. If the storage backend changes (or a future refactor introduces error conditions), these silent drops would mask failures.
 
 ---
 
 ## 8. `Collector.Stop()` may leave connections in the `conns` slice
 
 **Severity:** Low  
-**File:** `internal/collector/collector.go:137-141`
+**File:** `internal/collector/collector.go:219–228`
 
-`Stop()` closes all connections but doesn't nil out the `conns` slice. If `Start()` is called again on the same `Collector` instance, the old (closed) connections would still be in the slice, and new connections would be appended. While re-starting a collector is unlikely in normal usage, it could cause issues in tests or edge cases.
+`Stop()` now nils out both connection slices after closing:
+
+```go
+func (c *Collector) Stop() {
+    for _, conn := range c.conns {
+        conn.Close()
+    }
+    c.conns = nil
+    for _, conn := range c.sflowConns {
+        conn.Close()
+    }
+    c.sflowConns = nil
+}
+```
 
 ---
 
 ## 9. No input validation on collector config ports
 
 **Severity:** Low  
-**File:** `internal/collector/collector.go:40-44`
+**File:** `internal/collector/collector.go:48–56`
 
-The collector doesn't validate that port numbers are in the valid range (1–65535). A config with `netflow_port: 0` would cause the OS to assign a random port (useful for tests, but surprising in production). Negative or >65535 values would cause a runtime error from `net.ListenUDP`.
+Port validation was added at the top of `Start()`:
+
+```go
+if c.cfg.NetFlowPort < 0 || c.cfg.NetFlowPort > 65535 {
+    return fmt.Errorf("invalid NetFlow port: %d (must be 0–65535)", c.cfg.NetFlowPort)
+}
+// (same for IPFIXPort and SFlowPort)
+```
 
 ---
 
 ## 10. Flow Explorer pagination renders all page links
 
 **Severity:** Low  
-**File:** `internal/web/templates/flows.xhtml:55-61`
+**File:** `internal/web/handlers.go:230–252`
 
-The pagination template renders a link for every page:
+Pagination now uses a sliding window of 5 pages via `pageWindow()`:
 
-```html
-{{range seq 1 .TotalPages}}
+```go
+func pageWindow(currentPage, totalPages int) []int {
+    const windowSize = 5
+    // Centers 5 pages around the current page with clamping.
+    ...
+}
 ```
-
-With a large number of flows and a small page size, this could render thousands of page links, making the UI unusable. A sliding window (e.g., show 5 pages around the current page) would be more practical.
 
 ---
 
 ## 11. `SQLiteStore` has no connection pool limits
 
 **Severity:** Low  
-**File:** `internal/storage/sqlite.go:29`
+**File:** `internal/storage/sqlite.go:146`
 
-The SQLite connection is opened with `sql.Open()` without setting `MaxOpenConns` or `MaxIdleConns`. For SQLite (which uses file-level locking), having multiple concurrent connections can cause `SQLITE_BUSY` errors. Setting `db.SetMaxOpenConns(1)` is a common best practice for SQLite.
+Connection pool is now limited:
+
+```go
+// SQLite uses file-level locking; limit to one open connection to avoid
+// SQLITE_BUSY errors from concurrent writers.
+db.SetMaxOpenConns(1)
+```
 
 ---
 
 ## 12. Graceful shutdown race condition
 
 **Severity:** Low  
-**File:** `cmd/flowlens/main.go:99-106`
+**File:** `cmd/flowlens/main.go:57–67, 179`
 
-During shutdown, `coll.Stop()` is called first (which closes UDP connections), then `engine.Stop()`, then `srv.Stop()`. However, the collector's flow handler writes to both `ringBuf` and `sqlStore`. If a flow is being processed while shutdown begins, the handler could attempt to write to storage after `srv.Stop()` returns but before the function exits. There's no synchronization to ensure in-flight flow handler calls complete before storage is closed.
+The flow handler now uses a `sync.WaitGroup` to track in-flight calls, and `main()` waits for them to complete before stopping the engine and web server:
+
+```go
+var handlerWg sync.WaitGroup
+handler := func(flows []model.Flow) {
+    handlerWg.Add(1)
+    defer handlerWg.Done()
+    // ...
+}
+// ...
+coll.Stop()
+handlerWg.Wait() // drain in-flight handlers before closing storage
+engine.Stop()
+srv.Stop()
+```
+
+---
+
+## 13. Analysis modules hardcode 10-minute query window
+
+**Severity:** Medium  
+**Files:** `internal/analysis/toptalkers.go:29`, `scanner.go:21`, `dns.go:27`, `protocol.go:29`, `anomaly.go:36,48`, `retransmission.go:38`, `asymmetry.go:53`, `portconcentration.go:25`, `unreachable.go:28`, `newtalker.go:32`, `voip.go:27`
+
+All 11 analysis modules still hardcode `10*time.Minute` for their `store.Recent()` calls:
+
+```go
+flows, err := store.Recent(10*time.Minute, 0)
+```
+
+The web handlers were fixed (bug #1) to use `s.fullCfg.Storage.RingBufferDuration`, but the `Analyzer` interface only receives `config.AnalysisConfig`, which doesn't include the ring buffer duration (that lives in `config.StorageConfig`). There's no way for analyzers to access the configured window without changing the `Analyzer` interface or `AnalysisConfig` struct.
+
+If a user sets `ring_buffer_duration: 30m`, the dashboard shows 30 minutes of data, but all analysis modules still only examine the most recent 10 minutes.
+
+---
+
+## 14. Analysis modules use `.String()` on potentially nil IP addresses
+
+**Severity:** Medium  
+**Files:** `internal/analysis/toptalkers.go:43,139`, `scanner.go:43-44`, `retransmission.go:87-88,174-175`, `asymmetry.go:66-67`, `portconcentration.go:53,59`, `unreachable.go:57,64`
+
+Bug #2 fixed nil IP handling in `SQLiteStore.Insert` and `matchIP`, but multiple analysis modules still call `.String()` directly on `f.SrcAddr` / `f.DstAddr` without using `model.SafeIPString()`:
+
+```go
+// toptalkers.go:43
+src := f.SrcAddr.String()  // returns "<nil>" if SrcAddr is nil
+
+// scanner.go:43-44
+src := f.SrcAddr.String()
+key := scanKey{DstIP: f.DstAddr.String(), DstPort: f.DstPort}
+```
+
+When a flow has nil IPs (e.g. from an IPFIX template missing IP address fields), these produce `"<nil>"` keys in aggregation maps, leading to:
+- Corrupted top-talker reports with a `"<nil>"` host entry
+- False port scan detections attributed to `"<nil>"`
+- Incorrect asymmetry, unreachable, and retransmission analysis
+
+The affected analyzers are: `TopTalkers`, `BuildTopTalkersReport`, `ScanDetector`, `RetransmissionDetector` (both counter and heuristic paths), `FlowAsymmetry`, `PortConcentrationDetector`, and `UnreachableDetector`.
+
+---
+
+## 15. sFlow decoder drops L2 metadata from Ethernet headers
+
+**Severity:** Low  
+**Files:** `internal/collector/sflow.go:265–289`
+
+`decodeSFlowEthernet()` parses the Ethernet header but does not extract MAC addresses, VLAN IDs, or EtherType — the decoded `Flow` is missing all L2 fields:
+
+```go
+// sflow.go:265-289 — etherType is parsed for protocol dispatch but not stored
+func decodeSFlowEthernet(data []byte, ts time.Time, frameLength uint32) (model.Flow, bool) {
+    etherType := uint16(data[12])<<8 | uint16(data[13])
+    offset := 14
+    if etherType == 0x8100 {
+        // VLAN tag is skipped — VLAN ID is not extracted
+        etherType = uint16(data[16])<<8 | uint16(data[17])
+        offset = 18
+    }
+    // MAC addresses (data[0:6] dst, data[6:12] src) are never read
+    // ...
+}
+```
+
+Compare with the direct capture path (`capture.go:66–107`) which correctly populates `SrcMAC`, `DstMAC`, `VLAN`, and `EtherType`. The sFlow path produces flows with empty L2 fields, so the `/vlans` and `/macs` pages will not show any data from sFlow-sourced flows.
+
+---
+
+## 16. Extra collectors from `interfaces` config are never stopped
+
+**Severity:** Medium  
+**File:** `cmd/flowlens/main.go:91–115`
+
+When additional NetFlow/IPFIX collectors are created from the `interfaces` config, they are not tracked for shutdown:
+
+```go
+case "netflow", "":
+    if ifCfg.Listen != "" {
+        extraCfg := cfg.Collector
+        // ...
+        extraColl := collector.New(extraCfg, handler) // local variable
+        go func(name string) {
+            if err := extraColl.Start(); err != nil { ... }
+        }(ifCfg.Name)
+    }
+```
+
+The `extraColl` variable is scoped inside the loop body and never stored. During shutdown (main.go:174), only the primary `coll` is stopped — extra collectors' goroutines and UDP connections leak. This means:
+- UDP ports remain bound until the process exits
+- The flow handler `WaitGroup` may never reach zero if an in-flight handler call races with the `handlerWg.Wait()` call
+- The goroutines running `readLoop` keep allocating buffers until process termination
+
+---
+
+## 17. CSV report export doesn't escape special characters
+
+**Severity:** Low  
+**File:** `internal/web/handlers.go:1694–1698`
+
+The CSV export writes `GroupKey` values directly without RFC 4180 escaping:
+
+```go
+fmt.Fprintf(w, "%s,%d,%d,%d,%.1f\n",
+    row.GroupKey, row.TotalBytes, row.TotalPackets, row.FlowCount, row.AvgBytes)
+```
+
+If a `GroupKey` contains commas, double quotes, or newlines (unlikely for most group-by columns like `protocol` or `dst_port`, but possible for `src_addr` in edge cases or future group-by options), the CSV output will be malformed. The `encoding/csv` package should be used instead for proper escaping.
+
+---
+
+## 18. `handleCaptureStart` doesn't validate device against allowed interfaces
+
+**Severity:** Medium  
+**File:** `internal/web/handlers.go:1848–1856`
+
+The capture start handler accepts any device name from the form input without checking it against the configured `capture.interfaces` list:
+
+```go
+device := r.FormValue("device")
+bpf := r.FormValue("bpf")
+if device == "" {
+    http.Error(w, "Device is required", http.StatusBadRequest)
+    return
+}
+_, err := s.captureMgr.Start(device, bpf)
+```
+
+A user (or attacker with access to the web UI) could request capture on any network interface the process has access to, not just the ones configured in `capture.interfaces`. While kernel permissions limit the actual risk, the application should validate the device against `s.captureMgr.Interfaces()` before starting a capture.
 
 ---
 
@@ -182,8 +350,8 @@ During shutdown, `coll.Stop()` is called first (which closes UDP connections), t
 
 | # | Issue | Severity | Category | Status |
 |---|-------|----------|----------|--------|
-| 1 | `ring_buffer_duration` config ignored | Medium | Config | ✅ Fixed |
-| 2 | Nil-pointer panic on nil IP addresses | High | Crash | ✅ Fixed |
+| 1 | `ring_buffer_duration` config partially ignored | Medium | Config | ⚠️ Partially Fixed |
+| 2 | Nil-pointer on nil IP addresses (SQLite + web) | High | Crash | ✅ Fixed |
 | 3 | NFv9 FlowSet padding over-skip | Low | Protocol | ✅ Fixed |
 | 4 | Relative static file path | Medium | Deployment | ✅ Fixed |
 | 5 | Templates re-parsed every request | Low | Performance | ✅ Fixed |
@@ -194,3 +362,9 @@ During shutdown, `coll.Stop()` is called first (which closes UDP connections), t
 | 10 | Pagination renders all page links | Low | UI/UX | ✅ Fixed |
 | 11 | No SQLite connection pool limits | Low | Database | ✅ Fixed |
 | 12 | Shutdown race condition | Low | Concurrency | ✅ Fixed |
+| 13 | Analysis modules hardcode 10-min window | Medium | Config | ❌ Open |
+| 14 | Analysis modules nil-unsafe IP `.String()` calls | Medium | Correctness | ❌ Open |
+| 15 | sFlow decoder drops L2 metadata | Low | Protocol | ❌ Open |
+| 16 | Extra collectors never stopped on shutdown | Medium | Lifecycle | ❌ Open |
+| 17 | CSV export doesn't escape special chars | Low | Data Export | ❌ Open |
+| 18 | Capture start doesn't validate device name | Medium | Security | ❌ Open |
