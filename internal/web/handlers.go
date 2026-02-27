@@ -1704,6 +1704,9 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			logging.Default().Error("CSV export error: %v", err)
+		}
 	}
 }
 
