@@ -7,6 +7,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
+	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -23,7 +24,7 @@ const portConcentrationMinSources = 20
 
 // Analyze returns advisories about ports receiving connections from many sources.
 func (PortConcentrationDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("PortConcentrationDetector: failed to query recent flows: %v", err)
 		return nil
@@ -50,13 +51,13 @@ func (PortConcentrationDetector) Analyze(store *storage.RingBuffer, cfg config.A
 			continue
 		}
 
-		pk := portKey{dstIP: f.DstAddr.String(), dstPort: f.DstPort}
+		pk := portKey{dstIP: model.SafeIPString(f.DstAddr), dstPort: f.DstPort}
 		s, ok := ports[pk]
 		if !ok {
 			s = &portStats{sources: make(map[string]struct{})}
 			ports[pk] = s
 		}
-		s.sources[f.SrcAddr.String()] = struct{}{}
+		s.sources[model.SafeIPString(f.SrcAddr)] = struct{}{}
 		s.bytes += f.Bytes
 		s.packets += f.Packets
 	}

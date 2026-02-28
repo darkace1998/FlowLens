@@ -6,6 +6,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
+	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
@@ -18,7 +19,7 @@ func (ScanDetector) Name() string { return "Port Scan Detector" }
 
 // Analyze returns advisories about potential port scans or sweeps.
 func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("ScanDetector: failed to query recent flows: %v", err)
 		return nil
@@ -40,8 +41,8 @@ func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig
 			continue
 		}
 
-		src := f.SrcAddr.String()
-		key := scanKey{DstIP: f.DstAddr.String(), DstPort: f.DstPort}
+		src := model.SafeIPString(f.SrcAddr)
+		key := scanKey{DstIP: model.SafeIPString(f.DstAddr), DstPort: f.DstPort}
 
 		if _, ok := srcPorts[src]; !ok {
 			srcPorts[src] = make(map[scanKey]struct{})

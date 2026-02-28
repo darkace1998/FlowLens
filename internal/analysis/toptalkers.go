@@ -26,7 +26,7 @@ type talkerEntry struct {
 
 // Analyze returns advisories about hosts consuming disproportionate bandwidth.
 func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("TopTalkers: failed to query recent flows: %v", err)
 		return nil
@@ -40,7 +40,7 @@ func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) 
 
 	for _, f := range flows {
 		totalBytes += f.Bytes
-		src := f.SrcAddr.String()
+		src := model.SafeIPString(f.SrcAddr)
 		if e, ok := srcMap[src]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets
@@ -136,7 +136,7 @@ func formatCountShort(n uint64) string {
 func BuildTopTalkersReport(flows []model.Flow, n int) []talkerEntry {
 	srcMap := make(map[string]*talkerEntry)
 	for _, f := range flows {
-		src := f.SrcAddr.String()
+		src := model.SafeIPString(f.SrcAddr)
 		if e, ok := srcMap[src]; ok {
 			e.Bytes += f.Bytes
 			e.Packets += f.Packets

@@ -10,6 +10,15 @@ import (
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
+// queryWindow returns the configured analysis query window, falling back to
+// 10 minutes if not set.
+func queryWindow(cfg config.AnalysisConfig) time.Duration {
+	if cfg.QueryWindow > 0 {
+		return cfg.QueryWindow
+	}
+	return 10 * time.Minute
+}
+
 // Analyzer is the interface that all analysis modules must implement.
 type Analyzer interface {
 	// Name returns the analyzer's human-readable name.

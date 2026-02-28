@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/csv"
 	"fmt"
 	"html/template"
 	"math"
@@ -1691,10 +1692,20 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 	default: // CSV
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.csv")
-		fmt.Fprintf(w, "%s,bytes,packets,flows,avg_bytes\n", groupBy)
+		csvWriter := csv.NewWriter(w)
+		csvWriter.Write([]string{groupBy, "bytes", "packets", "flows", "avg_bytes"})
 		for _, row := range rows {
-			fmt.Fprintf(w, "%s,%d,%d,%d,%.1f\n",
-				row.GroupKey, row.TotalBytes, row.TotalPackets, row.FlowCount, row.AvgBytes)
+			csvWriter.Write([]string{
+				row.GroupKey,
+				fmt.Sprintf("%d", row.TotalBytes),
+				fmt.Sprintf("%d", row.TotalPackets),
+				fmt.Sprintf("%d", row.FlowCount),
+				fmt.Sprintf("%.1f", row.AvgBytes),
+			})
+		}
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			logging.Default().Error("CSV export error: %v", err)
 		}
 	}
 }
@@ -1851,6 +1862,22 @@ func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
 	if device == "" {
 		http.Error(w, "Device is required", http.StatusBadRequest)
 		return
+	}
+
+	// Validate device against configured allowed interfaces.
+	allowed := s.captureMgr.Interfaces()
+	if len(allowed) > 0 {
+		found := false
+		for _, iface := range allowed {
+			if iface == device {
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Error(w, fmt.Sprintf("Device %q is not in the allowed capture interfaces list", device), http.StatusForbidden)
+			return
+		}
 	}
 
 	_, err := s.captureMgr.Start(device, bpf)

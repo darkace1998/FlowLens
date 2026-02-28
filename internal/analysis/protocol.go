@@ -27,7 +27,7 @@ type protoEntry struct {
 
 // Analyze returns advisories about protocol distribution anomalies.
 func (ProtocolDistribution) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("ProtocolDistribution: failed to query recent flows: %v", err)
 		return nil

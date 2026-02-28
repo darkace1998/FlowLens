@@ -36,7 +36,7 @@ const criticalRetransmissionRateThreshold = 5.0
 
 // Analyze returns advisories about flows with retransmissions, OOO, or loss.
 func (RetransmissionDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
-	flows, err := store.Recent(10*time.Minute, 0)
+	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("RetransmissionDetector: failed to query recent flows: %v", err)
 		return nil
@@ -83,7 +83,7 @@ func analyzeWithCounters(flows []model.Flow) []Advisory {
 			continue
 		}
 		pk := pairKey{
-			src: f.SrcAddr.String(), dst: f.DstAddr.String(),
+			src: model.SafeIPString(f.SrcAddr), dst: model.SafeIPString(f.DstAddr),
 			srcPort: f.SrcPort, dstPort: f.DstPort,
 		}
 		if s, ok := pairs[pk]; ok {
@@ -171,7 +171,7 @@ func analyzeWithHeuristic(flows []model.Flow) []Advisory {
 			continue
 		}
 		pk := pairKey{
-			src: f.SrcAddr.String(), dst: f.DstAddr.String(),
+			src: model.SafeIPString(f.SrcAddr), dst: model.SafeIPString(f.DstAddr),
 			srcPort: f.SrcPort, dstPort: f.DstPort,
 		}
 		if s, ok := pairs[pk]; ok {

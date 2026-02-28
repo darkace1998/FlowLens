@@ -43,7 +43,11 @@ func main() {
 	log.Info("FlowLens %s starting", Version)
 
 	// Initialise storage backends.
-	ringBuf := storage.NewRingBuffer(10000)
+	ringCapacity := cfg.Storage.RingBufferCapacity
+	if ringCapacity <= 0 {
+		ringCapacity = 10000
+	}
+	ringBuf := storage.NewRingBuffer(ringCapacity)
 
 	sqlStore, err := storage.NewSQLiteStore(cfg.Storage.SQLitePath, cfg.Storage.SQLiteRetention, cfg.Storage.PruneInterval)
 	if err != nil {
@@ -76,6 +80,7 @@ func main() {
 
 	// Start additional collector instances from Interfaces config.
 	var captureSources []*capture.Source
+	var extraCollectors []*collector.Collector
 	for _, ifCfg := range cfg.Collector.Interfaces {
 		switch ifCfg.Type {
 		case "mirror", "tap":
@@ -105,6 +110,7 @@ func main() {
 				extraCfg.NetFlowPort = port
 				extraCfg.IPFIXPort = 0
 				extraColl := collector.New(extraCfg, handler)
+				extraCollectors = append(extraCollectors, extraColl)
 				go func(name string) {
 					if err := extraColl.Start(); err != nil {
 						log.Error("Collector %q error: %v", name, err)
@@ -113,6 +119,11 @@ func main() {
 				log.Info("Started additional collector on %s (%s)", ifCfg.Listen, ifCfg.Name)
 			}
 		}
+	}
+
+	// Set analysis query window to match ring buffer duration if not explicitly configured.
+	if cfg.Analysis.QueryWindow <= 0 {
+		cfg.Analysis.QueryWindow = cfg.Storage.RingBufferDuration
 	}
 
 	// Register all analysis modules.
@@ -172,6 +183,9 @@ func main() {
 
 	log.Info("Shutting down…")
 	coll.Stop()
+	for _, ec := range extraCollectors {
+		ec.Stop()
+	}
 	for _, src := range captureSources {
 		src.Stop()
 	}

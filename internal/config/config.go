@@ -40,6 +40,7 @@ type InterfaceConfig struct {
 // StorageConfig holds settings for flow data storage.
 type StorageConfig struct {
 	RingBufferDuration time.Duration `yaml:"ring_buffer_duration"`
+	RingBufferCapacity int           `yaml:"ring_buffer_capacity"` // max records in ring buffer (default: 10000)
 	SQLitePath         string        `yaml:"sqlite_path"`
 	SQLiteRetention    time.Duration `yaml:"sqlite_retention"`
 	PruneInterval      time.Duration `yaml:"prune_interval"`
@@ -52,6 +53,7 @@ type AnalysisConfig struct {
 	TopTalkersCount       int           `yaml:"top_talkers_count"`
 	AnomalyBaselineWindow time.Duration `yaml:"anomaly_baseline_window"`
 	ScanThreshold         int           `yaml:"scan_threshold"`
+	QueryWindow           time.Duration `yaml:"query_window"` // analysis query window (defaults to ring_buffer_duration)
 }
 
 // WebConfig holds settings for the web server.
@@ -80,6 +82,7 @@ func Defaults() Config {
 		},
 		Storage: StorageConfig{
 			RingBufferDuration: 10 * time.Minute,
+			RingBufferCapacity: 10000,
 			SQLitePath:         "./flowlens.db",
 			SQLiteRetention:    72 * time.Hour,
 			PruneInterval:      15 * time.Minute,
