@@ -236,7 +236,7 @@ func formatDuration(d time.Duration) string {
 	case m > 0 && s > 0:
 		return fmt.Sprintf("%dm %ds", m, s)
 	case m > 0:
-		return fmt.Sprintf("%d min", m)
+		return fmt.Sprintf("%dm", m)
 	default:
 		return fmt.Sprintf("%ds", s)
 	}
