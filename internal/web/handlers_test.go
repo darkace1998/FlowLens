@@ -393,6 +393,52 @@ func TestHosts_WithData(t *testing.T) {
 	if !strings.Contains(body, "4 active hosts") {
 		t.Errorf("hosts page should show '4 active hosts', body snippet: %s", body[:min(len(body), 500)])
 	}
+	// Host links should use ip= filter (not src_ip=) so they match as src or dst.
+	if strings.Contains(body, "src_ip=") {
+		t.Error("hosts page should use ip= filter, not src_ip=")
+	}
+	if !strings.Contains(body, "/flows?ip=") {
+		t.Error("hosts page links should use /flows?ip= to filter by either src or dst")
+	}
+}
+
+func TestFlows_FilterByHostIP(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+		makeTestFlow("172.16.0.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+	rb.Insert(flows)
+
+	// Filter by ip= should match both source and destination.
+	req := httptest.NewRequest("GET", "/flows?ip=192.168.1.1", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "2 flows") {
+		t.Errorf("filter by ip=192.168.1.1 should show 2 flows, got body snippet: %s", body[:min(len(body), 500)])
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		input time.Duration
+		want  string
+	}{
+		{10 * time.Minute, "10 min"},
+		{1 * time.Hour, "1h"},
+		{90 * time.Minute, "1h 30m"},
+		{30 * time.Second, "30s"},
+		{5*time.Minute + 30*time.Second, "5m 30s"},
+	}
+	for _, tt := range tests {
+		got := formatDuration(tt.input)
+		if got != tt.want {
+			t.Errorf("formatDuration(%v) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
 }
 
 func TestBuildHostsData(t *testing.T) {
@@ -533,27 +579,45 @@ func TestFilterFlows(t *testing.T) {
 	}
 
 	// Filter by port
-	result := filterFlows(flows, "", "", "443", "")
+	result := filterFlows(flows, "", "", "443", "", "")
 	if len(result) != 1 {
 		t.Errorf("filter port=443: got %d flows, want 1", len(result))
 	}
 
 	// Filter by protocol
-	result = filterFlows(flows, "", "", "", "udp")
+	result = filterFlows(flows, "", "", "", "udp", "")
 	if len(result) != 1 {
 		t.Errorf("filter proto=udp: got %d flows, want 1", len(result))
 	}
 
 	// Filter by dst IP
-	result = filterFlows(flows, "", "192.168.1.1", "", "")
+	result = filterFlows(flows, "", "192.168.1.1", "", "", "")
 	if len(result) != 2 {
 		t.Errorf("filter dst=192.168.1.1: got %d flows, want 2", len(result))
 	}
 
 	// No filter
-	result = filterFlows(flows, "", "", "", "")
+	result = filterFlows(flows, "", "", "", "", "")
 	if len(result) != 3 {
 		t.Errorf("no filter: got %d flows, want 3", len(result))
+	}
+
+	// Filter by host IP (matches either src or dst)
+	result = filterFlows(flows, "", "", "", "", "192.168.1.1")
+	if len(result) != 2 {
+		t.Errorf("filter ip=192.168.1.1: got %d flows, want 2", len(result))
+	}
+
+	// Filter by host IP that only appears as source
+	result = filterFlows(flows, "", "", "", "", "172.16.0.1")
+	if len(result) != 1 {
+		t.Errorf("filter ip=172.16.0.1: got %d flows, want 1", len(result))
+	}
+
+	// Filter by host IP with prefix matching
+	result = filterFlows(flows, "", "", "", "", "10.0.1")
+	if len(result) != 2 {
+		t.Errorf("filter ip=10.0.1 (prefix): got %d flows, want 2", len(result))
 	}
 }
 

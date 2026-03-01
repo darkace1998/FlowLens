@@ -21,7 +21,7 @@
     <div class="stat-value">{{formatPkts .TotalPackets}}</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Flows ({{.Window}})</div>
+    <div class="stat-label">Flows ({{formatDuration .Window}})</div>
     <div class="stat-value">{{.FlowCount}}</div>
   </div>
   <div class="stat-card">

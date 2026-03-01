@@ -24,25 +24,26 @@ import (
 // --- Template helpers ---
 
 var funcMap = template.FuncMap{
-	"formatBytes":   formatBytes,
-	"formatPkts":    formatPkts,
-	"formatBPS":     formatBPS,
-	"formatPPS":     formatPPS,
-	"protoName":     model.ProtocolName,
-	"appProto":      model.AppProtocol,
-	"appCategory":   model.AppCategory,
-	"asName":        model.ASName,
-	"timeAgo":       timeAgo,
-	"formatTime":    formatTime,
-	"seq":           seq,
-	"pageWindow":    pageWindow,
-	"add":           func(a, b int) int { return a + b },
-	"sub":           func(a, b int) int { return a - b },
-	"pctOf":         pctOf,
-	"severityClass": severityClass,
-	"formatAS":      formatAS,
-	"formatJitter":  formatJitter,
-	"formatMOS":     formatMOS,
+	"formatBytes":    formatBytes,
+	"formatPkts":     formatPkts,
+	"formatBPS":      formatBPS,
+	"formatPPS":      formatPPS,
+	"formatDuration": formatDuration,
+	"protoName":      model.ProtocolName,
+	"appProto":       model.AppProtocol,
+	"appCategory":    model.AppCategory,
+	"asName":         model.ASName,
+	"timeAgo":        timeAgo,
+	"formatTime":     formatTime,
+	"seq":            seq,
+	"pageWindow":     pageWindow,
+	"add":            func(a, b int) int { return a + b },
+	"sub":            func(a, b int) int { return a - b },
+	"pctOf":          pctOf,
+	"severityClass":  severityClass,
+	"formatAS":       formatAS,
+	"formatJitter":   formatJitter,
+	"formatMOS":      formatMOS,
 	"int":           func(v interface{}) int {
 		switch n := v.(type) {
 		case int:
@@ -216,6 +217,29 @@ func timeAgo(t time.Time) string {
 
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
+}
+
+// formatDuration returns a human-friendly duration string (e.g. "10 min" instead of "10m0s").
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return d.String()
+	}
+	totalSecs := int(d.Seconds())
+	h := totalSecs / 3600
+	m := (totalSecs % 3600) / 60
+	s := totalSecs % 60
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case h > 0:
+		return fmt.Sprintf("%dh", h)
+	case m > 0 && s > 0:
+		return fmt.Sprintf("%dm %ds", m, s)
+	case m > 0:
+		return fmt.Sprintf("%d min", m)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
 
 func seq(start, end int) []int {
@@ -1151,6 +1175,7 @@ type FlowsPageData struct {
 	FilterDstIP    string
 	FilterPort     string
 	FilterProtocol string
+	FilterIP       string // matches either src or dst
 }
 
 // --- Flow Explorer handler ---
@@ -1169,6 +1194,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
+	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
 
 	// Fetch all recent flows from the ring buffer using the configured window.
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
@@ -1186,7 +1212,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(allFlows)
 
 	// Apply filters.
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize
@@ -1264,6 +1290,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterDstIP:    filterDstIP,
 		FilterPort:     filterPort,
 		FilterProtocol: filterProto,
+		FilterIP:       filterIP,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1272,8 +1299,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.Flow {
-	if srcIP == "" && dstIP == "" && port == "" && proto == "" {
+func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) []model.Flow {
+	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" {
 		return flows
 	}
 
@@ -1308,6 +1335,9 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.F
 			continue
 		}
 		if dstIP != "" && !matchIP(f.DstAddr, dstIP) {
+			continue
+		}
+		if hostIP != "" && !matchIP(f.SrcAddr, hostIP) && !matchIP(f.DstAddr, hostIP) {
 			continue
 		}
 		if port != "" && f.SrcPort != portNum && f.DstPort != portNum {
