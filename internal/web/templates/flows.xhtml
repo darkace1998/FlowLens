@@ -54,13 +54,13 @@
     {{range .Flows}}
     <tr>
       <td>{{.Timestamp}}</td>
-      <td>{{.SrcAddr}}</td>
-      <td>{{.SrcPort}}</td>
+      <td><a href="/flows?src_ip={{.SrcAddr}}">{{.SrcAddr}}</a></td>
+      <td><a href="/flows?port={{.SrcPort}}">{{.SrcPort}}</a></td>
       <td>{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
-      <td>{{.DstAddr}}</td>
-      <td>{{.DstPort}}</td>
+      <td><a href="/flows?dst_ip={{.DstAddr}}">{{.DstAddr}}</a></td>
+      <td><a href="/flows?port={{.DstPort}}">{{.DstPort}}</a></td>
       <td>{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
-      <td>{{.Protocol}}</td>
+      <td><a href="/flows?protocol={{.Protocol}}">{{.Protocol}}</a></td>
       <td>{{.AppProto}}</td>
       <td>{{.AppCategory}}</td>
       <td>{{.Bytes}}</td>

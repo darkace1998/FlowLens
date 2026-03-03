@@ -1875,3 +1875,55 @@ func TestFlows_L2Columns(t *testing.T) {
 		t.Error("flows page should show EtherType name")
 	}
 }
+
+func TestFlows_ClickableLinks(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/flows", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	// Source IP should link to src_ip filter.
+	if !strings.Contains(body, `/flows?src_ip=10.0.1.1`) {
+		t.Error("flows page source IP should be a clickable link to /flows?src_ip=")
+	}
+	// Destination IP should link to dst_ip filter.
+	if !strings.Contains(body, `/flows?dst_ip=192.168.1.1`) {
+		t.Error("flows page destination IP should be a clickable link to /flows?dst_ip=")
+	}
+	// Ports should link to port filter.
+	if !strings.Contains(body, `/flows?port=80`) {
+		t.Error("flows page port should be a clickable link to /flows?port=")
+	}
+	// Protocol should link to protocol filter.
+	if !strings.Contains(body, `/flows?protocol=TCP`) {
+		t.Error("flows page protocol should be a clickable link to /flows?protocol=")
+	}
+}
+
+func TestDashboard_ClickableProtocols(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.1", "192.168.1.2", 54321, 53, 17, 200, 2),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	// Protocol names in breakdown should be clickable.
+	if !strings.Contains(body, `/flows?protocol=TCP`) {
+		t.Error("dashboard protocol breakdown should have clickable TCP link")
+	}
+	if !strings.Contains(body, `/flows?protocol=UDP`) {
+		t.Error("dashboard protocol breakdown should have clickable UDP link")
+	}
+}
