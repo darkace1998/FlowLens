@@ -2162,3 +2162,192 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 		logging.Default().Error("MAC template error: %v", err)
 	}
 }
+
+// --- Sessions (bidirectional flow conversations) ---
+
+// SessionEntry represents a bidirectional flow session (conversation).
+type SessionEntry struct {
+	SrcAddr     string
+	DstAddr     string
+	SrcPort     uint16
+	DstPort     uint16
+	Protocol    string
+	Proto       uint8
+	Bytes       uint64
+	Packets     uint64
+	FlowCount   int
+	BytesStr    string
+	PktsStr     string
+	FirstSeen   time.Time
+	LastSeen    time.Time
+	Duration    string
+	Throughput  string
+	AppProto    string
+	Retrans     uint32
+	OOO         uint32
+	Loss        uint32
+}
+
+// SessionsPageData holds data for the sessions template.
+type SessionsPageData struct {
+	Sessions      []SessionEntry
+	TotalSessions int
+	TotalBytes    uint64
+	TotalPackets  uint64
+	Window        time.Duration
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	all := s.ringBuf.All()
+
+	type sessKey struct {
+		lo, hi           string
+		loPort, hiPort   uint16
+		proto            uint8
+	}
+	type sessAgg struct {
+		srcAddr, dstAddr string
+		srcPort, dstPort uint16
+		proto            uint8
+		bytes, packets   uint64
+		flowCount        int
+		first, last      time.Time
+		retrans, ooo, loss uint32
+		appProto         string
+	}
+
+	agg := make(map[sessKey]*sessAgg)
+
+	for _, f := range all {
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		lo, hi := src, dst
+		loPort, hiPort := f.SrcPort, f.DstPort
+		if lo > hi || (lo == hi && loPort > hiPort) {
+			lo, hi = hi, lo
+			loPort, hiPort = hiPort, loPort
+		}
+		k := sessKey{lo: lo, hi: hi, loPort: loPort, hiPort: hiPort, proto: f.Protocol}
+
+		if a, ok := agg[k]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flowCount++
+			a.retrans += f.Retransmissions
+			a.ooo += f.OutOfOrder
+			a.loss += f.PacketLoss
+			if f.Timestamp.Before(a.first) {
+				a.first = f.Timestamp
+			}
+			if f.Timestamp.After(a.last) {
+				a.last = f.Timestamp
+			}
+		} else {
+			agg[k] = &sessAgg{
+				srcAddr: src, dstAddr: dst,
+				srcPort: f.SrcPort, dstPort: f.DstPort,
+				proto: f.Protocol, bytes: f.Bytes, packets: f.Packets,
+				flowCount: 1, first: f.Timestamp, last: f.Timestamp,
+				retrans: f.Retransmissions, ooo: f.OutOfOrder, loss: f.PacketLoss,
+				appProto: model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort),
+			}
+		}
+	}
+
+	var entries []SessionEntry
+	var totalBytes, totalPackets uint64
+
+	for _, a := range agg {
+		dur := a.last.Sub(a.first)
+		var thru string
+		if dur > 0 {
+			thru = formatBPS(a.bytes, dur)
+		}
+		entries = append(entries, SessionEntry{
+			SrcAddr:    a.srcAddr,
+			DstAddr:    a.dstAddr,
+			SrcPort:    a.srcPort,
+			DstPort:    a.dstPort,
+			Protocol:   model.ProtocolName(a.proto),
+			Proto:      a.proto,
+			Bytes:      a.bytes,
+			Packets:    a.packets,
+			FlowCount:  a.flowCount,
+			BytesStr:   formatBytes(a.bytes),
+			PktsStr:    formatPkts(a.packets),
+			FirstSeen:  a.first,
+			LastSeen:   a.last,
+			Duration:   formatUptime(dur),
+			Throughput: thru,
+			AppProto:   a.appProto,
+			Retrans:    a.retrans,
+			OOO:        a.ooo,
+			Loss:       a.loss,
+		})
+		totalBytes += a.bytes
+		totalPackets += a.packets
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := SessionsPageData{
+		Sessions:      entries,
+		TotalSessions: len(entries),
+		TotalBytes:    totalBytes,
+		TotalPackets:  totalPackets,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplSessions.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Sessions template error: %v", err)
+	}
+}
+
+// --- PCAP Import ---
+
+// pcapImportMaxSize is the maximum PCAP upload size (50 MB).
+const pcapImportMaxSize = 50 << 20
+
+func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
+
+	if err := r.ParseMultipartForm(pcapImportMaxSize); err != nil {
+		http.Error(w, "File too large (max 50 MB)", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("pcap")
+	if err != nil {
+		http.Error(w, "Missing pcap file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	flows, err := capture.ReadPcapFlows(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse PCAP: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if len(flows) == 0 {
+		http.Error(w, "No flows decoded from PCAP", http.StatusBadRequest)
+		return
+	}
+
+	// Stitch bidirectional flows for RTT estimation.
+	model.StitchFlows(flows)
+
+	// Insert into ring buffer for analysis.
+	if err := s.ringBuf.Insert(flows); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to import flows: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	logging.Default().Info("PCAP import: %d flows imported", len(flows))
+	http.Redirect(w, r, "/sessions", http.StatusSeeOther)
+}

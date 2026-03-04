@@ -1927,3 +1927,58 @@ func TestDashboard_ClickableProtocols(t *testing.T) {
 		t.Error("dashboard protocol breakdown should have clickable UDP link")
 	}
 }
+
+func TestSessionsPage(t *testing.T) {
+	s, rb := newTestServer(t)
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("192.168.1.1", "10.0.1.1", 80, 12345, 6, 3000, 30),
+		makeTestFlow("10.0.1.2", "192.168.1.2", 54321, 443, 6, 10000, 100),
+	}
+	rb.Insert(flows)
+
+	req := httptest.NewRequest("GET", "/sessions", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Sessions") {
+		t.Error("sessions page should contain Sessions heading")
+	}
+	// Should aggregate bidirectional flows into sessions.
+	if !strings.Contains(body, "10.0.1.1") {
+		t.Error("sessions page should contain source IP")
+	}
+	if !strings.Contains(body, "192.168.1.1") {
+		t.Error("sessions page should contain destination IP")
+	}
+}
+
+func TestSessionsPage_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/sessions", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "No sessions") {
+		t.Error("empty sessions page should show no sessions message")
+	}
+}
+
+func TestPcapImport_MethodNotAllowed(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/pcap/import", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}

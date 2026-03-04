@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/darkace1998/FlowLens/internal/model"
 )
 
 // pcapMagic is the PCAP file magic number (little-endian, microsecond resolution).
@@ -225,4 +227,76 @@ type PcapFileInfo struct {
 	Name    string
 	Size    int64
 	ModTime time.Time
+}
+
+// pcapMagicNano is the PCAP file magic number for nanosecond resolution.
+const pcapMagicNano = 0xa1b23c4d
+
+// ReadPcapFlows reads a PCAP file and decodes each Ethernet frame into a
+// model.Flow using the same decoder as live packet capture. It returns the
+// decoded flows and any error encountered during reading.
+func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
+	// Read global header (24 bytes).
+	var ghdr [24]byte
+	if _, err := io.ReadFull(r, ghdr[:]); err != nil {
+		return nil, fmt.Errorf("pcap: read global header: %w", err)
+	}
+
+	magic := binary.LittleEndian.Uint32(ghdr[0:4])
+	var nanoRes bool
+	switch magic {
+	case pcapMagic:
+		// microsecond resolution
+	case pcapMagicNano:
+		nanoRes = true
+	default:
+		return nil, fmt.Errorf("pcap: bad magic 0x%08x", magic)
+	}
+
+	// snapLen from global header (bytes 16..20) — informational.
+	_ = binary.LittleEndian.Uint32(ghdr[16:20])
+	linkType := binary.LittleEndian.Uint32(ghdr[20:24])
+	if linkType != linkTypeEthernet {
+		return nil, fmt.Errorf("pcap: unsupported link type %d (only Ethernet supported)", linkType)
+	}
+
+	var flows []model.Flow
+
+	var phdr [16]byte
+	for {
+		// Read packet record header (16 bytes).
+		if _, err := io.ReadFull(r, phdr[:]); err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				break
+			}
+			return flows, fmt.Errorf("pcap: read packet header: %w", err)
+		}
+
+		tsSec := binary.LittleEndian.Uint32(phdr[0:4])
+		tsFrac := binary.LittleEndian.Uint32(phdr[4:8])
+		capturedLen := binary.LittleEndian.Uint32(phdr[8:12])
+		// origLen at phdr[12:16] — not needed.
+
+		var ts time.Time
+		if nanoRes {
+			ts = time.Unix(int64(tsSec), int64(tsFrac))
+		} else {
+			ts = time.Unix(int64(tsSec), int64(tsFrac)*1000) // µs → ns
+		}
+
+		// Read packet data.
+		pktData := make([]byte, capturedLen)
+		if _, err := io.ReadFull(r, pktData); err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				break
+			}
+			return flows, fmt.Errorf("pcap: read packet data: %w", err)
+		}
+
+		if f, ok := decodeEthernet(pktData, ts); ok {
+			flows = append(flows, f)
+		}
+	}
+
+	return flows, nil
 }

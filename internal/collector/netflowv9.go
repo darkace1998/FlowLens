@@ -35,10 +35,12 @@ const (
 	nfv9FieldIPv6FlowLabel  = 31
 	nfv9FieldDirection      = 61
 	nfv9FieldIPv6NextHop    = 62
-	// TCP quality fields (same IDs as IPFIX for v9-compatible exporters)
+	// TCP quality fields
 	nfv9FieldTCPRetransmissionCount = 321
-	nfv9FieldTCPOutOfOrderCount     = 227
-	nfv9FieldPacketLossCount        = 233
+	// NOTE: NetFlow v9 field 227 is not a standard TCP out-of-order counter;
+	// in IPFIX (IE 227) it is postMCastOctetDeltaCount. Similarly, field 233
+	// is firewallEvent, not packet loss. These were removed to prevent false
+	// OOO/loss reports. OOO and loss are now detected via the heuristic analyzer.
 	nfv9FieldRTPJitter              = 387
 )
 
@@ -291,10 +293,6 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 		}
 	case nfv9FieldTCPRetransmissionCount:
 		f.Retransmissions = uint32(readUintN(data))
-	case nfv9FieldTCPOutOfOrderCount:
-		f.OutOfOrder = uint32(readUintN(data))
-	case nfv9FieldPacketLossCount:
-		f.PacketLoss = uint32(readUintN(data))
 	case nfv9FieldRTPJitter:
 		f.JitterMicros = int64(readUintN(data))
 	}
