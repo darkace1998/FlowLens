@@ -203,6 +203,13 @@ func StitchFlows(flows []Flow) {
 // Retransmissions field to 1 on flows whose sequence number has already been
 // seen for the same directed connection. Flows are modified in place.
 func DetectRetransmissions(flows []Flow) {
+	const (
+		minIPAndTCPHeader = 40   // 20-byte IP + 20-byte TCP minimum
+		tcpFlagFIN        = 0x01 // TCP FIN flag
+		tcpFlagSYN        = 0x02 // TCP SYN flag
+		tcpFlagSYNorFIN   = tcpFlagSYN | tcpFlagFIN
+	)
+
 	type connKey struct {
 		src, dst         string
 		srcPort, dstPort uint16
@@ -226,12 +233,12 @@ func DetectRetransmissions(flows []Flow) {
 		// Estimate TCP payload length from total IP length minus typical headers.
 		// Each PCAP flow has Bytes == IP total length and Packets == 1.
 		var payloadLen uint64
-		if f.Bytes > 40 { // 20 IP + 20 TCP minimum
-			payloadLen = f.Bytes - 40
+		if f.Bytes > minIPAndTCPHeader {
+			payloadLen = f.Bytes - minIPAndTCPHeader
 		}
 		seqEnd := uint64(f.TCPSeqNum) + payloadLen
-		// SYN and FIN consume one sequence number.
-		if f.TCPFlags&0x02 != 0 || f.TCPFlags&0x01 != 0 {
+		// SYN and FIN each consume one sequence number.
+		if f.TCPFlags&tcpFlagSYNorFIN != 0 {
 			seqEnd++
 		}
 
@@ -244,7 +251,7 @@ func DetectRetransmissions(flows []Flow) {
 		// A retransmission: the sequence number is below the highest seen end
 		// and the packet carries data (or SYN/FIN). Pure ACKs (no payload,
 		// no SYN/FIN) are excluded.
-		if payloadLen > 0 || f.TCPFlags&0x03 != 0 {
+		if payloadLen > 0 || f.TCPFlags&tcpFlagSYNorFIN != 0 {
 			if uint64(f.TCPSeqNum) < st.maxSeqEnd {
 				f.Retransmissions = 1
 			}
