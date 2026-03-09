@@ -1,9 +1,11 @@
 package capture
 
 import (
+	"bytes"
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -283,5 +285,86 @@ func TestReadPcapFlows(t *testing.T) {
 	}
 	if fl.DstPort != 443 {
 		t.Errorf("DstPort = %d, want 443", fl.DstPort)
+	}
+}
+
+func TestReadPcapFlows_PcapngDetected(t *testing.T) {
+	// Build a fake pcapng file (starts with Section Header Block type 0x0A0D0D0A).
+	var buf [24]byte
+	binary.LittleEndian.PutUint32(buf[0:4], pcapngMagic)
+	r := bytes.NewReader(buf[:])
+
+	_, err := ReadPcapFlows(r)
+	if err == nil {
+		t.Fatal("ReadPcapFlows should reject pcapng files")
+	}
+	if !strings.Contains(err.Error(), "pcapng") {
+		t.Errorf("error should mention pcapng, got: %v", err)
+	}
+}
+
+func TestReadPcapFlows_BigEndian(t *testing.T) {
+	// Build a big-endian PCAP file with one minimal packet.
+	var buf bytes.Buffer
+	bo := binary.BigEndian
+
+	// Global header (24 bytes).
+	var ghdr [24]byte
+	bo.PutUint32(ghdr[0:4], pcapMagic)    // magic (same value, big-endian encoding)
+	bo.PutUint16(ghdr[4:6], 2)            // version major
+	bo.PutUint16(ghdr[6:8], 4)            // version minor
+	bo.PutUint32(ghdr[16:20], 65535)       // snapLen
+	bo.PutUint32(ghdr[20:24], linkTypeEthernet) // link type
+	buf.Write(ghdr[:])
+
+	// Build minimal Ethernet + IPv4 + TCP packet (54 bytes).
+	pkt := make([]byte, 54)
+	pkt[12] = 0x08; pkt[13] = 0x00 // EtherType = IPv4
+	pkt[14] = 0x45                  // version=4, IHL=5
+	pkt[14+3] = 40                  // total length
+	pkt[14+9] = 6                   // protocol = TCP
+	pkt[14+12] = 10                 // src IP: 10.0.0.1
+	pkt[14+15] = 1
+	pkt[14+16] = 192               // dst IP: 192.168.1.1
+	pkt[14+17] = 168
+	pkt[14+18] = 1
+	pkt[14+19] = 1
+	pkt[35] = 80                    // src port = 80
+	pkt[36] = 0x01; pkt[37] = 0xBB // dst port = 443
+	pkt[34+12] = 0x50              // data offset
+	pkt[34+13] = 0x02              // SYN
+
+	// Packet header (16 bytes) in big-endian.
+	var phdr [16]byte
+	bo.PutUint32(phdr[0:4], 1750000000) // timestamp seconds
+	bo.PutUint32(phdr[4:8], 0)          // timestamp microseconds
+	bo.PutUint32(phdr[8:12], 54)        // captured length
+	bo.PutUint32(phdr[12:16], 54)       // original length
+	buf.Write(phdr[:])
+	buf.Write(pkt)
+
+	flows, err := ReadPcapFlows(&buf)
+	if err != nil {
+		t.Fatalf("ReadPcapFlows big-endian: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+	if flows[0].Protocol != 6 {
+		t.Errorf("Protocol = %d, want 6 (TCP)", flows[0].Protocol)
+	}
+}
+
+func TestReadPcapFlows_BadMagic(t *testing.T) {
+	var buf [24]byte
+	binary.LittleEndian.PutUint32(buf[0:4], 0xDEADBEEF)
+	r := bytes.NewReader(buf[:])
+
+	_, err := ReadPcapFlows(r)
+	if err == nil {
+		t.Fatal("ReadPcapFlows should reject unknown magic")
+	}
+	if !strings.Contains(err.Error(), "bad magic") {
+		t.Errorf("error should mention 'bad magic', got: %v", err)
 	}
 }

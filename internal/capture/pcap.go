@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -232,30 +233,52 @@ type PcapFileInfo struct {
 // pcapMagicNano is the PCAP file magic number for nanosecond resolution.
 const pcapMagicNano = 0xa1b23c4d
 
+// pcapMagicBE is the big-endian PCAP magic (microsecond resolution).
+const pcapMagicBE = 0xd4c3b2a1
+
+// pcapMagicNanoBE is the big-endian PCAP magic (nanosecond resolution).
+const pcapMagicNanoBE = 0x4d3cb2a1
+
+// pcapngMagic is the pcapng Section Header Block type.
+const pcapngMagic = 0x0a0d0d0a
+
 // ReadPcapFlows reads a PCAP file and decodes each Ethernet frame into a
 // model.Flow using the same decoder as live packet capture. It returns the
 // decoded flows and any error encountered during reading.
 func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
+	// Wrap with a buffered reader for efficient small reads (16–24 byte
+	// headers) especially when reading directly from a streaming source
+	// such as a multipart upload.
+	br := bufio.NewReaderSize(r, 64*1024)
+
 	// Read global header (24 bytes).
 	var ghdr [24]byte
-	if _, err := io.ReadFull(r, ghdr[:]); err != nil {
+	if _, err := io.ReadFull(br, ghdr[:]); err != nil {
 		return nil, fmt.Errorf("pcap: read global header: %w", err)
 	}
 
 	magic := binary.LittleEndian.Uint32(ghdr[0:4])
 	var nanoRes bool
+	var byteOrder binary.ByteOrder = binary.LittleEndian
 	switch magic {
 	case pcapMagic:
-		// microsecond resolution
+		// little-endian, microsecond resolution
 	case pcapMagicNano:
 		nanoRes = true
+	case pcapMagicBE:
+		byteOrder = binary.BigEndian
+	case pcapMagicNanoBE:
+		byteOrder = binary.BigEndian
+		nanoRes = true
+	case pcapngMagic:
+		return nil, fmt.Errorf("pcap: file is in pcapng format which is not supported — please re-export as classic pcap (e.g. in Wireshark: File → Save As → select \"Wireshark/… - pcap\")")
 	default:
-		return nil, fmt.Errorf("pcap: bad magic 0x%08x", magic)
+		return nil, fmt.Errorf("pcap: bad magic 0x%08x (expected pcap format)", magic)
 	}
 
 	// snapLen from global header (bytes 16..20) — informational.
-	_ = binary.LittleEndian.Uint32(ghdr[16:20])
-	linkType := binary.LittleEndian.Uint32(ghdr[20:24])
+	_ = byteOrder.Uint32(ghdr[16:20])
+	linkType := byteOrder.Uint32(ghdr[20:24])
 	if linkType != linkTypeEthernet {
 		return nil, fmt.Errorf("pcap: unsupported link type %d (only Ethernet supported)", linkType)
 	}
@@ -269,16 +292,16 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 	var phdr [16]byte
 	for {
 		// Read packet record header (16 bytes).
-		if _, err := io.ReadFull(r, phdr[:]); err != nil {
+		if _, err := io.ReadFull(br, phdr[:]); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return flows, fmt.Errorf("pcap: read packet header: %w", err)
 		}
 
-		tsSec := binary.LittleEndian.Uint32(phdr[0:4])
-		tsFrac := binary.LittleEndian.Uint32(phdr[4:8])
-		capturedLen := binary.LittleEndian.Uint32(phdr[8:12])
+		tsSec := byteOrder.Uint32(phdr[0:4])
+		tsFrac := byteOrder.Uint32(phdr[4:8])
+		capturedLen := byteOrder.Uint32(phdr[8:12])
 		// origLen at phdr[12:16] — not needed.
 
 		if capturedLen > pcapMaxCapturedLen {
@@ -294,7 +317,7 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 
 		// Read packet data.
 		pktData := make([]byte, capturedLen)
-		if _, err := io.ReadFull(r, pktData); err != nil {
+		if _, err := io.ReadFull(br, pktData); err != nil {
 			return flows, fmt.Errorf("pcap: read packet data: %w", err)
 		}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -2334,19 +2335,41 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB in-memory buffer
-		http.Error(w, "File too large (max 200 MB)", http.StatusBadRequest)
+	// Use MultipartReader for streaming instead of ParseMultipartForm.
+	// ParseMultipartForm buffers the file to a temp file for uploads
+	// larger than maxMemory, and reading it back can produce corrupt data
+	// for large (100+ MB) files. Streaming reads directly from the
+	// request body, avoiding temp files entirely.
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "Invalid multipart form", http.StatusBadRequest)
 		return
 	}
 
-	file, _, err := r.FormFile("pcap")
-	if err != nil {
+	// Find the "pcap" file part.
+	var pcapReader io.Reader
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Error reading upload", http.StatusBadRequest)
+			return
+		}
+		if part.FormName() == "pcap" {
+			pcapReader = part
+			break
+		}
+		part.Close()
+	}
+
+	if pcapReader == nil {
 		http.Error(w, "Missing pcap file", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
 
-	flows, err := capture.ReadPcapFlows(file)
+	flows, err := capture.ReadPcapFlows(pcapReader)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to parse PCAP: %v", err), http.StatusBadRequest)
 		return
