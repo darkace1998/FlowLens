@@ -118,7 +118,7 @@
       <tbody>
         {{range .TCPHealth.TopRetransFlows}}
         <tr>
-          <td><a href="/flows?ip={{.SrcAddr}}">{{.SrcAddr}}</a>:{{.SrcPort}} → <a href="/flows?ip={{.DstAddr}}">{{.DstAddr}}</a>:{{.DstPort}}</td>
+          <td><a href="/flows?ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a>:{{.SrcPort}} → <a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a>:{{.DstPort}}</td>
           <td>{{.Retrans}}</td>
           <td>{{.OOO}}</td>
           <td>{{.Loss}}</td>
@@ -169,7 +169,7 @@
       <tbody>
         {{range .VoIP.TopVoIPFlows}}
         <tr>
-          <td><a href="/flows?ip={{.SrcAddr}}">{{.SrcAddr}}</a>:{{.SrcPort}} → <a href="/flows?ip={{.DstAddr}}">{{.DstAddr}}</a>:{{.DstPort}}</td>
+          <td><a href="/flows?ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a>:{{.SrcPort}} → <a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a>:{{.DstPort}}</td>
           <td>{{.Jitter}}</td>
           <td><span class="mos-{{.MOSClass}}">{{.MOS}}</span></td>
           <td>{{.Loss}}</td>
@@ -196,7 +196,7 @@
       <tbody>
         {{range .TopSrc}}
         <tr>
-          <td><a href="/flows?src_ip={{.IP}}">{{.IP}}</a></td>
+          <td><a href="/flows?src_ip={{urlquery .IP}}">{{.IP}}</a></td>
           <td>{{formatBytes .Bytes}}</td>
           <td>{{formatPkts .Packets}}</td>
           <td>
@@ -222,7 +222,7 @@
       <tbody>
         {{range .TopDst}}
         <tr>
-          <td><a href="/flows?dst_ip={{.IP}}">{{.IP}}</a></td>
+          <td><a href="/flows?dst_ip={{urlquery .IP}}">{{.IP}}</a></td>
           <td>{{formatBytes .Bytes}}</td>
           <td>{{formatPkts .Packets}}</td>
           <td>
@@ -332,7 +332,7 @@
       <tbody>
         {{range .Protocols}}
         <tr>
-          <td><a href="/flows?protocol={{.Name}}">{{.Name}}</a></td>
+          <td><a href="/flows?protocol={{urlquery .Name}}">{{.Name}}</a></td>
           <td>{{formatBytes .Bytes}}</td>
           <td>{{formatPkts .Packets}}</td>
           <td>

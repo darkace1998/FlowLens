@@ -54,13 +54,13 @@
     {{range .Flows}}
     <tr>
       <td>{{.Timestamp}}</td>
-      <td><a href="/flows?src_ip={{.SrcAddr}}">{{.SrcAddr}}</a></td>
-      <td><a href="/flows?port={{.SrcPort}}">{{.SrcPort}}</a></td>
+      <td><a href="/flows?src_ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a></td>
+      <td>{{if .SrcPort}}<a href="/flows?port={{urlquery .SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
       <td>{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
-      <td><a href="/flows?dst_ip={{.DstAddr}}">{{.DstAddr}}</a></td>
-      <td><a href="/flows?port={{.DstPort}}">{{.DstPort}}</a></td>
+      <td><a href="/flows?dst_ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
+      <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
       <td>{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
-      <td><a href="/flows?protocol={{.Protocol}}">{{.Protocol}}</a></td>
+      <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
       <td>{{.AppProto}}</td>
       <td>{{.AppCategory}}</td>
       <td>{{.Bytes}}</td>
@@ -89,19 +89,19 @@
 
 <div class="pagination">
   {{if .HasPrev}}
-  <a href="/flows?page={{sub .Page 1}}{{if .FilterIP}}&amp;ip={{.FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{.FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{.FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{.FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{.FilterProtocol}}{{end}}">&#171; Prev</a>
+  <a href="/flows?page={{sub .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">&#171; Prev</a>
   {{end}}
 
   {{range pageWindow $.Page $.TotalPages}}
     {{if eq . $.Page}}
       <span class="page-current">{{.}}</span>
     {{else}}
-      <a href="/flows?page={{.}}{{if $.FilterIP}}&amp;ip={{$.FilterIP}}{{end}}{{if $.FilterSrcIP}}&amp;src_ip={{$.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{$.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{$.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{$.FilterProtocol}}{{end}}">{{.}}</a>
+      <a href="/flows?page={{.}}{{if $.FilterIP}}&amp;ip={{urlquery $.FilterIP}}{{end}}{{if $.FilterSrcIP}}&amp;src_ip={{urlquery $.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{urlquery $.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{urlquery $.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{urlquery $.FilterProtocol}}{{end}}">{{.}}</a>
     {{end}}
   {{end}}
 
   {{if .HasNext}}
-  <a href="/flows?page={{add .Page 1}}{{if .FilterIP}}&amp;ip={{.FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{.FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{.FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{.FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{.FilterProtocol}}{{end}}">Next &#187;</a>
+  <a href="/flows?page={{add .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">Next &#187;</a>
   {{end}}
 </div>
 {{else}}

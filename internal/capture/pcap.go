@@ -262,11 +262,15 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 
 	var flows []model.Flow
 
+	// pcapMaxCapturedLen is a sane upper bound on captured packet length to
+	// prevent a crafted PCAP from triggering a huge allocation (OOM/DoS).
+	const pcapMaxCapturedLen = 65535
+
 	var phdr [16]byte
 	for {
 		// Read packet record header (16 bytes).
 		if _, err := io.ReadFull(r, phdr[:]); err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			if err == io.EOF {
 				break
 			}
 			return flows, fmt.Errorf("pcap: read packet header: %w", err)
@@ -276,6 +280,10 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 		tsFrac := binary.LittleEndian.Uint32(phdr[4:8])
 		capturedLen := binary.LittleEndian.Uint32(phdr[8:12])
 		// origLen at phdr[12:16] — not needed.
+
+		if capturedLen > pcapMaxCapturedLen {
+			return flows, fmt.Errorf("pcap: captured length %d exceeds maximum %d", capturedLen, pcapMaxCapturedLen)
+		}
 
 		var ts time.Time
 		if nanoRes {
@@ -287,9 +295,6 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 		// Read packet data.
 		pktData := make([]byte, capturedLen)
 		if _, err := io.ReadFull(r, pktData); err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
-			}
 			return flows, fmt.Errorf("pcap: read packet data: %w", err)
 		}
 

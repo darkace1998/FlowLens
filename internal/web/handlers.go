@@ -219,7 +219,7 @@ func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-// formatDuration returns a human-friendly duration string (e.g. "10 min" instead of "10m0s").
+// formatDuration returns a human-friendly duration string (e.g. "10m" instead of "10m0s").
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
 		return d.String()
@@ -2198,7 +2198,12 @@ type SessionsPageData struct {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	all := s.ringBuf.All()
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = time.Hour
+	}
+
+	all, _ := s.ringBuf.Recent(window, 0)
 
 	type sessKey struct {
 		lo, hi           string
@@ -2236,18 +2241,28 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			a.retrans += f.Retransmissions
 			a.ooo += f.OutOfOrder
 			a.loss += f.PacketLoss
-			if f.Timestamp.Before(a.first) {
-				a.first = f.Timestamp
+			// Track firstSeen as min(f.Timestamp - f.Duration) when Duration > 0,
+			// since collectors typically set Timestamp to the flow end time.
+			flowStart := f.Timestamp
+			if f.Duration > 0 {
+				flowStart = f.Timestamp.Add(-f.Duration)
+			}
+			if flowStart.Before(a.first) {
+				a.first = flowStart
 			}
 			if f.Timestamp.After(a.last) {
 				a.last = f.Timestamp
 			}
 		} else {
+			flowStart := f.Timestamp
+			if f.Duration > 0 {
+				flowStart = f.Timestamp.Add(-f.Duration)
+			}
 			agg[k] = &sessAgg{
 				srcAddr: src, dstAddr: dst,
 				srcPort: f.SrcPort, dstPort: f.DstPort,
 				proto: f.Protocol, bytes: f.Bytes, packets: f.Packets,
-				flowCount: 1, first: f.Timestamp, last: f.Timestamp,
+				flowCount: 1, first: flowStart, last: f.Timestamp,
 				retrans: f.Retransmissions, ooo: f.OutOfOrder, loss: f.PacketLoss,
 				appProto: model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort),
 			}
@@ -2316,7 +2331,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
 
-	if err := r.ParseMultipartForm(pcapImportMaxSize); err != nil {
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB in-memory buffer
 		http.Error(w, "File too large (max 50 MB)", http.StatusBadRequest)
 		return
 	}

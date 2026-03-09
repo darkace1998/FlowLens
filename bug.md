@@ -81,7 +81,7 @@ The dashboard stat card "Flows (10m0s)" and the hosts page "Window: 10m0s" displ
 Templates used `{{.Window}}` which calls the default `String()` method on `time.Duration`.
 
 **Fix:**  
-Added a `formatDuration` template function that produces human-friendly output (e.g. "10 min", "1h 30m", "30s"). Updated dashboard and hosts templates to use `{{formatDuration .Window}}`.
+Added a `formatDuration` template function that produces compact, human-friendly output (e.g. "10m", "5m 30s", "30s"). Updated dashboard and hosts templates to use `{{formatDuration .Window}}`.
 
 ---
 
@@ -109,10 +109,10 @@ Added `.bar-fill.iface { background: #1b7c83; }` to give interface bars a distin
 **Status:** ⚠️ Known Limitation
 
 **Description:**  
-Chart.js is loaded from `https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js`. If the CDN is unreachable (air-gapped network, firewall, or proxy), all three dashboard charts (Protocol Distribution, Top Talkers, Throughput Over Time) will silently fail to render. The JavaScript code checks `if(typeof Chart==='undefined')return;` and gracefully degrades, but provides no visual feedback that charts are missing.
+Chart.js is loaded from `https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js`. If the CDN is unreachable (air-gapped network, firewall, or proxy), all three dashboard charts (Protocol Distribution, Top Talkers, Throughput Over Time) will silently fail to render. The JavaScript code checks `if(typeof Chart==='undefined')return;` and gracefully degrades, but provides no visual feedback that charts are missing. Additionally, loading third-party JavaScript from a CDN means that if the CDN or dependency is compromised, malicious code could execute with full privileges in the operator's browser.
 
 **Workaround:**  
-The Protocol Breakdown table and other statistics tables still display correct data. A future improvement could bundle Chart.js locally or show a fallback message when Chart.js fails to load.
+The Protocol Breakdown table and other statistics tables still display correct data. A future improvement should bundle Chart.js as a local static asset with Subresource Integrity (SRI) verification, or show a fallback message when Chart.js fails to load.
 
 ---
 

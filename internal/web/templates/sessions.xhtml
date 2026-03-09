@@ -57,11 +57,11 @@
   <tbody>
     {{range .Sessions}}
     <tr>
-      <td><a href="/flows?ip={{.SrcAddr}}">{{.SrcAddr}}</a></td>
-      <td>{{if .SrcPort}}<a href="/flows?port={{.SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
-      <td><a href="/flows?ip={{.DstAddr}}">{{.DstAddr}}</a></td>
-      <td>{{if .DstPort}}<a href="/flows?port={{.DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
-      <td><a href="/flows?protocol={{.Protocol}}">{{.Protocol}}</a></td>
+      <td><a href="/flows?ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a></td>
+      <td>{{if .SrcPort}}<a href="/flows?port={{urlquery .SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
+      <td><a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
+      <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
+      <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
       <td>{{.AppProto}}</td>
       <td>{{.BytesStr}}</td>
       <td>{{.PktsStr}}</td>

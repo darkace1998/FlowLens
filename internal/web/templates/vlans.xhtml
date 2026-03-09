@@ -24,7 +24,7 @@
       <td>{{.Flows}}</td>
       <td>
         {{range .TopHosts}}
-          <span class="tag"><a href="/flows?ip={{.Addr}}">{{.Addr}}</a> ({{.BytesStr}})</span>
+          <span class="tag"><a href="/flows?ip={{urlquery .Addr}}">{{.Addr}}</a> ({{.BytesStr}})</span>
         {{end}}
       </td>
     </tr>
