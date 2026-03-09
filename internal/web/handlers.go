@@ -2203,7 +2203,10 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		window = time.Hour
 	}
 
-	all, _ := s.ringBuf.Recent(window, 0)
+	all, err := s.ringBuf.Recent(window, 0)
+	if err != nil {
+		logging.Default().Warn("Sessions: ring buffer query error: %v", err)
+	}
 
 	type sessKey struct {
 		lo, hi           string
