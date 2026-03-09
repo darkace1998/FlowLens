@@ -2357,6 +2357,9 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Detect TCP retransmissions from packet-level sequence numbers.
+	model.DetectRetransmissions(flows)
+
 	// Stitch bidirectional flows for RTT estimation.
 	model.StitchFlows(flows)
 

@@ -266,6 +266,103 @@ func TestStitchFlows(t *testing.T) {
 	}
 }
 
+func TestStitchFlows_SameDirectionNoRTT(t *testing.T) {
+	now := time.Now()
+
+	// Two flows in the SAME direction should NOT produce an RTT estimate.
+	flows := []Flow{
+		{
+			Timestamp: now,
+			SrcAddr:   net.ParseIP("10.0.0.1"),
+			DstAddr:   net.ParseIP("10.0.0.2"),
+			SrcPort:   12345,
+			DstPort:   80,
+			Protocol:  6,
+			Bytes:     5000,
+			Duration:  2 * time.Second,
+		},
+		{
+			Timestamp: now.Add(100 * time.Millisecond),
+			SrcAddr:   net.ParseIP("10.0.0.1"),
+			DstAddr:   net.ParseIP("10.0.0.2"),
+			SrcPort:   12345,
+			DstPort:   80,
+			Protocol:  6,
+			Bytes:     3000,
+			Duration:  1 * time.Second,
+		},
+	}
+
+	StitchFlows(flows)
+
+	if flows[0].RTTMicros != 0 {
+		t.Errorf("same-direction flows[0].RTTMicros = %d, want 0", flows[0].RTTMicros)
+	}
+	if flows[1].RTTMicros != 0 {
+		t.Errorf("same-direction flows[1].RTTMicros = %d, want 0", flows[1].RTTMicros)
+	}
+}
+
+func TestDetectRetransmissions(t *testing.T) {
+	now := time.Now()
+
+	flows := []Flow{
+		// SYN: seq=1000, flags=SYN(0x02), payload=0 → consumes seq 1000-1001
+		{
+			Timestamp: now,
+			SrcAddr:   net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+			SrcPort: 12345, DstPort: 80, Protocol: 6,
+			Bytes: 40, Packets: 1, TCPFlags: 0x02, TCPSeqNum: 1000,
+		},
+		// Data: seq=1001, payload=100 bytes → covers seq 1001-1101
+		{
+			Timestamp: now.Add(1 * time.Millisecond),
+			SrcAddr:   net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+			SrcPort: 12345, DstPort: 80, Protocol: 6,
+			Bytes: 140, Packets: 1, TCPFlags: 0x10, TCPSeqNum: 1001,
+		},
+		// Retransmission: seq=1001 again (below maxSeqEnd=1101)
+		{
+			Timestamp: now.Add(50 * time.Millisecond),
+			SrcAddr:   net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+			SrcPort: 12345, DstPort: 80, Protocol: 6,
+			Bytes: 140, Packets: 1, TCPFlags: 0x10, TCPSeqNum: 1001,
+		},
+		// New data: seq=1101, payload=200 → covers seq 1101-1301 (not retransmission)
+		{
+			Timestamp: now.Add(100 * time.Millisecond),
+			SrcAddr:   net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("10.0.0.2"),
+			SrcPort: 12345, DstPort: 80, Protocol: 6,
+			Bytes: 240, Packets: 1, TCPFlags: 0x10, TCPSeqNum: 1101,
+		},
+		// Reverse direction (different connKey, should not be flagged)
+		{
+			Timestamp: now.Add(2 * time.Millisecond),
+			SrcAddr:   net.ParseIP("10.0.0.2"), DstAddr: net.ParseIP("10.0.0.1"),
+			SrcPort: 80, DstPort: 12345, Protocol: 6,
+			Bytes: 40, Packets: 1, TCPFlags: 0x12, TCPSeqNum: 5000,
+		},
+	}
+
+	DetectRetransmissions(flows)
+
+	if flows[0].Retransmissions != 0 {
+		t.Error("SYN packet should not be flagged as retransmission")
+	}
+	if flows[1].Retransmissions != 0 {
+		t.Error("first data packet should not be flagged as retransmission")
+	}
+	if flows[2].Retransmissions != 1 {
+		t.Error("duplicate seq=1001 should be flagged as retransmission")
+	}
+	if flows[3].Retransmissions != 0 {
+		t.Error("new data (seq=1101) should not be flagged as retransmission")
+	}
+	if flows[4].Retransmissions != 0 {
+		t.Error("reverse direction packet should not be flagged as retransmission")
+	}
+}
+
 func TestRetransmissionRate(t *testing.T) {
 	f := Flow{Packets: 1000, Retransmissions: 50}
 	rate := f.RetransmissionRate()
@@ -316,6 +413,13 @@ func TestIsVoIP(t *testing.T) {
 		{"UDP low ports", 17, 1234, 80, false},
 		{"TCP RTP range", 6, 50000, 16000, false},     // TCP not VoIP
 		{"UDP both high non-RTP", 17, 50000, 50001, false},
+		// DNS should NOT be classified as VoIP even when ephemeral port is in RTP range.
+		{"DNS query ephemeral in RTP", 17, 15000, 53, false},
+		{"DNS response ephemeral in RTP", 17, 53, 15000, false},
+		// Other well-known services below port 1024 should not be VoIP.
+		{"NTP ephemeral in RTP", 17, 15000, 123, false},
+		{"DHCP server", 17, 67, 15000, false},
+		{"SNMP ephemeral in RTP", 17, 15000, 161, false},
 	}
 
 	for _, tt := range tests {
