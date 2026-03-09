@@ -41,6 +41,7 @@
       <th>Destination</th>
       <th>Dst Port</th>
       <th>Protocol</th>
+      <th>TCP Flags</th>
       <th>Application</th>
       <th>Bytes</th>
       <th>Packets</th>
@@ -62,6 +63,7 @@
       <td><a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
       <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
       <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
+      <td>{{.TCPFlags}}</td>
       <td>{{.AppProto}}</td>
       <td>{{.BytesStr}}</td>
       <td>{{.PktsStr}}</td>

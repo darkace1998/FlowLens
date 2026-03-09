@@ -552,3 +552,31 @@ func TestFormatEtherType(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatTCPFlags(t *testing.T) {
+	tests := []struct {
+		flags uint8
+		want  string
+	}{
+		{0x00, "—"},         // no flags
+		{0x02, "SYN"},       // SYN only
+		{0x12, "SYN ACK"},   // SYN+ACK
+		{0x10, "ACK"},       // ACK only
+		{0x11, "FIN ACK"},   // FIN+ACK
+		{0x18, "PSH ACK"},   // PSH+ACK
+		{0x04, "RST"},       // RST only
+		{0x14, "RST ACK"},   // RST+ACK
+		{0x01, "FIN"},       // FIN only
+		{0x3F, "FIN SYN RST PSH ACK URG"}, // all lower 6 flags
+		{0xFF, "FIN SYN RST PSH ACK URG ECE CWR"}, // all 8 flags
+		{0x40, "ECE"},       // ECE only
+		{0x80, "CWR"},       // CWR only
+		{0xC0, "ECE CWR"},   // ECE+CWR
+	}
+	for _, tt := range tests {
+		got := FormatTCPFlags(tt.flags)
+		if got != tt.want {
+			t.Errorf("FormatTCPFlags(0x%02x) = %q, want %q", tt.flags, got, tt.want)
+		}
+	}
+}

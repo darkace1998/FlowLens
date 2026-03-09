@@ -1160,6 +1160,7 @@ type FlowRow struct {
 	DstMAC      string
 	VLAN        uint16
 	EtherType   string
+	TCPFlags    string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1276,6 +1277,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			DstMAC:      model.FormatMAC(f.DstMAC),
 			VLAN:        f.VLAN,
 			EtherType:   model.FormatEtherType(f.EtherType),
+			TCPFlags:    model.FormatTCPFlags(f.TCPFlags),
 		})
 	}
 
@@ -2187,6 +2189,7 @@ type SessionEntry struct {
 	Retrans     uint32
 	OOO         uint32
 	Loss        uint32
+	TCPFlags    string
 }
 
 // SessionsPageData holds data for the sessions template.
@@ -2223,6 +2226,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		first, last      time.Time
 		retrans, ooo, loss uint32
 		appProto         string
+		tcpFlags         uint8
 	}
 
 	agg := make(map[sessKey]*sessAgg)
@@ -2245,6 +2249,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			a.retrans += f.Retransmissions
 			a.ooo += f.OutOfOrder
 			a.loss += f.PacketLoss
+			a.tcpFlags |= f.TCPFlags
 			// Track firstSeen as min(f.Timestamp - f.Duration) when Duration > 0,
 			// since collectors typically set Timestamp to the flow end time.
 			flowStart := f.Timestamp
@@ -2269,6 +2274,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				flowCount: 1, first: flowStart, last: f.Timestamp,
 				retrans: f.Retransmissions, ooo: f.OutOfOrder, loss: f.PacketLoss,
 				appProto: model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort),
+				tcpFlags: f.TCPFlags,
 			}
 		}
 	}
@@ -2302,6 +2308,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			Retrans:    a.retrans,
 			OOO:        a.ooo,
 			Loss:       a.loss,
+			TCPFlags:   model.FormatTCPFlags(a.tcpFlags),
 		})
 		totalBytes += a.bytes
 		totalPackets += a.packets

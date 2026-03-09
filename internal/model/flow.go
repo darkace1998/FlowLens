@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -520,6 +521,39 @@ func FormatMAC(mac net.HardwareAddr) string {
 		return "—"
 	}
 	return mac.String()
+}
+
+// FormatTCPFlags returns a human-readable representation of TCP flags.
+// For example, a SYN+ACK packet (0x12) returns "SYN ACK".
+// Returns "—" when flags are zero or the flow is not TCP.
+func FormatTCPFlags(flags uint8) string {
+	if flags == 0 {
+		return "—"
+	}
+	type flagDef struct {
+		mask uint8
+		name string
+	}
+	defs := []flagDef{
+		{0x01, "FIN"},
+		{0x02, "SYN"},
+		{0x04, "RST"},
+		{0x08, "PSH"},
+		{0x10, "ACK"},
+		{0x20, "URG"},
+		{0x40, "ECE"},
+		{0x80, "CWR"},
+	}
+	var parts []string
+	for _, d := range defs {
+		if flags&d.mask != 0 {
+			parts = append(parts, d.name)
+		}
+	}
+	if len(parts) == 0 {
+		return "—"
+	}
+	return strings.Join(parts, " ")
 }
 
 // FormatEtherType returns a human-readable name for common EtherType values.
