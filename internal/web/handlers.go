@@ -2323,8 +2323,8 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 // --- PCAP Import ---
 
-// pcapImportMaxSize is the maximum PCAP upload size (50 MB).
-const pcapImportMaxSize = 50 << 20
+// pcapImportMaxSize is the maximum PCAP upload size (200 MB).
+const pcapImportMaxSize = 200 << 20
 
 func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -2335,7 +2335,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB in-memory buffer
-		http.Error(w, "File too large (max 50 MB)", http.StatusBadRequest)
+		http.Error(w, "File too large (max 200 MB)", http.StatusBadRequest)
 		return
 	}
 
