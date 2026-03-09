@@ -207,3 +207,81 @@ func TestListPcapFiles_WithFiles(t *testing.T) {
 		t.Errorf("expected 2 pcap files, got %d", len(files))
 	}
 }
+
+func TestReadPcapFlows(t *testing.T) {
+	dir := t.TempDir()
+	pw, err := NewPcapWriter(dir, "import", 65535, 0, 0)
+	if err != nil {
+		t.Fatalf("NewPcapWriter: %v", err)
+	}
+
+	// Build a minimal Ethernet + IPv4 + TCP packet.
+	// Ethernet: dst(6) + src(6) + ethertype(2) = 14 bytes
+	// IPv4: 20 bytes (IHL=5, protocol=TCP, totalLen=40)
+	// TCP: 20 bytes (src port, dst port, flags)
+	pkt := make([]byte, 54)
+	// Ethernet header
+	pkt[12] = 0x08 // EtherType = 0x0800 (IPv4)
+	pkt[13] = 0x00
+	// IPv4 header at offset 14
+	pkt[14] = 0x45         // version=4, IHL=5
+	pkt[14+2] = 0x00       // total length high
+	pkt[14+3] = 40         // total length low (20 IP + 20 TCP)
+	pkt[14+9] = 6          // protocol = TCP
+	pkt[14+12] = 10        // src IP: 10.0.0.1
+	pkt[14+13] = 0
+	pkt[14+14] = 0
+	pkt[14+15] = 1
+	pkt[14+16] = 192       // dst IP: 192.168.1.1
+	pkt[14+17] = 168
+	pkt[14+18] = 1
+	pkt[14+19] = 1
+	// TCP header at offset 34
+	pkt[34] = 0x00         // src port high
+	pkt[35] = 80           // src port = 80
+	pkt[36] = 0x01         // dst port high
+	pkt[37] = 0xBB         // dst port = 443
+	pkt[34+13] = 0x02      // SYN flag
+
+	ts := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	if err := pw.WritePacket(pkt, ts); err != nil {
+		t.Fatalf("WritePacket: %v", err)
+	}
+	pw.Close()
+
+	// Read it back.
+	files, _ := filepath.Glob(filepath.Join(dir, "import_*.pcap"))
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	f, err := os.Open(files[0])
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer f.Close()
+
+	flows, err := ReadPcapFlows(f)
+	if err != nil {
+		t.Fatalf("ReadPcapFlows: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+
+	fl := flows[0]
+	if fl.SrcAddr.String() != "10.0.0.1" {
+		t.Errorf("SrcAddr = %s, want 10.0.0.1", fl.SrcAddr)
+	}
+	if fl.DstAddr.String() != "192.168.1.1" {
+		t.Errorf("DstAddr = %s, want 192.168.1.1", fl.DstAddr)
+	}
+	if fl.Protocol != 6 {
+		t.Errorf("Protocol = %d, want 6 (TCP)", fl.Protocol)
+	}
+	if fl.SrcPort != 80 {
+		t.Errorf("SrcPort = %d, want 80", fl.SrcPort)
+	}
+	if fl.DstPort != 443 {
+		t.Errorf("DstPort = %d, want 443", fl.DstPort)
+	}
+}

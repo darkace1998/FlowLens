@@ -24,25 +24,26 @@ import (
 // --- Template helpers ---
 
 var funcMap = template.FuncMap{
-	"formatBytes":   formatBytes,
-	"formatPkts":    formatPkts,
-	"formatBPS":     formatBPS,
-	"formatPPS":     formatPPS,
-	"protoName":     model.ProtocolName,
-	"appProto":      model.AppProtocol,
-	"appCategory":   model.AppCategory,
-	"asName":        model.ASName,
-	"timeAgo":       timeAgo,
-	"formatTime":    formatTime,
-	"seq":           seq,
-	"pageWindow":    pageWindow,
-	"add":           func(a, b int) int { return a + b },
-	"sub":           func(a, b int) int { return a - b },
-	"pctOf":         pctOf,
-	"severityClass": severityClass,
-	"formatAS":      formatAS,
-	"formatJitter":  formatJitter,
-	"formatMOS":     formatMOS,
+	"formatBytes":    formatBytes,
+	"formatPkts":     formatPkts,
+	"formatBPS":      formatBPS,
+	"formatPPS":      formatPPS,
+	"formatDuration": formatDuration,
+	"protoName":      model.ProtocolName,
+	"appProto":       model.AppProtocol,
+	"appCategory":    model.AppCategory,
+	"asName":         model.ASName,
+	"timeAgo":        timeAgo,
+	"formatTime":     formatTime,
+	"seq":            seq,
+	"pageWindow":     pageWindow,
+	"add":            func(a, b int) int { return a + b },
+	"sub":            func(a, b int) int { return a - b },
+	"pctOf":          pctOf,
+	"severityClass":  severityClass,
+	"formatAS":       formatAS,
+	"formatJitter":   formatJitter,
+	"formatMOS":      formatMOS,
 	"int":           func(v interface{}) int {
 		switch n := v.(type) {
 		case int:
@@ -216,6 +217,29 @@ func timeAgo(t time.Time) string {
 
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
+}
+
+// formatDuration returns a human-friendly duration string (e.g. "10m" instead of "10m0s").
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return d.String()
+	}
+	totalSecs := int(d.Seconds())
+	h := totalSecs / 3600
+	m := (totalSecs % 3600) / 60
+	s := totalSecs % 60
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case h > 0:
+		return fmt.Sprintf("%dh", h)
+	case m > 0 && s > 0:
+		return fmt.Sprintf("%dm %ds", m, s)
+	case m > 0:
+		return fmt.Sprintf("%dm", m)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
 
 func seq(start, end int) []int {
@@ -1151,6 +1175,7 @@ type FlowsPageData struct {
 	FilterDstIP    string
 	FilterPort     string
 	FilterProtocol string
+	FilterIP       string // matches either src or dst
 }
 
 // --- Flow Explorer handler ---
@@ -1169,6 +1194,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
+	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
 
 	// Fetch all recent flows from the ring buffer using the configured window.
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
@@ -1186,7 +1212,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(allFlows)
 
 	// Apply filters.
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize
@@ -1264,6 +1290,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterDstIP:    filterDstIP,
 		FilterPort:     filterPort,
 		FilterProtocol: filterProto,
+		FilterIP:       filterIP,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1272,8 +1299,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.Flow {
-	if srcIP == "" && dstIP == "" && port == "" && proto == "" {
+func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) []model.Flow {
+	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" {
 		return flows
 	}
 
@@ -1308,6 +1335,9 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto string) []model.F
 			continue
 		}
 		if dstIP != "" && !matchIP(f.DstAddr, dstIP) {
+			continue
+		}
+		if hostIP != "" && !matchIP(f.SrcAddr, hostIP) && !matchIP(f.DstAddr, hostIP) {
 			continue
 		}
 		if port != "" && f.SrcPort != portNum && f.DstPort != portNum {
@@ -2131,4 +2161,211 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmplMACs.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("MAC template error: %v", err)
 	}
+}
+
+// --- Sessions (bidirectional flow conversations) ---
+
+// SessionEntry represents a bidirectional flow session (conversation).
+type SessionEntry struct {
+	SrcAddr     string
+	DstAddr     string
+	SrcPort     uint16
+	DstPort     uint16
+	Protocol    string
+	Proto       uint8
+	Bytes       uint64
+	Packets     uint64
+	FlowCount   int
+	BytesStr    string
+	PktsStr     string
+	FirstSeen   time.Time
+	LastSeen    time.Time
+	Duration    string
+	Throughput  string
+	AppProto    string
+	Retrans     uint32
+	OOO         uint32
+	Loss        uint32
+}
+
+// SessionsPageData holds data for the sessions template.
+type SessionsPageData struct {
+	Sessions      []SessionEntry
+	TotalSessions int
+	TotalBytes    uint64
+	TotalPackets  uint64
+	Window        time.Duration
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = time.Hour
+	}
+
+	all, err := s.ringBuf.Recent(window, 0)
+	if err != nil {
+		logging.Default().Warn("Sessions: ring buffer query error: %v", err)
+	}
+
+	type sessKey struct {
+		lo, hi           string
+		loPort, hiPort   uint16
+		proto            uint8
+	}
+	type sessAgg struct {
+		srcAddr, dstAddr string
+		srcPort, dstPort uint16
+		proto            uint8
+		bytes, packets   uint64
+		flowCount        int
+		first, last      time.Time
+		retrans, ooo, loss uint32
+		appProto         string
+	}
+
+	agg := make(map[sessKey]*sessAgg)
+
+	for _, f := range all {
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		lo, hi := src, dst
+		loPort, hiPort := f.SrcPort, f.DstPort
+		if lo > hi || (lo == hi && loPort > hiPort) {
+			lo, hi = hi, lo
+			loPort, hiPort = hiPort, loPort
+		}
+		k := sessKey{lo: lo, hi: hi, loPort: loPort, hiPort: hiPort, proto: f.Protocol}
+
+		if a, ok := agg[k]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flowCount++
+			a.retrans += f.Retransmissions
+			a.ooo += f.OutOfOrder
+			a.loss += f.PacketLoss
+			// Track firstSeen as min(f.Timestamp - f.Duration) when Duration > 0,
+			// since collectors typically set Timestamp to the flow end time.
+			flowStart := f.Timestamp
+			if f.Duration > 0 {
+				flowStart = f.Timestamp.Add(-f.Duration)
+			}
+			if flowStart.Before(a.first) {
+				a.first = flowStart
+			}
+			if f.Timestamp.After(a.last) {
+				a.last = f.Timestamp
+			}
+		} else {
+			flowStart := f.Timestamp
+			if f.Duration > 0 {
+				flowStart = f.Timestamp.Add(-f.Duration)
+			}
+			agg[k] = &sessAgg{
+				srcAddr: src, dstAddr: dst,
+				srcPort: f.SrcPort, dstPort: f.DstPort,
+				proto: f.Protocol, bytes: f.Bytes, packets: f.Packets,
+				flowCount: 1, first: flowStart, last: f.Timestamp,
+				retrans: f.Retransmissions, ooo: f.OutOfOrder, loss: f.PacketLoss,
+				appProto: model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort),
+			}
+		}
+	}
+
+	var entries []SessionEntry
+	var totalBytes, totalPackets uint64
+
+	for _, a := range agg {
+		dur := a.last.Sub(a.first)
+		var thru string
+		if dur > 0 {
+			thru = formatBPS(a.bytes, dur)
+		}
+		entries = append(entries, SessionEntry{
+			SrcAddr:    a.srcAddr,
+			DstAddr:    a.dstAddr,
+			SrcPort:    a.srcPort,
+			DstPort:    a.dstPort,
+			Protocol:   model.ProtocolName(a.proto),
+			Proto:      a.proto,
+			Bytes:      a.bytes,
+			Packets:    a.packets,
+			FlowCount:  a.flowCount,
+			BytesStr:   formatBytes(a.bytes),
+			PktsStr:    formatPkts(a.packets),
+			FirstSeen:  a.first,
+			LastSeen:   a.last,
+			Duration:   formatUptime(dur),
+			Throughput: thru,
+			AppProto:   a.appProto,
+			Retrans:    a.retrans,
+			OOO:        a.ooo,
+			Loss:       a.loss,
+		})
+		totalBytes += a.bytes
+		totalPackets += a.packets
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+
+	data := SessionsPageData{
+		Sessions:      entries,
+		TotalSessions: len(entries),
+		TotalBytes:    totalBytes,
+		TotalPackets:  totalPackets,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplSessions.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Sessions template error: %v", err)
+	}
+}
+
+// --- PCAP Import ---
+
+// pcapImportMaxSize is the maximum PCAP upload size (200 MB).
+const pcapImportMaxSize = 200 << 20
+
+func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB in-memory buffer
+		http.Error(w, "File too large (max 200 MB)", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("pcap")
+	if err != nil {
+		http.Error(w, "Missing pcap file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	flows, err := capture.ReadPcapFlows(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse PCAP: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if len(flows) == 0 {
+		http.Error(w, "No flows decoded from PCAP", http.StatusBadRequest)
+		return
+	}
+
+	// Stitch bidirectional flows for RTT estimation.
+	model.StitchFlows(flows)
+
+	// Insert into ring buffer for analysis.
+	if err := s.ringBuf.Insert(flows); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to import flows: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	logging.Default().Info("PCAP import: %d flows imported", len(flows))
+	http.Redirect(w, r, "/sessions", http.StatusSeeOther)
 }

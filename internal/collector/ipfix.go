@@ -40,10 +40,12 @@ const (
 	// Note: Actual IE support varies by exporter vendor. These IDs cover
 	// common implementations; exporters that use different IDs will simply
 	// have these fields as zero (the heuristic detector provides a fallback).
-	ipfixFieldTCPRetransmissionCount = 321 // tcpRetransmissionCount (draft-ietf-ipfix-tcpControlBits)
-	ipfixFieldTCPSynTotalCount       = 322 // tcpSynTotalCount
-	ipfixFieldTCPOutOfOrderCount     = 227 // vendor-specific out-of-order counter (not in base IANA registry)
-	ipfixFieldPacketLossCount        = 233 // vendor-specific packet loss counter (not in base IANA registry)
+	ipfixFieldTCPRetransmissionCount = 321 // tcpRetransmissionCount (IANA IPFIX IE 321)
+	ipfixFieldTCPSynTotalCount       = 322 // tcpSynTotalCount (IANA IPFIX IE 322)
+	// NOTE: There are no standard IANA IPFIX IEs for TCP out-of-order count
+	// or packet loss count. IE 227 is postMCastOctetDeltaCount and IE 233
+	// is firewallEvent — mapping them as OOO/loss produced false positives.
+	// OOO and loss are now detected only via the heuristic analyzer.
 	ipfixFieldRTPJitter              = 387 // transportRtpJitterMean (IANA IPFIX IE 387) in microseconds
 
 	// Layer-2 fields (IANA IPFIX assignments).
@@ -338,10 +340,6 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 	case ipfixFieldTCPSynTotalCount:
 		// SYN count can inform quality analysis; store as informational.
 		// Currently no dedicated field — could be used for SYN flood detection.
-	case ipfixFieldTCPOutOfOrderCount:
-		f.OutOfOrder = uint32(readUintN(data))
-	case ipfixFieldPacketLossCount:
-		f.PacketLoss = uint32(readUintN(data))
 	case ipfixFieldRTPJitter:
 		f.JitterMicros = int64(readUintN(data))
 	case ipfixFieldSourceMacAddress:

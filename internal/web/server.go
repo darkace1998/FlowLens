@@ -39,6 +39,7 @@ type Server struct {
 	tmplCapture    *template.Template
 	tmplVLANs      *template.Template
 	tmplMACs       *template.Template
+	tmplSessions   *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -69,6 +70,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplCapture = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/capture.xhtml"))
 	s.tmplVLANs = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/vlans.xhtml"))
 	s.tmplMACs = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/macs.xhtml"))
+	s.tmplSessions = template.Must(template.New("layout.xhtml").Funcs(funcMap).ParseFS(templateFS, "templates/layout.xhtml", "templates/sessions.xhtml"))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
@@ -84,6 +86,8 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/capture/download", s.handleCaptureDownload)
 	s.mux.HandleFunc("/vlans", s.handleVLANs)
 	s.mux.HandleFunc("/macs", s.handleMACs)
+	s.mux.HandleFunc("/sessions", s.handleSessions)
+	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	s.srv = &http.Server{

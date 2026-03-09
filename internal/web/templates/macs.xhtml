@@ -21,7 +21,7 @@
       <td><code>{{.MAC}}</code></td>
       <td>
         {{range .IPs}}
-          <span class="tag">{{.}}</span>
+          <span class="tag"><a href="/flows?ip={{. | urlquery}}">{{.}}</a></span>
         {{end}}
       </td>
       <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>

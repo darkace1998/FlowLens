@@ -1,0 +1,84 @@
+{{define "title"}}Sessions{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>Flow Sessions</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Sessions</div>
+    <div class="stat-value">{{.TotalSessions}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Bytes</div>
+    <div class="stat-value">{{formatBytes .TotalBytes}}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Packets</div>
+    <div class="stat-value">{{formatPkts .TotalPackets}}</div>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:1rem">
+  <h2>Import PCAP</h2>
+  <form method="POST" action="/pcap/import" enctype="multipart/form-data" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+    <label style="font-size:.75rem;color:var(--muted);text-transform:uppercase">
+      PCAP File
+      <input type="file" name="pcap" accept=".pcap,.cap" required style="display:block;margin-top:.25rem" />
+    </label>
+    <button type="submit">Import &amp; Analyze</button>
+  </form>
+  <p class="flow-summary" style="margin-top:.5rem">Upload a PCAP file (max 200 MB) to import packets as flows for analysis.</p>
+</div>
+
+{{if .Sessions}}
+<p class="flow-summary">{{.TotalSessions}} bidirectional sessions sorted by traffic volume.</p>
+<div class="table-responsive">
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>Src Port</th>
+      <th>Destination</th>
+      <th>Dst Port</th>
+      <th>Protocol</th>
+      <th>Application</th>
+      <th>Bytes</th>
+      <th>Packets</th>
+      <th>Flows</th>
+      <th>Duration</th>
+      <th>Throughput</th>
+      <th>First Seen</th>
+      <th>Last Seen</th>
+      <th>Retrans</th>
+      <th>OOO</th>
+      <th>Loss</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Sessions}}
+    <tr>
+      <td><a href="/flows?ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a></td>
+      <td>{{if .SrcPort}}<a href="/flows?port={{urlquery .SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
+      <td><a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
+      <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
+      <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
+      <td>{{.AppProto}}</td>
+      <td>{{.BytesStr}}</td>
+      <td>{{.PktsStr}}</td>
+      <td>{{.FlowCount}}</td>
+      <td>{{.Duration}}</td>
+      <td>{{if .Throughput}}{{.Throughput}}{{else}}—{{end}}</td>
+      <td>{{formatTime .FirstSeen}}</td>
+      <td>{{formatTime .LastSeen}}</td>
+      <td>{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
+      <td>{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
+      <td>{{if .Loss}}{{.Loss}}{{else}}—{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty">No sessions. Import a PCAP or wait for flow data to arrive.</p>
+{{end}}
+{{end}}
