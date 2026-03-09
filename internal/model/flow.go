@@ -550,9 +550,6 @@ func FormatTCPFlags(flags uint8) string {
 			parts = append(parts, d.name)
 		}
 	}
-	if len(parts) == 0 {
-		return "—"
-	}
 	return strings.Join(parts, " ")
 }
 
