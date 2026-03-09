@@ -246,7 +246,7 @@ const pcapngMagic = 0x0a0d0d0a
 // model.Flow using the same decoder as live packet capture. It returns the
 // decoded flows and any error encountered during reading.
 func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
-	// Wrap with a buffered reader for efficient small reads (16–24 byte
+	// Wrap with a buffered reader for efficient small reads (16-24 byte
 	// headers) especially when reading directly from a streaming source
 	// such as a multipart upload.
 	br := bufio.NewReaderSize(r, 64*1024)
@@ -271,7 +271,7 @@ func ReadPcapFlows(r io.Reader) ([]model.Flow, error) {
 		byteOrder = binary.BigEndian
 		nanoRes = true
 	case pcapngMagic:
-		return nil, fmt.Errorf("pcap: file is in pcapng format which is not supported — please re-export as classic pcap (e.g. in Wireshark: File → Save As → select \"Wireshark/… - pcap\")")
+		return nil, fmt.Errorf("pcap: file is in pcapng format which is not supported - please re-export as classic pcap (e.g. in Wireshark: File -> Save As -> select \"Wireshark/... - pcap\")")
 	default:
 		return nil, fmt.Errorf("pcap: bad magic 0x%08x (expected pcap format)", magic)
 	}
