@@ -82,15 +82,22 @@
 
 ## 📊 Features & Functionality
 
-- [ ] **P1** — JSON REST API for programmatic access to flows, hosts, sessions, and advisories
-- [ ] **P1** — Alerting integrations — send advisories to webhook, email, Slack, or PagerDuty
-- [ ] **P1** — sFlow counter sample support (already decoded but not surfaced in the UI — show interface utilisation from sFlow counters)
-- [ ] **P2** — Flow export — allow downloading filtered flow data as CSV or JSON from the flow explorer
-- [ ] **P2** — Configurable analyzer thresholds via the config file (top-talker %, scan port count, DNS volume, etc. are currently hardcoded)
+- [x] **P1** — JSON REST API for programmatic access to flows, hosts, sessions, and advisories
+  — Five API endpoints: `/api/flows` (paginated, filtered), `/api/hosts`, `/api/sessions`, `/api/advisories`, `/api/dashboard`. All return JSON with `application/json` content type.
+- [x] **P1** — Alerting integrations — send advisories to webhook, email, Slack, or PagerDuty
+  — Webhook integration: configure `webhook_url` in analysis config. New advisories are POSTed as JSON with severity, title, description, and action. No-op when URL is empty.
+- [x] **P1** — sFlow counter sample support (already decoded but not surfaced in the UI — show interface utilisation from sFlow counters)
+  — In-memory `CounterStore` receives decoded sFlow counter samples. New `/counters` page displays per-interface utilization with traffic bars, errors, drops, and speed. Counter handler wired into collector.
+- [x] **P2** — Flow export — allow downloading filtered flow data as CSV or JSON from the flow explorer
+  — `/flows/export` endpoint with `format=csv|json` and same filter parameters as `/flows`. Export buttons added to the flow explorer UI.
+- [x] **P2** — Configurable analyzer thresholds via the config file (top-talker %, scan port count, DNS volume, etc. are currently hardcoded)
+  — Eight new config fields: `dns_rate_threshold`, `dns_ratio_threshold`, `retrans_rate_threshold`, `retrans_critical_threshold`, `asymmetry_threshold`, `mos_warning_threshold`, `mos_critical_threshold`, `top_talker_percent`. Each analyzer reads from config with zero-value fallback.
 - [ ] **P2** — SNMP enrichment — resolve ifIndex to interface name and device hostname
 - [ ] **P2** — Streaming PCAP import progress (currently blocks until the entire file is parsed)
-- [ ] **P2** — Dashboard time-range selector (last 5m / 15m / 1h / 6h / 24h)
-- [ ] **P3** — Multi-exporter view — group and compare flows by exporter IP
+- [x] **P2** — Dashboard time-range selector (last 5m / 15m / 1h / 6h / 24h)
+  — Dashboard accepts `?range=5m|15m|1h|6h|24h` query parameter. Styled button bar with active state. Auto-refresh preserves selected range.
+- [x] **P3** — Multi-exporter view — group and compare flows by exporter IP
+  — New `/exporters` page groups flows by exporter IP with aggregate statistics (bytes, packets, flow count, top protocol, traffic percentage bars, first/last seen).
 - [ ] **P3** — Historical trending — store hourly/daily aggregates for long-term traffic graphs
 - [ ] **P3** — Horizontal scaling — multiple collector instances writing to a shared database
 - [ ] **P3** — LLM-powered advisory explanations ("Why am I seeing this scan?")
