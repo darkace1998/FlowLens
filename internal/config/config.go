@@ -64,6 +64,7 @@ type AnalysisConfig struct {
 	MOSWarningThreshold      float64 `yaml:"mos_warning_threshold"`       // MOS below this triggers warning (default: 3.5)
 	MOSCriticalThreshold     float64 `yaml:"mos_critical_threshold"`      // MOS below this triggers critical (default: 3.0)
 	TopTalkerPercent         float64 `yaml:"top_talker_percent"`          // bandwidth % above which top talker triggers advisory (default: 25)
+	WebhookURL               string  `yaml:"webhook_url"`                 // URL to POST advisories as JSON (optional, disabled when empty)
 }
 
 // WebConfig holds settings for the web server.

@@ -115,8 +115,9 @@ func (e *Engine) runAll() {
 
 	now := time.Now()
 
+	var added []Advisory
+
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	// Mark previously-active advisories as resolved if they are no longer reported.
 	for i := range e.advisories {
@@ -141,6 +142,7 @@ func (e *Engine) runAll() {
 	for _, a := range newAdvisories {
 		if _, exists := existingActive[a.Title]; !exists {
 			e.advisories = append(e.advisories, a)
+			added = append(added, a)
 		}
 	}
 
@@ -161,4 +163,9 @@ func (e *Engine) runAll() {
 	if len(e.advisories) > maxAdvisoryHistory {
 		e.advisories = e.advisories[:maxAdvisoryHistory]
 	}
+
+	e.mu.Unlock()
+
+	// Send new advisories to webhook (outside lock).
+	sendWebhook(e.cfg.WebhookURL, added)
 }
