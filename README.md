@@ -80,7 +80,7 @@ FlowLens is lightweight but resource needs scale with traffic volume. The follow
 |-------------|------|--------|-------|
 | Low traffic (<1K flows/s) | 0.5 | 128 MB | Suitable for home lab / small office |
 | Medium traffic (1K–10K flows/s) | 1 | 256 MB | Typical enterprise branch |
-| High traffic (10K–50K flows/s) | 2 | 512 MB | Data centre / core router |
+| High traffic (10K–50K flows/s) | 2 | 512 MB | Data center / core router |
 | Very high traffic (>50K flows/s) | 4 | 1 GB | Consider dedicated host |
 
 Apply limits with Docker:
