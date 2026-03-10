@@ -121,14 +121,14 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 		if len(data) < 12+16 {
 			return nil, nil, fmt.Errorf("sflow: truncated agent address")
 		}
-		agentIP = net.IP(make([]byte, net.IPv4len))
+		agentIP = make(net.IP, net.IPv4len)
 		copy(agentIP, data[8:12])
 		offset = 12
 	case sflowAddrTypeIPv6:
 		if len(data) < 24+16 {
 			return nil, nil, fmt.Errorf("sflow: truncated agent address")
 		}
-		agentIP = net.IP(make([]byte, net.IPv6len))
+		agentIP = make(net.IP, net.IPv6len)
 		copy(agentIP, data[8:24])
 		offset = 24
 	default:
@@ -375,8 +375,8 @@ func decodeSFlowIPv4(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 	}
 
 	proto := data[9]
-	srcIP := net.IP(make([]byte, net.IPv4len))
-	dstIP := net.IP(make([]byte, net.IPv4len))
+	srcIP := make(net.IP, net.IPv4len)
+	dstIP := make(net.IP, net.IPv4len)
 	copy(srcIP, data[12:16])
 	copy(dstIP, data[16:20])
 	tos := data[1]
@@ -416,8 +416,8 @@ func decodeSFlowIPv6(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 	}
 
 	proto := data[6] // Next Header
-	srcIP := net.IP(make([]byte, net.IPv6len))
-	dstIP := net.IP(make([]byte, net.IPv6len))
+	srcIP := make(net.IP, net.IPv6len)
+	dstIP := make(net.IP, net.IPv6len)
 	copy(srcIP, data[8:24])
 	copy(dstIP, data[24:40])
 

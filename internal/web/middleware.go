@@ -71,5 +71,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		"status": "ok",
 		"uptime": time.Since(s.startTime).Round(time.Second).String(),
 	}
-	json.NewEncoder(w).Encode(resp) //nolint:errcheck
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		logging.Default().Error("healthz JSON encode error: %v", err)
+	}
 }

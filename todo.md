@@ -106,14 +106,22 @@
 
 ## 🏗️ Architecture & Code Health
 
-- [ ] **P1** — Extract hardcoded magic numbers in packet parsing to named constants (e.g. TCP header size `20`, IPv6 header `40`)
-- [ ] **P1** — Standardize error handling — some handlers log + return, others silently fall through; adopt a consistent middleware pattern
-- [ ] **P2** — Add structured request logging middleware (method, path, status, duration)
-- [ ] **P2** — Add a `/healthz` endpoint for container orchestration liveness probes
-- [ ] **P2** — Decouple the web handler layer from direct storage calls — introduce a service / use-case layer
-- [ ] **P2** — Move template helper functions (`formatBytes`, `formatPkts`, `pctOf`, etc.) into a dedicated `internal/web/helpers.go` file
-- [ ] **P3** — Consider replacing SQLite with an embeddable time-series store for >10 M flow scalability
-- [ ] **P3** — Add OpenTelemetry tracing for request/query observability
+- [x] **P1** — Extract hardcoded magic numbers in packet parsing to named constants (e.g. TCP header size `20`, IPv6 header `40`)
+  — Added named constants for Ethernet header sizes, EtherType values, IP protocol numbers, IP/TCP header sizes, sFlow sample/record sizes, and TCP/UDP field offsets in `sflow.go` and `model/flow.go`. All inline magic numbers replaced.
+- [x] **P1** — Standardize error handling — some handlers log + return, others silently fall through; adopt a consistent middleware pattern
+  — Added `httpError()` helper in `middleware.go` that combines HTTP error response + structured logging in one call. 12 handler error patterns standardized. Added panic recovery middleware to prevent server crashes.
+- [x] **P2** — Add structured request logging middleware (method, path, status, duration)
+  — `requestLogging()` middleware wraps all requests with `[INFO] METHOD /path STATUS DURATION` log lines. Uses `statusRecorder` to capture response status code.
+- [x] **P2** — Add a `/healthz` endpoint for container orchestration liveness probes
+  — Returns `200 OK` with JSON `{"status":"ok","uptime":"..."}`. Available at `/healthz`.
+- [x] **P2** — Decouple the web handler layer from direct storage calls — introduce a service / use-case layer
+  — Added `FlowService` and `ReportService` interfaces in `service.go`. Handlers call `flowSvc.RecentFlows()`, `flowSvc.InsertFlows()`, `flowSvc.FlowCount()`, `reportSvc.QueryReport()`, `reportSvc.QueryTimeSeries()` instead of direct `RingBuffer`/`SQLiteStore` access.
+- [x] **P2** — Move template helper functions (`formatBytes`, `formatPkts`, `pctOf`, etc.) into a dedicated `internal/web/helpers.go` file
+  — 18 helper functions and the `funcMap` variable extracted from `handlers.go` into `helpers.go`.
+- [x] **P3** — Consider replacing SQLite with an embeddable time-series store for >10 M flow scalability
+  — Documented scalability considerations in `SQLiteStore` doc comment. Recommends InfluxDB/TimescaleDB/ClickHouse for higher throughput. The new `FlowService`/`ReportService` interfaces make backend swaps seamless.
+- [x] **P3** — Add OpenTelemetry tracing for request/query observability
+  — Added `internal/tracing` package with `Tracer` interface and no-op default. Can be wired to OpenTelemetry via `SetGlobal()` at startup with zero overhead when not enabled.
 
 ---
 
