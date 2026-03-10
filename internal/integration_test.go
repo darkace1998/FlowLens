@@ -18,13 +18,51 @@ import (
 	"github.com/darkace1998/FlowLens/internal/web"
 )
 
+// findFreePort returns a free UDP port by binding and immediately closing.
+func findFreePort(t *testing.T) int {
+	t.Helper()
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("find free port: %v", err)
+	}
+	port := conn.LocalAddr().(*net.UDPAddr).Port
+	conn.Close()
+	return port
+}
+
+// collectorHelper bundles a collector with its Start() goroutine
+// to allow synchronized Stop().
+type collectorHelper struct {
+	c    *collector.Collector
+	done chan error
+}
+
+// startCollector creates and starts a collector on the given port.
+func startCollector(t *testing.T, port int, handler func([]model.Flow)) *collectorHelper {
+	t.Helper()
+	cfg := config.CollectorConfig{
+		NetFlowPort: port,
+		BufferSize:  65535,
+	}
+	c := collector.New(cfg, handler)
+	done := make(chan error, 1)
+	go func() { done <- c.Start() }()
+	// Allow time for listener to bind.
+	time.Sleep(100 * time.Millisecond)
+	return &collectorHelper{c: c, done: done}
+}
+
+// stop closes the collector and waits for Start() to return.
+func (h *collectorHelper) stop() {
+	h.c.Stop()
+	<-h.done
+}
+
 // TestCollector_RingBuffer_WebHandler verifies the full pipeline:
 // NetFlow v5 packet → collector → ring buffer → web dashboard handler.
 func TestCollector_RingBuffer_WebHandler(t *testing.T) {
-	// 1. Set up storage.
 	ringBuf := storage.NewRingBuffer(1000)
 
-	// 2. Set up collector with a handler that inserts into the ring buffer.
 	var mu sync.Mutex
 	handler := func(flows []model.Flow) {
 		mu.Lock()
@@ -32,26 +70,16 @@ func TestCollector_RingBuffer_WebHandler(t *testing.T) {
 		ringBuf.Insert(flows)
 	}
 
-	cfg := config.CollectorConfig{
-		NetFlowPort: 0, // OS-assigned
-		BufferSize:  65535,
-	}
-	c := collector.New(cfg, handler)
+	port := findFreePort(t)
+	ch := startCollector(t, port, handler)
+	defer ch.stop()
 
-	errCh := make(chan error, 1)
-	go func() { errCh <- c.Start() }()
-	time.Sleep(50 * time.Millisecond)
-
-	addr := c.Addr()
-	if addr == nil {
-		t.Fatal("collector did not start — no address")
-	}
-	defer c.Stop()
-
-	// 3. Send a NetFlow v5 packet.
+	// Send a NetFlow v5 packet.
 	pkt := buildNFV5Packet(3)
-	udpAddr := addr.(*net.UDPAddr)
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: port,
+	})
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -60,10 +88,10 @@ func TestCollector_RingBuffer_WebHandler(t *testing.T) {
 	}
 	conn.Close()
 
-	// 4. Wait for processing.
+	// Wait for processing.
 	time.Sleep(200 * time.Millisecond)
 
-	// 5. Verify flows arrived in ring buffer.
+	// Verify flows arrived in ring buffer.
 	mu.Lock()
 	count := ringBuf.Len()
 	mu.Unlock()
@@ -71,7 +99,7 @@ func TestCollector_RingBuffer_WebHandler(t *testing.T) {
 		t.Fatalf("ring buffer has %d flows, want 3", count)
 	}
 
-	// 6. Set up web server and verify the dashboard shows data.
+	// Set up web server and verify the dashboard shows data.
 	webCfg := config.WebConfig{Listen: ":0", PageSize: 50}
 	s := web.NewServer(webCfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
 
@@ -94,7 +122,6 @@ func TestCollector_RingBuffer_WebHandler(t *testing.T) {
 // TestCollector_SQLite_WebHandler verifies the pipeline with SQLite persistence:
 // NetFlow v5 packet → collector → SQLite + ring buffer → web flows page.
 func TestCollector_SQLite_WebHandler(t *testing.T) {
-	// 1. Set up storage.
 	ringBuf := storage.NewRingBuffer(1000)
 	dbPath := filepath.Join(t.TempDir(), "integration.db")
 	sqlStore, err := storage.NewSQLiteStore(dbPath, 1*time.Hour, 10*time.Minute)
@@ -103,7 +130,6 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 	}
 	defer sqlStore.Close()
 
-	// 2. Set up collector that writes to both stores.
 	var mu sync.Mutex
 	handler := func(flows []model.Flow) {
 		mu.Lock()
@@ -112,26 +138,16 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 		sqlStore.Insert(flows)
 	}
 
-	cfg := config.CollectorConfig{
-		NetFlowPort: 0,
-		BufferSize:  65535,
-	}
-	c := collector.New(cfg, handler)
+	port := findFreePort(t)
+	ch := startCollector(t, port, handler)
+	defer ch.stop()
 
-	errCh := make(chan error, 1)
-	go func() { errCh <- c.Start() }()
-	time.Sleep(50 * time.Millisecond)
-
-	addr := c.Addr()
-	if addr == nil {
-		t.Fatal("collector did not start")
-	}
-	defer c.Stop()
-
-	// 3. Send packets.
+	// Send packets.
 	pkt := buildNFV5Packet(2)
-	udpAddr := addr.(*net.UDPAddr)
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+	conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: port,
+	})
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -142,7 +158,7 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	// 4. Verify ring buffer.
+	// Verify ring buffer.
 	mu.Lock()
 	rbCount := ringBuf.Len()
 	mu.Unlock()
@@ -150,7 +166,7 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 		t.Fatalf("ring buffer has %d flows, want 2", rbCount)
 	}
 
-	// 5. Verify SQLite.
+	// Verify SQLite.
 	recent, err := sqlStore.Recent(10*time.Minute, 0)
 	if err != nil {
 		t.Fatalf("sqlStore.Recent: %v", err)
@@ -159,7 +175,7 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 		t.Fatalf("SQLite has %d flows, want 2", len(recent))
 	}
 
-	// 6. Verify web flows page with data from ring buffer.
+	// Verify web flows page.
 	webCfg := config.WebConfig{Listen: ":0", PageSize: 50}
 	s := web.NewServer(webCfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
 
@@ -174,13 +190,12 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 	if !strings.Contains(body, "Flow Explorer") {
 		t.Error("flows page should contain 'Flow Explorer'")
 	}
-	// The page should show "2 flows" since we inserted 2.
 	if !strings.Contains(body, "2 flows") {
 		t.Errorf("expected '2 flows' in body, got snippet: %s", body[:min(len(body), 300)])
 	}
 }
 
-// TestMultiProtocol_RoundTrip sends different protocol types and verifies
+// TestMultiProtocol_RoundTrip sends multiple packets and verifies
 // they all end up in storage correctly.
 func TestMultiProtocol_RoundTrip(t *testing.T) {
 	ringBuf := storage.NewRingBuffer(1000)
@@ -192,27 +207,17 @@ func TestMultiProtocol_RoundTrip(t *testing.T) {
 		ringBuf.Insert(flows)
 	}
 
-	cfg := config.CollectorConfig{
-		NetFlowPort: 0,
-		BufferSize:  65535,
-	}
-	c := collector.New(cfg, handler)
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- c.Start() }()
-	time.Sleep(50 * time.Millisecond)
-
-	addr := c.Addr()
-	if addr == nil {
-		t.Fatal("collector did not start")
-	}
-	defer c.Stop()
+	port := findFreePort(t)
+	ch := startCollector(t, port, handler)
+	defer ch.stop()
 
 	// Send multiple NFV5 packets.
 	for i := 0; i < 5; i++ {
 		pkt := buildNFV5Packet(1)
-		udpAddr := addr.(*net.UDPAddr)
-	conn, err := net.DialUDP("udp", nil, udpAddr)
+		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+			IP:   net.ParseIP("127.0.0.1"),
+			Port: port,
+		})
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}

@@ -245,11 +245,9 @@ func (c *Collector) Stop() {
 	for _, conn := range c.conns {
 		conn.Close()
 	}
-	c.conns = nil
 	for _, conn := range c.sflowConns {
 		conn.Close()
 	}
-	c.sflowConns = nil
 }
 
 // Addr returns the local address of the first listener,
