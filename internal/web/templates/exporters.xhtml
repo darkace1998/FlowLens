@@ -1,0 +1,46 @@
+{{define "title"}}Exporters{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>Multi-Exporter View</h1>
+<p class="flow-summary">{{.TotalExporters}} exporters observed in the last {{formatDuration .Window}} — {{formatBytes .TotalBytes}} total</p>
+
+{{if .Exporters}}
+<div class="table-responsive">
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>Exporter IP</th>
+      <th>Bytes</th>
+      <th>Packets</th>
+      <th>Flows</th>
+      <th>Traffic %</th>
+      <th>Top Protocol</th>
+      <th>First Seen</th>
+      <th>Last Seen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Exporters}}
+    <tr>
+      <td><a href="/flows?ip={{.IP}}">{{.IP}}</a></td>
+      <td>{{formatBytes .Bytes}}</td>
+      <td>{{formatPkts .Packets}}</td>
+      <td>{{.FlowCount}}</td>
+      <td>
+        <div class="bar-container">
+          <div class="bar" style="width: {{printf "%.1f" .Pct}}%; max-width: 100%"></div>
+          <span class="bar-label">{{printf "%.1f" .Pct}}%</span>
+        </div>
+      </td>
+      <td>{{.TopProto}}</td>
+      <td>{{.FirstSeen}}</td>
+      <td>{{.LastSeen}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty">No exporter data available yet.</p>
+{{end}}
+{{end}}

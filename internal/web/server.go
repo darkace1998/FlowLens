@@ -45,6 +45,7 @@ type Server struct {
 	tmplMACs       *template.Template
 	tmplSessions   *template.Template
 	tmplCounters   *template.Template
+	tmplExporters  *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -90,6 +91,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplMACs = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/macs.xhtml"))
 	s.tmplSessions = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/sessions.xhtml"))
 	s.tmplCounters = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/counters.xhtml"))
+	s.tmplExporters = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/exporters.xhtml"))
 
 	// Register routes. State-changing POST endpoints are CSRF-protected.
 	s.mux.HandleFunc("/", s.handleDashboard)
@@ -109,6 +111,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/macs", s.handleMACs)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
 	s.mux.HandleFunc("/counters", s.handleCounters)
+	s.mux.HandleFunc("/exporters", s.handleExporters)
 	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
 
 	// JSON API endpoints.

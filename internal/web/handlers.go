@@ -451,6 +451,7 @@ type DashboardData struct {
 	VoIP         VoIPStats
 	Interfaces   []InterfaceEntry
 	IfaceFilter  string // current interface filter value (from query param)
+	SelectedRange string // currently selected time-range (e.g. "5m", "15m", "1h")
 
 	// Chart data for interactive Chart.js visualizations.
 	ChartProtoLabels  []string
@@ -498,6 +499,24 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
+
+	// Parse optional time-range selector.
+	selectedRange := r.URL.Query().Get("range")
+	switch selectedRange {
+	case "5m":
+		window = 5 * time.Minute
+	case "15m":
+		window = 15 * time.Minute
+	case "1h":
+		window = 1 * time.Hour
+	case "6h":
+		window = 6 * time.Hour
+	case "24h":
+		window = 24 * time.Hour
+	default:
+		selectedRange = "" // use default, no selection
+	}
+
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
 		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
@@ -527,6 +546,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := buildDashboardData(flows, window, s.fullCfg.Collector.InterfaceNames)
 	data.IfaceFilter = ifaceFilter
+	data.SelectedRange = selectedRange
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplDashboard.ExecuteTemplate(w, "layout", data); err != nil {
@@ -2276,6 +2296,118 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplMACs.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("MAC template error: %v", err)
+	}
+}
+
+// --- Multi-exporter view ---
+
+// ExporterEntry represents a single exporter's aggregate statistics.
+type ExporterEntry struct {
+	IP        string
+	Bytes     uint64
+	Packets   uint64
+	FlowCount int
+	Pct       float64
+	TopProto  string // most common protocol
+	FirstSeen string
+	LastSeen  string
+}
+
+// ExportersPageData holds all data for the exporters template.
+type ExportersPageData struct {
+	Exporters      []ExporterEntry
+	TotalExporters int
+	TotalBytes     uint64
+	Window         time.Duration
+}
+
+func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	flows, err := s.ringBuf.Recent(window, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("Exporters query error: %v", err)
+		return
+	}
+
+	type exporterAgg struct {
+		bytes, packets uint64
+		flowCount      int
+		protoCount     map[uint8]int
+		first, last    time.Time
+	}
+
+	aggMap := make(map[string]*exporterAgg)
+	var totalBytes uint64
+
+	for _, f := range flows {
+		totalBytes += f.Bytes
+		ip := model.SafeIPString(f.ExporterIP)
+		if ip == "" || ip == "<nil>" {
+			ip = "unknown"
+		}
+		if a, ok := aggMap[ip]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flowCount++
+			a.protoCount[f.Protocol]++
+			if f.Timestamp.Before(a.first) {
+				a.first = f.Timestamp
+			}
+			if f.Timestamp.After(a.last) {
+				a.last = f.Timestamp
+			}
+		} else {
+			aggMap[ip] = &exporterAgg{
+				bytes:      f.Bytes,
+				packets:    f.Packets,
+				flowCount:  1,
+				protoCount: map[uint8]int{f.Protocol: 1},
+				first:      f.Timestamp,
+				last:       f.Timestamp,
+			}
+		}
+	}
+
+	entries := make([]ExporterEntry, 0, len(aggMap))
+	for ip, a := range aggMap {
+		var topProto uint8
+		var maxCount int
+		for proto, count := range a.protoCount {
+			if count > maxCount {
+				topProto = proto
+				maxCount = count
+			}
+		}
+		entries = append(entries, ExporterEntry{
+			IP:        ip,
+			Bytes:     a.bytes,
+			Packets:   a.packets,
+			FlowCount: a.flowCount,
+			Pct:       pctOf(a.bytes, totalBytes),
+			TopProto:  model.ProtocolName(topProto),
+			FirstSeen: timeAgo(a.first),
+			LastSeen:  timeAgo(a.last),
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Bytes > entries[j].Bytes
+	})
+
+	data := ExportersPageData{
+		Exporters:      entries,
+		TotalExporters: len(entries),
+		TotalBytes:     totalBytes,
+		Window:         window,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplExporters.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
 	}
 }
 
