@@ -223,7 +223,7 @@ func DetectRetransmissions(flows []Flow) {
 
 	for i := range flows {
 		f := &flows[i]
-		if f.Protocol != 6 || f.TCPSeqNum == 0 {
+		if f.Protocol != 6 {
 			continue
 		}
 		ck := connKey{
@@ -231,11 +231,19 @@ func DetectRetransmissions(flows []Flow) {
 			srcPort: f.SrcPort, dstPort: f.DstPort,
 		}
 
-		// Estimate TCP payload length from total IP length minus typical headers.
+		// Estimate TCP payload length from total IP length minus headers.
 		// Each PCAP flow has Bytes == IP total length and Packets == 1.
+		// Choose the correct header size based on EtherType.
+		var headerLen uint64
+		switch f.EtherType {
+		case 0x86DD: // IPv6: 40-byte IP header + 20-byte TCP header
+			headerLen = 60
+		default: // IPv4 (0x0800) or unknown: 20-byte IP + 20-byte TCP
+			headerLen = minIPAndTCPHeader
+		}
 		var payloadLen uint64
-		if f.Bytes > minIPAndTCPHeader {
-			payloadLen = f.Bytes - minIPAndTCPHeader
+		if f.Bytes > headerLen {
+			payloadLen = f.Bytes - headerLen
 		}
 		seqEnd := uint64(f.TCPSeqNum) + payloadLen
 		// SYN and FIN each consume one sequence number.
@@ -525,7 +533,7 @@ func FormatMAC(mac net.HardwareAddr) string {
 
 // FormatTCPFlags returns a human-readable representation of TCP flags.
 // For example, a SYN+ACK packet (0x12) returns "SYN ACK".
-// Returns "—" when flags are zero or the flow is not TCP.
+// Returns "—" when flags are zero.
 func FormatTCPFlags(flags uint8) string {
 	if flags == 0 {
 		return "—"

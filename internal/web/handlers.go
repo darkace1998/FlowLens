@@ -2363,7 +2363,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find the "pcap" file part.
-	var pcapReader io.Reader
+	var pcapReader io.ReadCloser
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -2384,6 +2384,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing pcap file", http.StatusBadRequest)
 		return
 	}
+	defer pcapReader.Close()
 
 	flows, err := capture.ReadPcapFlows(pcapReader)
 	if err != nil {
