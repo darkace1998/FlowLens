@@ -38,6 +38,7 @@ docker build -t flowlens .
 docker run -d \
   -p 2055:2055/udp \
   -p 4739:4739/udp \
+  -p 6343:6343/udp \
   -p 8080:8080 \
   --name flowlens \
   flowlens
@@ -46,11 +47,51 @@ docker run -d \
 docker run -d \
   -p 2055:2055/udp \
   -p 4739:4739/udp \
+  -p 6343:6343/udp \
   -p 8080:8080 \
   -v /path/to/flowlens.yaml:/app/configs/flowlens.yaml \
   --name flowlens \
   flowlens
 ```
+
+### With Docker Compose
+
+A ready-to-use [`docker-compose.yml`](docker-compose.yml) is included with persistent volumes for the database and captures:
+
+```bash
+docker compose up -d
+```
+
+### With Kubernetes (Helm)
+
+A Helm chart is available in [`deploy/helm/flowlens/`](deploy/helm/flowlens/):
+
+```bash
+helm install flowlens deploy/helm/flowlens/
+```
+
+See the chart's [`values.yaml`](deploy/helm/flowlens/values.yaml) for all configurable options including ingress, persistence, and resource limits.
+
+### Recommended Resource Limits
+
+FlowLens is lightweight but resource needs scale with traffic volume. The following limits are recommended starting points:
+
+| Environment | CPUs | Memory | Notes |
+|-------------|------|--------|-------|
+| Low traffic (<1K flows/s) | 0.5 | 128 MB | Suitable for home lab / small office |
+| Medium traffic (1K–10K flows/s) | 1 | 256 MB | Typical enterprise branch |
+| High traffic (10K–50K flows/s) | 2 | 512 MB | Data centre / core router |
+| Very high traffic (>50K flows/s) | 4 | 1 GB | Consider dedicated host |
+
+Apply limits with Docker:
+
+```bash
+docker run -d --memory=512m --cpus=2 \
+  -p 2055:2055/udp -p 4739:4739/udp -p 6343:6343/udp -p 8080:8080 \
+  --name flowlens flowlens
+```
+
+The SQLite database and PCAP capture files are the primary disk consumers. Mount volumes for `/app/data` and `/app/captures` to persist data across container restarts.
 
 ## Configuration
 
@@ -108,6 +149,8 @@ FlowLens/
 │   └── main.go
 ├── configs/               # Default configuration
 │   └── flowlens.yaml
+├── deploy/
+│   └── helm/flowlens/     # Kubernetes Helm chart
 ├── internal/
 │   ├── analysis/          # Advisory engine and analyzers
 │   ├── collector/         # UDP listener, NetFlow v5/v9/IPFIX decoders
@@ -116,7 +159,8 @@ FlowLens/
 │   ├── model/             # Unified Flow struct
 │   ├── storage/           # Ring buffer and SQLite backends
 │   └── web/               # HTTP server, handlers, and templates
-├── static/                # CSS stylesheet
+├── static/                # CSS stylesheet and Chart.js
+├── docker-compose.yml     # Docker Compose example
 ├── Dockerfile             # Multi-stage Docker build
 └── README.md
 ```

@@ -15,6 +15,14 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(git describe --tags
 # --- Runtime stage ---
 FROM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
 
+# OCI image labels (https://github.com/opencontainers/image-spec/blob/main/annotations.md).
+LABEL org.opencontainers.image.title="FlowLens" \
+      org.opencontainers.image.description="Lightweight NetFlow/IPFIX/sFlow collector, analyzer, and web dashboard" \
+      org.opencontainers.image.url="https://github.com/darkace1998/FlowLens" \
+      org.opencontainers.image.source="https://github.com/darkace1998/FlowLens" \
+      org.opencontainers.image.documentation="https://github.com/darkace1998/FlowLens/blob/main/README.md" \
+      org.opencontainers.image.licenses="MIT"
+
 RUN apk add --no-cache ca-certificates tzdata
 
 # Run as non-root user for security.
@@ -31,7 +39,11 @@ RUN mkdir -p /app/captures && chown -R flowlens:flowlens /app
 
 USER flowlens
 
-EXPOSE 2055/udp 4739/udp 8080/tcp
+EXPOSE 2055/udp 4739/udp 6343/udp 8080/tcp
+
+# Liveness probe: hit the /healthz endpoint every 30 seconds.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost:8080/healthz || exit 1
 
 ENTRYPOINT ["/app/flowlens"]
 CMD ["configs/flowlens.yaml"]

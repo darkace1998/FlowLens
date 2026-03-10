@@ -127,15 +127,16 @@
 
 ## 🐳 Docker & Deployment
 
-- [ ] **P1** — Add a `HEALTHCHECK` directive to the Dockerfile
-  ```dockerfile
-  HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:8080/about || exit 1
-  ```
-- [ ] **P2** — Add OCI image labels (`org.opencontainers.image.title`, `.version`, `.source`, `.description`)
-- [ ] **P2** — Provide a `docker-compose.yml` example with volume mounts for the database and captures directory
-- [ ] **P2** — Document recommended resource limits (`--memory 512m --cpus 2`) in README
-- [ ] **P3** — Helm chart for Kubernetes deployment
+- [x] **P1** — Add a `HEALTHCHECK` directive to the Dockerfile
+  — `HEALTHCHECK` added using `wget -qO-` against the `/healthz` endpoint with 30s interval, 3s timeout, 5s start-period, and 3 retries. Also exposed sFlow port `6343/udp`.
+- [x] **P2** — Add OCI image labels (`org.opencontainers.image.title`, `.version`, `.source`, `.description`)
+  — Six `org.opencontainers.image.*` labels added to the runtime stage: title, description, url, source, documentation, and licenses.
+- [x] **P2** — Provide a `docker-compose.yml` example with volume mounts for the database and captures directory
+  — `docker-compose.yml` at the repo root with named volumes for data and captures, resource limits, healthcheck, and all collector ports.
+- [x] **P2** — Document recommended resource limits (`--memory 512m --cpus 2`) in README
+  — Added a "Recommended Resource Limits" section with a four-tier table (low/medium/high/very-high traffic) and a `docker run` example with `--memory` and `--cpus` flags.
+- [x] **P3** — Helm chart for Kubernetes deployment
+  — Full Helm chart in `deploy/helm/flowlens/` with Deployment, Service, Ingress, PVCs, ServiceAccount, health probes, resource limits, and configurable values.
 
 ---
 
