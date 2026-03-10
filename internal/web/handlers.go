@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -1308,6 +1309,108 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplFlows.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+// handleFlowsExport exports filtered flows as CSV or JSON.
+func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "csv"
+	}
+
+	filterSrcIP := strings.TrimSpace(r.URL.Query().Get("src_ip"))
+	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
+	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
+	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
+	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	if err != nil {
+		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
+		logging.Default().Error("Flow export query error: %v", err)
+		return
+	}
+
+	model.StitchFlows(allFlows)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+
+	switch format {
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-flows.json")
+		type exportFlow struct {
+			Timestamp string `json:"timestamp"`
+			SrcAddr   string `json:"src_addr"`
+			DstAddr   string `json:"dst_addr"`
+			SrcPort   uint16 `json:"src_port"`
+			DstPort   uint16 `json:"dst_port"`
+			Protocol  string `json:"protocol"`
+			Bytes     uint64 `json:"bytes"`
+			Packets   uint64 `json:"packets"`
+			Duration  string `json:"duration"`
+			AppProto  string `json:"app_proto"`
+			Category  string `json:"category"`
+		}
+		out := make([]exportFlow, 0, len(filtered))
+		for _, f := range filtered {
+			appProto := f.AppProto
+			appCat := f.AppCat
+			if appProto == "" {
+				appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+				appCat = model.AppCategory(appProto)
+			}
+			out = append(out, exportFlow{
+				Timestamp: f.Timestamp.Format(time.RFC3339),
+				SrcAddr:   model.SafeIPString(f.SrcAddr),
+				DstAddr:   model.SafeIPString(f.DstAddr),
+				SrcPort:   f.SrcPort,
+				DstPort:   f.DstPort,
+				Protocol:  model.ProtocolName(f.Protocol),
+				Bytes:     f.Bytes,
+				Packets:   f.Packets,
+				Duration:  f.Duration.String(),
+				AppProto:  appProto,
+				Category:  appCat,
+			})
+		}
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			logging.Default().Error("Flow JSON export error: %v", err)
+		}
+	default: // CSV
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-flows.csv")
+		csvWriter := csv.NewWriter(w)
+		csvWriter.Write([]string{"timestamp", "src_addr", "dst_addr", "src_port", "dst_port", "protocol", "bytes", "packets", "duration", "app_proto", "category"})
+		for _, f := range filtered {
+			appProto := f.AppProto
+			appCat := f.AppCat
+			if appProto == "" {
+				appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+				appCat = model.AppCategory(appProto)
+			}
+			csvWriter.Write([]string{
+				f.Timestamp.Format(time.RFC3339),
+				model.SafeIPString(f.SrcAddr),
+				model.SafeIPString(f.DstAddr),
+				fmt.Sprintf("%d", f.SrcPort),
+				fmt.Sprintf("%d", f.DstPort),
+				model.ProtocolName(f.Protocol),
+				fmt.Sprintf("%d", f.Bytes),
+				fmt.Sprintf("%d", f.Packets),
+				f.Duration.String(),
+				appProto,
+				appCat,
+			})
+		}
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			logging.Default().Error("Flow CSV export error: %v", err)
+		}
 	}
 }
 

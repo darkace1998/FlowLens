@@ -89,6 +89,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	// Register routes. State-changing POST endpoints are CSRF-protected.
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
+	s.mux.HandleFunc("/flows/export", s.handleFlowsExport)
 	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/reports", s.handleReports)
 	s.mux.HandleFunc("/reports/export", s.handleReportsExport)
