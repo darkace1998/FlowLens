@@ -1,6 +1,6 @@
 # Binary
-flowlens
-flowlens.exe
+/flowlens
+/flowlens.exe
 
 # Database
 *.db
