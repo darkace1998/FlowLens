@@ -48,13 +48,17 @@ func (cs *CounterStore) Len() int {
 	return len(cs.counters)
 }
 
+// prune removes entries older than maxAge. Samples are expected to arrive in
+// roughly chronological order (timestamps set to time.Now() on receipt), but the
+// filter handles out-of-order arrivals safely.
 func (cs *CounterStore) prune() {
 	cutoff := time.Now().Add(-cs.maxAge)
-	i := 0
-	for i < len(cs.counters) && cs.counters[i].Timestamp.Before(cutoff) {
-		i++
+	n := 0
+	for _, c := range cs.counters {
+		if !c.Timestamp.Before(cutoff) {
+			cs.counters[n] = c
+			n++
+		}
 	}
-	if i > 0 {
-		cs.counters = cs.counters[i:]
-	}
+	cs.counters = cs.counters[:n]
 }

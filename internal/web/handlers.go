@@ -2701,31 +2701,49 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 		}
 		samples := s.counterStore.Recent(window)
 
-		// Aggregate by agent+ifIndex, keeping most recent sample.
+		// Aggregate by agent+ifIndex: keep the two most recent samples to compute
+		// delta-based utilization (bytes transferred between samples / elapsed time).
 		type key struct {
 			agent   string
 			ifIndex uint32
 		}
-		latest := make(map[key]collector.SFlowCounterSample)
+		type samplePair struct {
+			prev, latest collector.SFlowCounterSample
+			hasPrev      bool
+		}
+		pairs := make(map[key]*samplePair)
 		for _, sample := range samples {
 			k := key{agent: sample.AgentIP.String(), ifIndex: sample.IfIndex}
-			if existing, ok := latest[k]; !ok || sample.Timestamp.After(existing.Timestamp) {
-				latest[k] = sample
+			if p, ok := pairs[k]; ok {
+				if sample.Timestamp.After(p.latest.Timestamp) {
+					p.prev = p.latest
+					p.latest = sample
+					p.hasPrev = true
+				} else if !p.hasPrev || sample.Timestamp.After(p.prev.Timestamp) {
+					p.prev = sample
+					p.hasPrev = true
+				}
+			} else {
+				pairs[k] = &samplePair{latest: sample}
 			}
 		}
 
-		for _, cs := range latest {
+		for _, p := range pairs {
+			cs := p.latest
 			var inUtil, outUtil float64
-			if cs.IfSpeed > 0 {
-				// Approximation from cumulative counters; accurate delta-based
-				// utilization would require tracking previous sample values.
-				inUtil = float64(cs.InOctets*8) / float64(cs.IfSpeed) * 100
-				outUtil = float64(cs.OutOctets*8) / float64(cs.IfSpeed) * 100
-				if inUtil > 100 {
-					inUtil = 100
-				}
-				if outUtil > 100 {
-					outUtil = 100
+			if p.hasPrev && cs.IfSpeed > 0 {
+				dt := cs.Timestamp.Sub(p.prev.Timestamp).Seconds()
+				if dt > 0 {
+					deltaIn := cs.InOctets - p.prev.InOctets
+					deltaOut := cs.OutOctets - p.prev.OutOctets
+					inUtil = float64(deltaIn*8) / (dt * float64(cs.IfSpeed)) * 100
+					outUtil = float64(deltaOut*8) / (dt * float64(cs.IfSpeed)) * 100
+					if inUtil > 100 {
+						inUtil = 100
+					}
+					if outUtil > 100 {
+						outUtil = 100
+					}
 				}
 			}
 			ifName := fmt.Sprintf("if%d", cs.IfIndex)
