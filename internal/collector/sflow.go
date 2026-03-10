@@ -21,6 +21,63 @@ const (
 	sflowGenericIfCounters  = 1  // enterprise=0, format=1 — generic interface counters
 )
 
+// Packet parsing constants — network protocol header sizes and field offsets.
+const (
+	// IPv4 / IPv6 address types in sFlow agent address field.
+	sflowAddrTypeIPv4 = 1
+	sflowAddrTypeIPv6 = 2
+
+	// Ethernet header sizes.
+	ethHeaderSize     = 14 // 6 dst MAC + 6 src MAC + 2 EtherType
+	ethHeaderVLANSize = 18 // Ethernet header with 802.1Q VLAN tag
+	macAddrLen        = 6  // IEEE 802 MAC address length
+
+	// EtherType values (IEEE 802.3).
+	etherTypeVLAN = 0x8100 // 802.1Q VLAN tag
+	etherTypeIPv4 = 0x0800
+	etherTypeIPv6 = 0x86DD
+
+	// VLAN ID mask (12-bit field in 802.1Q tag).
+	vlanIDMask = 0x0FFF
+
+	// IP header sizes.
+	ipv4MinHeaderSize = 20 // Minimum IPv4 header (no options)
+	ipv6HeaderSize    = 40 // Fixed IPv6 header size
+
+	// IP protocol numbers (IANA).
+	protoTCP = 6
+	protoUDP = 17
+
+	// TCP header field offsets / sizes.
+	tcpUDPPortsMinLen = 4  // Minimum bytes needed to read src+dst port
+	tcpFlagsMinLen    = 14 // Minimum bytes to reach TCP flags byte (offset 13 + 1)
+	tcpFlagsOffset    = 13 // Byte offset of TCP flags within TCP header
+
+	// Ethernet protocol for raw packet header.
+	sflowHeaderProtocolEthernet = 1
+
+	// sFlow raw packet header record fields.
+	sflowRawHeaderMinLen = 16 // headerProtocol(4)+frameLength(4)+strippedBytes(4)+headerLength(4)
+
+	// sFlow flow sample header sizes.
+	sflowFlowSampleHeaderLen         = 32 // Standard flow sample header
+	sflowExpandedFlowSampleHeaderLen = 44 // Expanded flow sample header
+
+	// sFlow counter sample header sizes.
+	sflowCounterSampleHeaderLen         = 12 // Standard counter sample header
+	sflowExpandedCounterSampleHeaderLen = 16 // Expanded counter sample header
+
+	// sFlow sample/record type header size (type + length fields).
+	sflowSampleRecordHeaderLen = 8
+
+	// sFlow enterprise/format bit masks.
+	sflowFormatMask    = 0xFFF        // Bottom 12 bits for sample format
+	sflowIfIndexMask   = 0x3FFFFFFF   // Mask to strip format bits from interface indices
+
+	// Generic interface counters record size (sFlow v5 spec).
+	sflowGenericIfCountersLen = 88
+)
+
 // SFlowCounterSample represents a decoded sFlow counter sample for interface utilization.
 type SFlowCounterSample struct {
 	IfIndex      uint32
@@ -60,18 +117,18 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 	var agentIP net.IP
 	var offset int
 	switch addrType {
-	case 1: // IPv4
+	case sflowAddrTypeIPv4:
 		if len(data) < 12+16 {
 			return nil, nil, fmt.Errorf("sflow: truncated agent address")
 		}
-		agentIP = net.IP(make([]byte, 4))
+		agentIP = net.IP(make([]byte, net.IPv4len))
 		copy(agentIP, data[8:12])
 		offset = 12
-	case 2: // IPv6
+	case sflowAddrTypeIPv6:
 		if len(data) < 24+16 {
 			return nil, nil, fmt.Errorf("sflow: truncated agent address")
 		}
-		agentIP = net.IP(make([]byte, 16))
+		agentIP = net.IP(make([]byte, net.IPv6len))
 		copy(agentIP, data[8:24])
 		offset = 24
 	default:
@@ -96,13 +153,13 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 	var counters []SFlowCounterSample
 
 	for i := uint32(0); i < numSamples; i++ {
-		if len(data) < offset+8 {
+		if len(data) < offset+sflowSampleRecordHeaderLen {
 			break
 		}
 
 		sampleTypeRaw := binary.BigEndian.Uint32(data[offset : offset+4])
 		sampleLen := binary.BigEndian.Uint32(data[offset+4 : offset+8])
-		offset += 8
+		offset += sflowSampleRecordHeaderLen
 
 		if len(data) < offset+int(sampleLen) {
 			break
@@ -113,7 +170,7 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 
 		// Extract enterprise and format: enterprise = top 20 bits, format = bottom 12 bits
 		enterprise := sampleTypeRaw >> 12
-		format := sampleTypeRaw & 0xFFF
+		format := sampleTypeRaw & sflowFormatMask
 
 		if enterprise != 0 {
 			continue // skip vendor-specific samples
@@ -152,9 +209,9 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 
 	var minLen int
 	if expanded {
-		minLen = 44
+		minLen = sflowExpandedFlowSampleHeaderLen
 	} else {
-		minLen = 32
+		minLen = sflowFlowSampleHeaderLen
 	}
 
 	if len(data) < minLen {
@@ -173,29 +230,29 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		// outputFormat := binary.BigEndian.Uint32(data[32:36])
 		outputIface = binary.BigEndian.Uint32(data[36:40])
 		numRecords = binary.BigEndian.Uint32(data[40:44])
-		off = 44
+		off = sflowExpandedFlowSampleHeaderLen
 	} else {
 		samplingRate = binary.BigEndian.Uint32(data[8:12])
 		inputIface = binary.BigEndian.Uint32(data[20:24])
 		outputIface = binary.BigEndian.Uint32(data[24:28])
 		numRecords = binary.BigEndian.Uint32(data[28:32])
-		off = 32
+		off = sflowFlowSampleHeaderLen
 
 		// In standard flow sample, input/output encode format in top 2 bits
-		inputIface = inputIface & 0x3FFFFFFF
-		outputIface = outputIface & 0x3FFFFFFF
+		inputIface = inputIface & sflowIfIndexMask
+		outputIface = outputIface & sflowIfIndexMask
 	}
 
 	var flows []model.Flow
 
 	for r := uint32(0); r < numRecords; r++ {
-		if len(data) < off+8 {
+		if len(data) < off+sflowSampleRecordHeaderLen {
 			break
 		}
 
 		recordTypeRaw := binary.BigEndian.Uint32(data[off : off+4])
 		recordLen := binary.BigEndian.Uint32(data[off+4 : off+8])
-		off += 8
+		off += sflowSampleRecordHeaderLen
 
 		if len(data) < off+int(recordLen) {
 			break
@@ -205,7 +262,7 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		off += int(recordLen)
 
 		recEnterprise := recordTypeRaw >> 12
-		recFormat := recordTypeRaw & 0xFFF
+		recFormat := recordTypeRaw & sflowFormatMask
 
 		if recEnterprise != 0 || recFormat != sflowRawPacketHeader {
 			continue
@@ -237,7 +294,7 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 func decodeSFlowRawPacketHeader(data []byte, ts time.Time) (model.Flow, bool) {
 	// Raw packet header record:
 	//   headerProtocol(4) + frameLength(4) + strippedBytes(4) + headerLength(4) + header(variable)
-	if len(data) < 16 {
+	if len(data) < sflowRawHeaderMinLen {
 		return model.Flow{}, false
 	}
 
@@ -246,14 +303,13 @@ func decodeSFlowRawPacketHeader(data []byte, ts time.Time) (model.Flow, bool) {
 	// strippedBytes := binary.BigEndian.Uint32(data[8:12])
 	headerLen := binary.BigEndian.Uint32(data[12:16])
 
-	if len(data) < 16+int(headerLen) {
+	if len(data) < sflowRawHeaderMinLen+int(headerLen) {
 		return model.Flow{}, false
 	}
 
-	headerData := data[16 : 16+int(headerLen)]
+	headerData := data[sflowRawHeaderMinLen : sflowRawHeaderMinLen+int(headerLen)]
 
-	// Protocol 1 = Ethernet
-	if headerProtocol != 1 {
+	if headerProtocol != sflowHeaderProtocolEthernet {
 		return model.Flow{}, false
 	}
 
@@ -263,36 +319,36 @@ func decodeSFlowRawPacketHeader(data []byte, ts time.Time) (model.Flow, bool) {
 
 // decodeSFlowEthernet parses an Ethernet header and extracts IP flow fields.
 func decodeSFlowEthernet(data []byte, ts time.Time, frameLength uint32) (model.Flow, bool) {
-	if len(data) < 14 {
+	if len(data) < ethHeaderSize {
 		return model.Flow{}, false
 	}
 
 	// Extract L2 metadata.
-	dstMAC := make(net.HardwareAddr, 6)
-	srcMAC := make(net.HardwareAddr, 6)
+	dstMAC := make(net.HardwareAddr, macAddrLen)
+	srcMAC := make(net.HardwareAddr, macAddrLen)
 	copy(dstMAC, data[0:6])
 	copy(srcMAC, data[6:12])
 
 	etherType := uint16(data[12])<<8 | uint16(data[13])
-	offset := 14
+	offset := ethHeaderSize
 
 	var vlanID uint16
 	// Handle 802.1Q VLAN tag
-	if etherType == 0x8100 {
-		if len(data) < 18 {
+	if etherType == etherTypeVLAN {
+		if len(data) < ethHeaderVLANSize {
 			return model.Flow{}, false
 		}
-		vlanID = (uint16(data[14])<<8 | uint16(data[15])) & 0x0FFF
+		vlanID = (uint16(data[14])<<8 | uint16(data[15])) & vlanIDMask
 		etherType = uint16(data[16])<<8 | uint16(data[17])
-		offset = 18
+		offset = ethHeaderVLANSize
 	}
 
 	var f model.Flow
 	var ok bool
 	switch etherType {
-	case 0x0800: // IPv4
+	case etherTypeIPv4:
 		f, ok = decodeSFlowIPv4(data[offset:], ts, frameLength)
-	case 0x86DD: // IPv6
+	case etherTypeIPv6:
 		f, ok = decodeSFlowIPv6(data[offset:], ts, frameLength)
 	default:
 		return model.Flow{}, false
@@ -309,18 +365,18 @@ func decodeSFlowEthernet(data []byte, ts time.Time, frameLength uint32) (model.F
 
 // decodeSFlowIPv4 parses an IPv4 packet header from an sFlow sample.
 func decodeSFlowIPv4(data []byte, ts time.Time, frameLength uint32) (model.Flow, bool) {
-	if len(data) < 20 {
+	if len(data) < ipv4MinHeaderSize {
 		return model.Flow{}, false
 	}
 
 	ihl := int(data[0]&0x0f) * 4
-	if ihl < 20 || len(data) < ihl {
+	if ihl < ipv4MinHeaderSize || len(data) < ihl {
 		return model.Flow{}, false
 	}
 
 	proto := data[9]
-	srcIP := net.IP(make([]byte, 4))
-	dstIP := net.IP(make([]byte, 4))
+	srcIP := net.IP(make([]byte, net.IPv4len))
+	dstIP := net.IP(make([]byte, net.IPv4len))
 	copy(srcIP, data[12:16])
 	copy(dstIP, data[16:20])
 	tos := data[1]
@@ -337,14 +393,14 @@ func decodeSFlowIPv4(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 
 	l4Data := data[ihl:]
 	switch proto {
-	case 6: // TCP
-		if len(l4Data) >= 14 {
+	case protoTCP:
+		if len(l4Data) >= tcpFlagsMinLen {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
-			f.TCPFlags = l4Data[13]
+			f.TCPFlags = l4Data[tcpFlagsOffset]
 		}
-	case 17: // UDP
-		if len(l4Data) >= 4 {
+	case protoUDP:
+		if len(l4Data) >= tcpUDPPortsMinLen {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
 		}
@@ -355,13 +411,13 @@ func decodeSFlowIPv4(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 
 // decodeSFlowIPv6 parses an IPv6 packet header from an sFlow sample.
 func decodeSFlowIPv6(data []byte, ts time.Time, frameLength uint32) (model.Flow, bool) {
-	if len(data) < 40 {
+	if len(data) < ipv6HeaderSize {
 		return model.Flow{}, false
 	}
 
 	proto := data[6] // Next Header
-	srcIP := net.IP(make([]byte, 16))
-	dstIP := net.IP(make([]byte, 16))
+	srcIP := net.IP(make([]byte, net.IPv6len))
+	dstIP := net.IP(make([]byte, net.IPv6len))
 	copy(srcIP, data[8:24])
 	copy(dstIP, data[24:40])
 
@@ -374,16 +430,16 @@ func decodeSFlowIPv6(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 		Packets:   1,
 	}
 
-	l4Data := data[40:]
+	l4Data := data[ipv6HeaderSize:]
 	switch proto {
-	case 6: // TCP
-		if len(l4Data) >= 14 {
+	case protoTCP:
+		if len(l4Data) >= tcpFlagsMinLen {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
-			f.TCPFlags = l4Data[13]
+			f.TCPFlags = l4Data[tcpFlagsOffset]
 		}
-	case 17: // UDP
-		if len(l4Data) >= 4 {
+	case protoUDP:
+		if len(l4Data) >= tcpUDPPortsMinLen {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
 		}
@@ -404,31 +460,31 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 	var off int
 
 	if expanded {
-		minLen = 16
+		minLen = sflowExpandedCounterSampleHeaderLen
 		if len(data) < minLen {
 			return nil
 		}
 		numRecords = binary.BigEndian.Uint32(data[12:16])
-		off = 16
+		off = sflowExpandedCounterSampleHeaderLen
 	} else {
-		minLen = 12
+		minLen = sflowCounterSampleHeaderLen
 		if len(data) < minLen {
 			return nil
 		}
 		numRecords = binary.BigEndian.Uint32(data[8:12])
-		off = 12
+		off = sflowCounterSampleHeaderLen
 	}
 
 	var counters []SFlowCounterSample
 
 	for r := uint32(0); r < numRecords; r++ {
-		if len(data) < off+8 {
+		if len(data) < off+sflowSampleRecordHeaderLen {
 			break
 		}
 
 		recordTypeRaw := binary.BigEndian.Uint32(data[off : off+4])
 		recordLen := binary.BigEndian.Uint32(data[off+4 : off+8])
-		off += 8
+		off += sflowSampleRecordHeaderLen
 
 		if len(data) < off+int(recordLen) {
 			break
@@ -438,17 +494,14 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		off += int(recordLen)
 
 		recEnterprise := recordTypeRaw >> 12
-		recFormat := recordTypeRaw & 0xFFF
+		recFormat := recordTypeRaw & sflowFormatMask
 
 		if recEnterprise != 0 || recFormat != sflowGenericIfCounters {
 			continue
 		}
 
-		// Generic interface counters record: 88 bytes
-		// ifIndex(4) + ifType(4) + ifSpeed(8) + ifDirection(4) + ifStatus(4) +
-		// inOctets(8) + inUcastPkts(4) + inMulticastPkts(4) + inBroadcastPkts(4) + inDiscards(4) + inErrors(4) + inUnknownProtos(4) +
-		// outOctets(8) + outUcastPkts(4) + outMulticastPkts(4) + outBroadcastPkts(4) + outDiscards(4) + outErrors(4)
-		if len(recordData) < 88 {
+		// Generic interface counters record: see sflowGenericIfCountersLen (88 bytes).
+		if len(recordData) < sflowGenericIfCountersLen {
 			continue
 		}
 
