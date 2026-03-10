@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // --- HTTP Basic Authentication middleware ---
@@ -104,4 +105,13 @@ func cspMiddleware(next http.Handler) http.Handler {
 			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// --- Request timeout middleware ---
+
+// requestTimeout adds a context deadline to each request. If the handler
+// does not complete within the timeout, the client receives a 503 Service
+// Unavailable response. This prevents hung requests from slow storage queries.
+func requestTimeout(next http.Handler, timeout time.Duration) http.Handler {
+	return http.TimeoutHandler(next, timeout, "Request timed out")
 }

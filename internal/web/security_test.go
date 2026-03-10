@@ -326,3 +326,106 @@ func TestSessionsTemplate_ContainsCSRFToken(t *testing.T) {
 		t.Error("sessions page (PCAP import form) should contain CSRF token field")
 	}
 }
+
+// --- Request timeout middleware tests ---
+
+func TestRequestTimeout_Exists(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	// The server should have ReadTimeout, WriteTimeout, and IdleTimeout set.
+	if s.srv.ReadTimeout == 0 {
+		t.Error("ReadTimeout should be set")
+	}
+	if s.srv.WriteTimeout == 0 {
+		t.Error("WriteTimeout should be set")
+	}
+	if s.srv.IdleTimeout == 0 {
+		t.Error("IdleTimeout should be set")
+	}
+}
+
+// --- Accessibility tests ---
+
+func TestLayout_AriaLabels(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+
+	// Navigation should have aria-label
+	if !strings.Contains(body, `aria-label="Main navigation"`) {
+		t.Error("nav should have aria-label='Main navigation'")
+	}
+
+	// Hamburger menu toggle should have descriptive aria-label
+	if !strings.Contains(body, `aria-label="Toggle navigation menu"`) {
+		t.Error("hamburger menu should have aria-label='Toggle navigation menu'")
+	}
+
+	// Hamburger menu should have aria-expanded
+	if !strings.Contains(body, `aria-expanded="false"`) {
+		t.Error("hamburger menu should have aria-expanded attribute")
+	}
+
+	// Dark mode toggle should have aria-label
+	if !strings.Contains(body, `aria-label="Toggle dark mode"`) {
+		t.Error("dark mode toggle should have aria-label")
+	}
+
+	// Loading spinner should have role="status"
+	if !strings.Contains(body, `role="status"`) {
+		t.Error("loading spinner should have role='status'")
+	}
+
+	// Loading overlay should have aria-hidden
+	if !strings.Contains(body, `aria-hidden="true"`) {
+		t.Error("loading overlay should be aria-hidden by default")
+	}
+
+	// Brand link should have aria-label
+	if !strings.Contains(body, `aria-label="FlowLens home"`) {
+		t.Error("brand link should have aria-label='FlowLens home'")
+	}
+
+	// Nav links should have role="menubar"
+	if !strings.Contains(body, `role="menubar"`) {
+		t.Error("nav links container should have role='menubar'")
+	}
+}
+
+func TestLayout_LoadingSpinner(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+
+	if !strings.Contains(body, "loading-overlay") {
+		t.Error("page should contain loading overlay")
+	}
+	if !strings.Contains(body, "loading-spinner") {
+		t.Error("page should contain loading spinner")
+	}
+}
+
+func TestAdvisories_SeverityBadgeAccessibility(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	req := httptest.NewRequest("GET", "/advisories", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	// Page should render without error (even with no advisories)
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(body, "Advisories") {
+		t.Error("advisories page should contain 'Advisories'")
+	}
+}

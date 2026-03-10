@@ -105,14 +105,18 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
-	// Build the handler chain: CSP → Basic Auth → Mux.
+	// Build the handler chain: Request Timeout → CSP → Basic Auth → Mux.
 	var handler http.Handler = s.mux
 	handler = basicAuth(handler, cfg.Username, cfg.Password)
 	handler = cspMiddleware(handler)
+	handler = requestTimeout(handler, 30*time.Second)
 
 	s.srv = &http.Server{
-		Addr:    cfg.Listen,
-		Handler: handler,
+		Addr:         cfg.Listen,
+		Handler:      handler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Configure TLS if both certificate and key are provided.
