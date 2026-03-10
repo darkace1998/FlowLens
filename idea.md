@@ -244,40 +244,40 @@ web:
 
 ### Phase 1 — Collector & Storage
 
-- [ ] UDP listener for NetFlow v5
-- [ ] Decode NetFlow v5 into unified `Flow` struct
-- [ ] In-memory ring buffer with fixed capacity
-- [ ] SQLite storage with insert and TTL-based pruning
-- [ ] YAML config loader
-- [ ] Basic `main.go` that wires it all together and runs
+- [x] UDP listener for NetFlow v5
+- [x] Decode NetFlow v5 into unified `Flow` struct
+- [x] In-memory ring buffer with fixed capacity
+- [x] SQLite storage with insert and TTL-based pruning
+- [x] YAML config loader
+- [x] Basic `main.go` that wires it all together and runs
 
 ### Phase 2 — Web Interface
 
-- [ ] HTTP server with Go `net/http`
-- [ ] XHTML layout template (header, nav, footer)
-- [ ] Dashboard page: throughput, top talkers, protocol breakdown
-- [ ] Flow explorer page: table with server-side filtering + pagination
-- [ ] Minimal CSS stylesheet
+- [x] HTTP server with Go `net/http`
+- [x] XHTML layout template (header, nav, footer)
+- [x] Dashboard page: throughput, top talkers, protocol breakdown
+- [x] Flow explorer page: table with server-side filtering + pagination
+- [x] Minimal CSS stylesheet
 
 ### Phase 3 — Analysis Engine
 
-- [ ] Analysis runner (periodic, configurable interval)
-- [ ] Top talkers analyzer
-- [ ] Protocol distribution analyzer
-- [ ] Port scan / sweep detector
-- [ ] Advisory model with severity levels
-- [ ] Advisories page in web UI
+- [x] Analysis runner (periodic, configurable interval)
+- [x] Top talkers analyzer
+- [x] Protocol distribution analyzer
+- [x] Port scan / sweep detector
+- [x] Advisory model with severity levels
+- [x] Advisories page in web UI
 
 ### Phase 4 — Polish & Harden
 
-- [ ] NetFlow v9 decoder (template handling)
-- [ ] IPFIX decoder (template handling)
-- [ ] Anomaly detection (baseline deviation)
-- [ ] About / status page (config, memory, uptime)
-- [ ] Dockerfile (multi-stage build, scratch/alpine base)
-- [ ] Graceful shutdown
-- [ ] Logging (structured, leveled)
-- [ ] README with setup instructions
+- [x] NetFlow v9 decoder (template handling)
+- [x] IPFIX decoder (template handling)
+- [x] Anomaly detection (baseline deviation)
+- [x] About / status page (config, memory, uptime)
+- [x] Dockerfile (multi-stage build, scratch/alpine base)
+- [x] Graceful shutdown
+- [x] Logging (structured, leveled)
+- [x] README with setup instructions
 
 ---
 
@@ -298,10 +298,10 @@ go build -o flowlens ./cmd/flowlens/
 
 ## Future Ideas (Out of Scope for Now)
 
-- sFlow support
+- ~~sFlow support~~ ✅ Implemented
 - SNMP enrichment (interface names, device hostnames)
-- GeoIP mapping
-- Webhook / email alerting
+- ~~GeoIP mapping~~ ✅ Implemented
+- ~~Webhook / email alerting~~ ✅ Implemented (webhook)
 - LLM-powered advisory explanations
-- Dark mode
+- ~~Dark mode~~ ✅ Implemented
 - Horizontal scaling (multiple collectors → shared database)

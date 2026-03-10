@@ -142,13 +142,20 @@
 
 ## 📖 Documentation
 
-- [ ] **P1** — Add a **Development Guide** section to the README (build, test, lint, run locally)
-- [ ] **P1** — Add a **Security Considerations** section to the README (authentication, TLS, firewall rules)
-- [ ] **P1** — Update `idea.md` roadmap checkboxes — all MVP phases are implemented but checkboxes are still empty
-- [ ] **P2** — Add architecture diagrams (data-flow, component diagram) to the README or a `docs/` folder
-- [ ] **P2** — Document the JSON API once implemented
-- [ ] **P2** — Add example `nginx` / `Caddy` reverse-proxy configs for TLS termination + auth
-- [ ] **P3** — Add a CONTRIBUTING.md with coding standards, PR process, and issue templates
+- [x] **P1** — Add a **Development Guide** section to the README (build, test, lint, run locally)
+  — Added comprehensive Development Guide with prerequisites, build (with version ldflags), run, test (unit/race/coverage/bench/fuzz), lint, Docker, and CI pipeline sections.
+- [x] **P1** — Add a **Security Considerations** section to the README (authentication, TLS, firewall rules)
+  — Added Security Considerations covering authentication, TLS/HTTPS, CSRF, CSP headers, firewall rules (with iptables example), rate limiting, and container security.
+- [x] **P1** — Update `idea.md` roadmap checkboxes — all MVP phases are implemented but checkboxes are still empty
+  — All 26 MVP roadmap checkboxes in Phases 1–4 marked as complete. Future Ideas updated to reflect implemented features (sFlow, GeoIP, webhooks, dark mode).
+- [x] **P2** — Add architecture diagrams (data-flow, component diagram) to the README or a `docs/` folder
+  — Added ASCII architecture diagram showing collector → storage → analysis → web data flow, plus a component overview table mapping packages to responsibilities.
+- [x] **P2** — Document the JSON API once implemented
+  — Documented all 6 API endpoints (`/api/flows`, `/api/hosts`, `/api/sessions`, `/api/advisories`, `/api/dashboard`, `/healthz`) with parameters, response schemas, and example JSON.
+- [x] **P2** — Add example `nginx` / `Caddy` reverse-proxy configs for TLS termination + auth
+  — Created `docs/reverse-proxy.md` with nginx (TLS, Basic Auth, rate limiting) and Caddy (automatic HTTPS, auth) examples plus Docker Compose integration.
+- [x] **P3** — Add a CONTRIBUTING.md with coding standards, PR process, and issue templates
+  — Created `CONTRIBUTING.md` with development setup, Go style guide, error handling, testing, web template, and CSS conventions, PR process, commit message format, issue reporting, and security disclosure.
 
 ---
 
