@@ -20,6 +20,13 @@ func isColumnExistsError(err error) bool {
 }
 
 // SQLiteStore persists flow records in a SQLite database with WAL mode.
+//
+// Scalability note: SQLite is well-suited for single-node deployments with
+// up to ~5–10 million flow records. Beyond that scale, write contention and
+// query latency may increase significantly. For higher throughput or
+// multi-node deployments, consider migrating to a purpose-built time-series
+// database (e.g. InfluxDB, TimescaleDB, or ClickHouse) while keeping the
+// FlowService/ReportService interfaces unchanged in the web layer.
 type SQLiteStore struct {
 	db            *sql.DB
 	retention     time.Duration
