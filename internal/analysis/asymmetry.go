@@ -99,6 +99,11 @@ func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfi
 	}
 	var results []asymResult
 
+	asymThresh := cfg.AsymmetryThreshold
+	if asymThresh <= 0 {
+		asymThresh = asymmetryThreshold
+	}
+
 	for pk, stats := range pairs {
 		larger := stats.LowToHighBytes
 		smaller := stats.HighToLowBytes
@@ -123,7 +128,7 @@ func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfi
 			ratio = float64(larger) / float64(smaller)
 		}
 
-		if ratio >= asymmetryThreshold {
+		if ratio >= asymThresh {
 			results = append(results, asymResult{
 				pk:       pk,
 				ratio:    ratio,

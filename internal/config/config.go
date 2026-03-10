@@ -55,6 +55,15 @@ type AnalysisConfig struct {
 	AnomalyBaselineWindow time.Duration `yaml:"anomaly_baseline_window"`
 	ScanThreshold         int           `yaml:"scan_threshold"`
 	QueryWindow           time.Duration `yaml:"query_window"` // analysis query window (defaults to ring_buffer_duration)
+
+	DNSRateThreshold         float64 `yaml:"dns_rate_threshold"`          // DNS flows/min to trigger advisory (default: 100)
+	DNSRatioThreshold        float64 `yaml:"dns_ratio_threshold"`         // DNS flow percentage to trigger advisory (default: 30)
+	RetransRateThreshold     float64 `yaml:"retrans_rate_threshold"`      // retransmission % to trigger advisory (default: 1.0)
+	RetransCriticalThreshold float64 `yaml:"retrans_critical_threshold"`  // critical retransmission % (default: 5.0)
+	AsymmetryThreshold       float64 `yaml:"asymmetry_threshold"`         // traffic ratio imbalance to trigger advisory (default: 10.0)
+	MOSWarningThreshold      float64 `yaml:"mos_warning_threshold"`       // MOS below this triggers warning (default: 3.5)
+	MOSCriticalThreshold     float64 `yaml:"mos_critical_threshold"`      // MOS below this triggers critical (default: 3.0)
+	TopTalkerPercent         float64 `yaml:"top_talker_percent"`          // bandwidth % above which top talker triggers advisory (default: 25)
 }
 
 // WebConfig holds settings for the web server.
@@ -93,10 +102,18 @@ func Defaults() Config {
 			PruneInterval:      15 * time.Minute,
 		},
 		Analysis: AnalysisConfig{
-			Interval:              60 * time.Second,
-			TopTalkersCount:       10,
-			AnomalyBaselineWindow: 7 * 24 * time.Hour,
-			ScanThreshold:         500,
+			Interval:                 60 * time.Second,
+			TopTalkersCount:          10,
+			AnomalyBaselineWindow:    7 * 24 * time.Hour,
+			ScanThreshold:            500,
+			DNSRateThreshold:         100,
+			DNSRatioThreshold:        30,
+			RetransRateThreshold:     1.0,
+			RetransCriticalThreshold: 5.0,
+			AsymmetryThreshold:       10.0,
+			MOSWarningThreshold:      3.5,
+			MOSCriticalThreshold:     3.0,
+			TopTalkerPercent:         25,
 		},
 		Web: WebConfig{
 			Listen:   ":8080",

@@ -70,12 +70,17 @@ func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) 
 	now := time.Now()
 	var advisories []Advisory
 
+	talkerPct := cfg.TopTalkerPercent
+	if talkerPct <= 0 {
+		talkerPct = 25
+	}
+
 	for _, e := range entries[:n] {
 		pct := float64(e.Bytes) / float64(totalBytes) * 100
 
 		// Only generate advisories when a host exceeds a meaningful threshold.
 		// A host at 20% of bandwidth is normal — silence is a feature.
-		if pct <= 25 {
+		if pct <= talkerPct {
 			continue
 		}
 
