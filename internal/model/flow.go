@@ -236,9 +236,9 @@ func DetectRetransmissions(flows []Flow) {
 		// Choose the correct header size based on EtherType.
 		var headerLen uint64
 		switch f.EtherType {
-		case 0x86DD: // IPv6: 40-byte IP header + 20-byte TCP header
+		case 0x86DD: // IPv6: 40-byte IP + 20-byte TCP (minimum headers)
 			headerLen = 60
-		default: // IPv4 (0x0800) or unknown: 20-byte IP + 20-byte TCP
+		default: // IPv4 (0x0800) or unknown: 20-byte IP + 20-byte TCP (minimum headers)
 			headerLen = minIPAndTCPHeader
 		}
 		var payloadLen uint64
