@@ -24,6 +24,8 @@ type Server struct {
 	cfg          config.WebConfig
 	ringBuf      *storage.RingBuffer
 	sqlStore     *storage.SQLiteStore
+	flowSvc      FlowService   // abstracts flow data access for handler decoupling
+	reportSvc    ReportService // abstracts report queries (nil when SQLite not configured)
 	engine       *analysis.Engine
 	geoLookup    *geo.Lookup
 	captureMgr   *capture.Manager
@@ -61,12 +63,17 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 		cfg:          cfg,
 		ringBuf:      ringBuf,
 		sqlStore:     sqlStore,
+		flowSvc:      &defaultFlowService{rb: ringBuf},
 		engine:       engine,
 		geoLookup:    geoLookup,
 		captureMgr:   captureMgr,
 		counterStore: counterStore,
 		csrf:         csrf,
 		mux:          http.NewServeMux(),
+	}
+
+	if sqlStore != nil {
+		s.reportSvc = &defaultReportService{sql: sqlStore}
 	}
 
 	// Parse templates once at startup.

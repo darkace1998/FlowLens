@@ -162,7 +162,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
 		logging.Default().Error("API flows query error: %v", err)
@@ -223,7 +223,7 @@ func (s *Server) handleAPIHosts(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
 		logging.Default().Error("API hosts query error: %v", err)
@@ -259,7 +259,7 @@ func (s *Server) handleAPISessions(w http.ResponseWriter, r *http.Request) {
 		window = time.Hour
 	}
 
-	all, err := s.ringBuf.Recent(window, 0)
+	all, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
 		logging.Default().Warn("API sessions: ring buffer query error: %v", err)
@@ -400,7 +400,7 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
 		logging.Default().Error("API dashboard query error: %v", err)

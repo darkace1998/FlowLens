@@ -237,7 +237,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		selectedRange = "" // use default, no selection
 	}
 
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -953,7 +953,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -1068,7 +1068,7 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -1219,7 +1219,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -1335,7 +1335,7 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -1460,7 +1460,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.sqlStore == nil {
+	if s.reportSvc == nil {
 		data.Error = "SQLite store not configured"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		s.tmplReports.ExecuteTemplate(w, "layout", data)
@@ -1468,7 +1468,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Run aggregate query.
-	rows, err := s.sqlStore.QueryReport(startTime, endTime, data.GroupBy)
+	rows, err := s.reportSvc.QueryReport(startTime, endTime, data.GroupBy)
 	if err != nil {
 		data.Error = fmt.Sprintf("Report query failed: %v", err)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1479,7 +1479,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	// Run time-series query — auto-select bucket size.
 	dur := endTime.Sub(startTime)
 	bucketSec := chooseBucket(dur)
-	ts, err := s.sqlStore.QueryTimeSeries(startTime, endTime, bucketSec)
+	ts, err := s.reportSvc.QueryTimeSeries(startTime, endTime, bucketSec)
 	if err != nil {
 		logging.Default().Warn("Time-series query failed: %v", err)
 	}
@@ -1546,12 +1546,12 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 		groupBy = "app_proto"
 	}
 
-	if s.sqlStore == nil {
+	if s.reportSvc == nil {
 		http.Error(w, "SQLite store not configured", http.StatusInternalServerError)
 		return
 	}
 
-	rows, err := s.sqlStore.QueryReport(startTime, endTime, groupBy)
+	rows, err := s.reportSvc.QueryReport(startTime, endTime, groupBy)
 	if err != nil {
 		httpError(w, r, "Query failed", http.StatusInternalServerError, err)
 		return
@@ -1672,7 +1672,7 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		ScanThreshold:    s.fullCfg.Analysis.ScanThreshold,
 		WebListen:        s.fullCfg.Web.Listen,
 		PageSize:         s.fullCfg.Web.PageSize,
-		FlowCount:        s.ringBuf.Len(),
+		FlowCount:        s.flowSvc.FlowCount(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1849,7 +1849,7 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -1938,7 +1938,7 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -2039,7 +2039,7 @@ func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
@@ -2164,7 +2164,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		window = time.Hour
 	}
 
-	all, err := s.ringBuf.Recent(window, 0)
+	all, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		logging.Default().Warn("Sessions: ring buffer query error: %v", err)
 	}
@@ -2367,7 +2367,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(flows)
 
 	// Insert into ring buffer for analysis.
-	if err := s.ringBuf.Insert(flows); err != nil {
+	if err := s.flowSvc.InsertFlows(flows); err != nil {
 		httpError(w, r, "Failed to import flows", http.StatusInternalServerError, err)
 		return
 	}
