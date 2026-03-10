@@ -1,5 +1,6 @@
 # --- Build stage ---
-FROM golang:1.24-alpine AS builder
+# Pin base images by digest for reproducible builds.
+FROM golang:1.24-alpine@sha256:8bee1901f1e530bfb4a7850aa7a479d17ae3a18beb6e09064ed54cfd245b7191 AS builder
 
 RUN apk add --no-cache git
 
@@ -12,7 +13,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=$(git describe --tags
     -o /flowlens ./cmd/flowlens/
 
 # --- Runtime stage ---
-FROM alpine:3.21
+FROM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
 
 RUN apk add --no-cache ca-certificates tzdata
 
