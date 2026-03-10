@@ -76,7 +76,7 @@
 - [x] **P3** — Add a loading spinner / skeleton screen for pages that query large datasets
   — Loading overlay with CSS spinner shown on form submissions. Uses `.loading-overlay.active` toggle with `aria-hidden` management.
 - [x] **P3** — Add `aria-label` attributes to the hamburger menu toggle and other icon-only controls
-  — Added `aria-label` to nav, brand link, hamburger toggle (with `aria-expanded`), dark-mode toggle, loading spinner (`role="status"`), and `role="menubar"`/`role="menuitem"` on nav links.
+  — Added `aria-label` to nav, brand link, hamburger toggle (with `aria-expanded`), dark-mode toggle, loading spinner (`role="status"` with visually-hidden text via `.sr-only`). Navigation links use semantic `<nav aria-label>` rather than ARIA menu roles per ARIA best practices.
 
 ---
 

@@ -380,6 +380,11 @@ func TestLayout_AriaLabels(t *testing.T) {
 		t.Error("loading spinner should have role='status'")
 	}
 
+	// Loading spinner should have screen-reader text
+	if !strings.Contains(body, "sr-only") {
+		t.Error("loading spinner should have visually-hidden text for screen readers")
+	}
+
 	// Loading overlay should have aria-hidden
 	if !strings.Contains(body, `aria-hidden="true"`) {
 		t.Error("loading overlay should be aria-hidden by default")
@@ -388,11 +393,6 @@ func TestLayout_AriaLabels(t *testing.T) {
 	// Brand link should have aria-label
 	if !strings.Contains(body, `aria-label="FlowLens home"`) {
 		t.Error("brand link should have aria-label='FlowLens home'")
-	}
-
-	// Nav links should have role="menubar"
-	if !strings.Contains(body, `role="menubar"`) {
-		t.Error("nav links container should have role='menubar'")
 	}
 }
 
