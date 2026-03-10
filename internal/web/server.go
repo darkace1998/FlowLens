@@ -113,6 +113,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/counters", s.handleCounters)
 	s.mux.HandleFunc("/exporters", s.handleExporters)
 	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
+	s.mux.HandleFunc("/healthz", s.handleHealthz)
 
 	// JSON API endpoints.
 	s.mux.HandleFunc("/api/flows", s.handleAPIFlows)
@@ -123,11 +124,13 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
-	// Build the handler chain: Request Timeout → CSP → Basic Auth → Mux.
+	// Build the handler chain: Recovery → Request Logging → Request Timeout → CSP → Basic Auth → Mux.
 	var handler http.Handler = s.mux
 	handler = basicAuth(handler, cfg.Username, cfg.Password)
 	handler = cspMiddleware(handler)
 	handler = requestTimeout(handler, 30*time.Second)
+	handler = requestLogging(handler)
+	handler = recoverMiddleware(handler)
 
 	s.srv = &http.Server{
 		Addr:         cfg.Listen,

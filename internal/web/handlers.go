@@ -239,8 +239,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Dashboard query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -956,8 +955,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	}
 	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Flows query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1072,8 +1070,7 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Flow export query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1224,8 +1221,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	}
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Hosts query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1341,8 +1337,7 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 	}
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Map query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1558,7 +1553,7 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.sqlStore.QueryReport(startTime, endTime, groupBy)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Query failed", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1768,7 +1763,7 @@ func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
 
 	_, err := s.captureMgr.Start(device, bpf)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start capture: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Failed to start capture", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1793,7 +1788,7 @@ func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.captureMgr.Stop(id); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to stop capture: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Failed to stop capture", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1856,8 +1851,7 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 	}
 	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("VLAN query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1946,8 +1940,7 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	}
 	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("MAC query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -2048,8 +2041,7 @@ func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
 	}
 	flows, err := s.ringBuf.Recent(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Exporters query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -2376,7 +2368,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 
 	// Insert into ring buffer for analysis.
 	if err := s.ringBuf.Insert(flows); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to import flows: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Failed to import flows", http.StatusInternalServerError, err)
 		return
 	}
 
