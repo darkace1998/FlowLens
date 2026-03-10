@@ -13,7 +13,6 @@
 - [ ] **P1** — Add CSRF tokens to state-changing endpoints (`/capture/start`, `/capture/stop`, `/pcap/import`)
 - [ ] **P1** — Bundle Chart.js as a local static asset instead of loading from `cdn.jsdelivr.net`
   — Eliminates CDN availability risk and supply-chain attack surface (see `bug.md` #7).
-  — If kept on CDN, add a Subresource Integrity (`integrity=`) attribute.
 - [ ] **P1** — Add TLS support (built-in or document reverse-proxy setup with example configs)
 - [ ] **P2** — Add rate-limiting on the UDP collector ports to mitigate amplification / DoS
 - [ ] **P2** — Run the container as a non-root user
