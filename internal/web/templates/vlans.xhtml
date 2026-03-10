@@ -5,6 +5,7 @@
 <p class="flow-summary">{{.TotalVLANs}} VLANs observed</p>
 
 {{if .VLANs}}
+<div class="table-responsive">
 <table class="flows-table">
   <thead>
     <tr>
@@ -31,6 +32,7 @@
     {{end}}
   </tbody>
 </table>
+</div>
 {{else}}
 <p class="empty">No VLAN data available.</p>
 {{end}}

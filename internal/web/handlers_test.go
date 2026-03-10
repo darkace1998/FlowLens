@@ -1,6 +1,9 @@
 package web
 
 import (
+	"bytes"
+	"encoding/binary"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -644,6 +647,50 @@ func TestFormatBPS(t *testing.T) {
 	got := formatBPS(1000000, 10*time.Minute)
 	if !strings.Contains(got, "Kbps") {
 		t.Errorf("formatBPS(1MB, 10m) = %q, expected Kbps range", got)
+	}
+}
+
+func TestFormatPkts(t *testing.T) {
+	tests := []struct {
+		input uint64
+		want  string
+	}{
+		{0, "0"},
+		{999, "999"},
+		{1000, "1.0K"},
+		{500000, "500.0K"},
+		{1000000, "1.0M"},
+		{999999999, "1000.0M"},
+		{1000000000, "1.0B"},
+		{5500000000, "5.5B"},
+		{1000000000000, "1.0T"},
+		{86805636224700000, "86805.6T"},
+	}
+	for _, tt := range tests {
+		got := formatPkts(tt.input)
+		if got != tt.want {
+			t.Errorf("formatPkts(%d) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPctOf(t *testing.T) {
+	tests := []struct {
+		part, total uint64
+		want        float64
+	}{
+		{0, 0, 0},
+		{50, 100, 50},
+		{100, 100, 100},
+		{200, 100, 100},     // capped at 100
+		{101, 100, 100},     // minimal overflow capped at 100
+		{1, 3, 33.3},
+	}
+	for _, tt := range tests {
+		got := pctOf(tt.part, tt.total)
+		if got != tt.want {
+			t.Errorf("pctOf(%d, %d) = %v, want %v", tt.part, tt.total, got, tt.want)
+		}
 	}
 }
 
@@ -1980,5 +2027,104 @@ func TestPcapImport_MethodNotAllowed(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestPcapImport_StreamingUpload(t *testing.T) {
+	s, ringBuf := newTestServer(t)
+
+	// Build a valid PCAP file in memory.
+	var pcapBuf bytes.Buffer
+	// Global header (24 bytes) — little-endian.
+	var ghdr [24]byte
+	binary.LittleEndian.PutUint32(ghdr[0:4], 0xa1b2c3d4) // magic
+	binary.LittleEndian.PutUint16(ghdr[4:6], 2)           // version major
+	binary.LittleEndian.PutUint16(ghdr[6:8], 4)           // version minor
+	binary.LittleEndian.PutUint32(ghdr[16:20], 65535)      // snapLen
+	binary.LittleEndian.PutUint32(ghdr[20:24], 1)          // link type = Ethernet
+	pcapBuf.Write(ghdr[:])
+
+	// Build a minimal Ethernet + IPv4 + TCP packet (54 bytes).
+	pkt := make([]byte, 54)
+	pkt[12] = 0x08; pkt[13] = 0x00 // EtherType = IPv4
+	pkt[14] = 0x45                  // version=4, IHL=5
+	pkt[14+3] = 40                  // total length
+	pkt[14+9] = 6                   // protocol = TCP
+	pkt[14+12] = 10                 // src IP: 10.0.0.1
+	pkt[14+15] = 1
+	pkt[14+16] = 192               // dst IP: 192.168.1.1
+	pkt[14+17] = 168
+	pkt[14+18] = 1
+	pkt[14+19] = 1
+	pkt[35] = 80                    // src port = 80
+	pkt[36] = 0x01; pkt[37] = 0xBB // dst port = 443
+	pkt[34+12] = 0x50
+	pkt[34+13] = 0x02              // SYN
+
+	// Packet header (16 bytes).
+	var phdr [16]byte
+	binary.LittleEndian.PutUint32(phdr[0:4], uint32(time.Now().Unix()))
+	binary.LittleEndian.PutUint32(phdr[4:8], 0)
+	binary.LittleEndian.PutUint32(phdr[8:12], 54)
+	binary.LittleEndian.PutUint32(phdr[12:16], 54)
+	pcapBuf.Write(phdr[:])
+	pcapBuf.Write(pkt)
+
+	// Create multipart form body.
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("pcap", "test.pcap")
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	part.Write(pcapBuf.Bytes())
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/pcap/import", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	// Should redirect to /sessions on success.
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d; body: %s", w.Code, http.StatusSeeOther, w.Body.String())
+	}
+
+	// Ring buffer should have the imported flow.
+	flows, err := ringBuf.Recent(1*time.Hour, 0)
+	if err != nil {
+		t.Fatalf("ringBuf.Recent: %v", err)
+	}
+	if len(flows) == 0 {
+		t.Error("expected at least 1 flow in ring buffer after PCAP import")
+	}
+}
+
+func TestPcapImport_PcapngRejected(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	// Build a fake pcapng file.
+	var pcapBuf bytes.Buffer
+	var ghdr [24]byte
+	binary.LittleEndian.PutUint32(ghdr[0:4], 0x0a0d0d0a) // pcapng magic
+	pcapBuf.Write(ghdr[:])
+
+	// Create multipart form body.
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, _ := writer.CreateFormFile("pcap", "test.pcapng")
+	part.Write(pcapBuf.Bytes())
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/pcap/import", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(w.Body.String(), "pcapng") {
+		t.Error("error response should mention pcapng format")
 	}
 }

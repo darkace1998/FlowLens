@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,9 @@ type Flow struct {
 	DstMAC    net.HardwareAddr // destination MAC address (6 bytes)
 	VLAN      uint16           // 802.1Q VLAN ID (0 = untagged)
 	EtherType uint16           // Ethernet type field (0x0800=IPv4, 0x86DD=IPv6, etc.)
+
+	// TCP sequence tracking (populated by PCAP decoder, zero for NetFlow/IPFIX)
+	TCPSeqNum uint32 // TCP sequence number (used for retransmission detection)
 }
 
 // CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
@@ -73,8 +77,16 @@ func (f *Flow) IsVoIP() bool {
 	if f.Protocol != 17 { // UDP only
 		return false
 	}
+	// SIP signaling ports are explicitly VoIP.
 	if f.SrcPort == 5060 || f.SrcPort == 5061 || f.DstPort == 5060 || f.DstPort == 5061 {
 		return true
+	}
+	// Exclude well-known service ports (below 1024). When one side uses a
+	// well-known port (e.g. DNS/53, NTP/123, DHCP/67-68, SNMP/161) the
+	// other side's ephemeral port may fall in the RTP range but the flow
+	// is clearly not VoIP/RTP.
+	if f.SrcPort < 1024 || f.DstPort < 1024 {
+		return false
 	}
 	port := f.DstPort
 	if f.SrcPort >= 10000 && f.SrcPort <= 20000 {
@@ -151,6 +163,7 @@ func StitchFlows(flows []Flow) {
 	type stitchEntry struct {
 		idx       int
 		timestamp time.Time
+		srcKey    string // original (non-canonical) src:srcPort for direction check
 	}
 	seen := make(map[string]*stitchEntry, len(flows))
 
@@ -160,24 +173,101 @@ func StitchFlows(flows []Flow) {
 		f.CalcThroughput()
 
 		key := FlowKey(f.SrcAddr, f.DstAddr, f.SrcPort, f.DstPort, f.Protocol)
+		srcKey := fmt.Sprintf("%s:%d", SafeIPString(f.SrcAddr), f.SrcPort)
 		if prev, ok := seen[key]; ok {
-			// Found the other direction — estimate RTT from timestamp delta.
-			delta := f.Timestamp.Sub(prev.timestamp)
-			if delta < 0 {
-				delta = -delta
-			}
-			rttMicros := delta.Microseconds()
-			if rttMicros > 0 && f.RTTMicros == 0 {
-				f.RTTMicros = rttMicros
-			}
-			if rttMicros > 0 && flows[prev.idx].RTTMicros == 0 {
-				flows[prev.idx].RTTMicros = rttMicros
+			// Only estimate RTT between flows in opposite directions.
+			if srcKey != prev.srcKey {
+				delta := f.Timestamp.Sub(prev.timestamp)
+				if delta < 0 {
+					delta = -delta
+				}
+				rttMicros := delta.Microseconds()
+				if rttMicros > 0 && f.RTTMicros == 0 {
+					f.RTTMicros = rttMicros
+				}
+				if rttMicros > 0 && flows[prev.idx].RTTMicros == 0 {
+					flows[prev.idx].RTTMicros = rttMicros
+				}
 			}
 			// Update entry to latest.
 			prev.idx = i
 			prev.timestamp = f.Timestamp
+			prev.srcKey = srcKey
 		} else {
-			seen[key] = &stitchEntry{idx: i, timestamp: f.Timestamp}
+			seen[key] = &stitchEntry{idx: i, timestamp: f.Timestamp, srcKey: srcKey}
+		}
+	}
+}
+
+// DetectRetransmissions analyses per-packet TCP flows (as produced by PCAP
+// decoding where Packets == 1 and TCPSeqNum is populated) and sets the
+// Retransmissions field to 1 on flows whose sequence number has already been
+// seen for the same directed connection. Flows are modified in place.
+func DetectRetransmissions(flows []Flow) {
+	const (
+		minIPAndTCPHeader = 40   // 20-byte IP + 20-byte TCP minimum
+		tcpFlagFIN        = 0x01 // TCP FIN flag
+		tcpFlagSYN        = 0x02 // TCP SYN flag
+		tcpFlagSYNorFIN   = tcpFlagSYN | tcpFlagFIN
+	)
+
+	type connKey struct {
+		src, dst         string
+		srcPort, dstPort uint16
+	}
+	// Track the maximum sequence number + payload seen per directed connection.
+	type seqState struct {
+		maxSeqEnd uint64 // highest (seqNum + payloadLen) observed
+	}
+	conns := make(map[connKey]*seqState)
+
+	for i := range flows {
+		f := &flows[i]
+		if f.Protocol != 6 {
+			continue
+		}
+		ck := connKey{
+			src: SafeIPString(f.SrcAddr), dst: SafeIPString(f.DstAddr),
+			srcPort: f.SrcPort, dstPort: f.DstPort,
+		}
+
+		// Estimate TCP payload length from total IP length minus headers.
+		// Each PCAP flow has Bytes == IP total length and Packets == 1.
+		// Choose the correct header size based on EtherType.
+		var headerLen uint64
+		switch f.EtherType {
+		case 0x86DD: // IPv6: 40-byte IP + 20-byte TCP (minimum headers)
+			headerLen = 60
+		default: // IPv4 (0x0800) or unknown: 20-byte IP + 20-byte TCP (minimum headers)
+			headerLen = minIPAndTCPHeader
+		}
+		var payloadLen uint64
+		if f.Bytes > headerLen {
+			payloadLen = f.Bytes - headerLen
+		}
+		seqEnd := uint64(f.TCPSeqNum) + payloadLen
+		// SYN and FIN each consume one sequence number.
+		if f.TCPFlags&tcpFlagSYNorFIN != 0 {
+			seqEnd++
+		}
+
+		st, ok := conns[ck]
+		if !ok {
+			conns[ck] = &seqState{maxSeqEnd: seqEnd}
+			continue
+		}
+
+		// A retransmission: the sequence number is below the highest seen end
+		// and the packet carries data (or SYN/FIN). Pure ACKs (no payload,
+		// no SYN/FIN) are excluded.
+		if payloadLen > 0 || f.TCPFlags&tcpFlagSYNorFIN != 0 {
+			if uint64(f.TCPSeqNum) < st.maxSeqEnd {
+				f.Retransmissions = 1
+			}
+		}
+
+		if seqEnd > st.maxSeqEnd {
+			st.maxSeqEnd = seqEnd
 		}
 	}
 }
@@ -439,6 +529,36 @@ func FormatMAC(mac net.HardwareAddr) string {
 		return "—"
 	}
 	return mac.String()
+}
+
+// FormatTCPFlags returns a human-readable representation of TCP flags.
+// For example, a SYN+ACK packet (0x12) returns "SYN ACK".
+// Returns "—" when flags are zero.
+func FormatTCPFlags(flags uint8) string {
+	if flags == 0 {
+		return "—"
+	}
+	type flagDef struct {
+		mask uint8
+		name string
+	}
+	defs := []flagDef{
+		{0x01, "FIN"},
+		{0x02, "SYN"},
+		{0x04, "RST"},
+		{0x08, "PSH"},
+		{0x10, "ACK"},
+		{0x20, "URG"},
+		{0x40, "ECE"},
+		{0x80, "CWR"},
+	}
+	var parts []string
+	for _, d := range defs {
+		if flags&d.mask != 0 {
+			parts = append(parts, d.name)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // FormatEtherType returns a human-readable name for common EtherType values.

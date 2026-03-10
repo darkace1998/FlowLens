@@ -27,7 +27,7 @@
     </label>
     <button type="submit">Import &amp; Analyze</button>
   </form>
-  <p class="flow-summary" style="margin-top:.5rem">Upload a PCAP file (max 200 MB) to import packets as flows for analysis.</p>
+  <p class="flow-summary" style="margin-top:.5rem">Upload a PCAP file (max 200 MB) to import packets as flows for analysis. Classic pcap format only; pcapng must be re-exported.</p>
 </div>
 
 {{if .Sessions}}
@@ -41,6 +41,7 @@
       <th>Destination</th>
       <th>Dst Port</th>
       <th>Protocol</th>
+      <th>TCP Flags</th>
       <th>Application</th>
       <th>Bytes</th>
       <th>Packets</th>
@@ -62,6 +63,7 @@
       <td><a href="/flows?ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
       <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
       <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
+      <td>{{.TCPFlags}}</td>
       <td>{{.AppProto}}</td>
       <td>{{.BytesStr}}</td>
       <td>{{.PktsStr}}</td>

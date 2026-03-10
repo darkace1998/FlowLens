@@ -143,6 +143,7 @@ func decodeIPv4(data []byte, timestamp time.Time) (model.Flow, bool) {
 		if len(l4Data) >= 14 {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
+			f.TCPSeqNum = uint32(l4Data[4])<<24 | uint32(l4Data[5])<<16 | uint32(l4Data[6])<<8 | uint32(l4Data[7])
 			f.TCPFlags = l4Data[13]
 		}
 	case 17: // UDP
@@ -185,6 +186,7 @@ func decodeIPv6(data []byte, timestamp time.Time) (model.Flow, bool) {
 		if len(l4Data) >= 14 {
 			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
 			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
+			f.TCPSeqNum = uint32(l4Data[4])<<24 | uint32(l4Data[5])<<16 | uint32(l4Data[6])<<8 | uint32(l4Data[7])
 			f.TCPFlags = l4Data[13]
 		}
 	case 17: // UDP

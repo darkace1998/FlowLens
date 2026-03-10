@@ -5,6 +5,7 @@
 <p class="flow-summary">{{.TotalMACs}} MAC addresses observed</p>
 
 {{if .MACs}}
+<div class="table-responsive">
 <table class="flows-table">
   <thead>
     <tr>
@@ -31,6 +32,7 @@
     {{end}}
   </tbody>
 </table>
+</div>
 {{else}}
 <p class="empty">No MAC address data available. L2 data requires IPFIX IE 56/80 or packet capture.</p>
 {{end}}

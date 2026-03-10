@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -100,13 +101,18 @@ func formatBytes(b uint64) string {
 }
 
 func formatPkts(p uint64) string {
-	if p < 1000 {
+	switch {
+	case p < 1000:
 		return fmt.Sprintf("%d", p)
+	case p < 1_000_000:
+		return fmt.Sprintf("%.1fK", float64(p)/1e3)
+	case p < 1_000_000_000:
+		return fmt.Sprintf("%.1fM", float64(p)/1e6)
+	case p < 1_000_000_000_000:
+		return fmt.Sprintf("%.1fB", float64(p)/1e9)
+	default:
+		return fmt.Sprintf("%.1fT", float64(p)/1e12)
 	}
-	if p < 1000000 {
-		return fmt.Sprintf("%.1fK", float64(p)/1000)
-	}
-	return fmt.Sprintf("%.1fM", float64(p)/1000000)
 }
 
 func formatBPS(bytesTotal uint64, duration time.Duration) string {
@@ -280,7 +286,11 @@ func pctOf(part, total uint64) float64 {
 	if total == 0 {
 		return 0
 	}
-	return math.Round(float64(part) / float64(total) * 1000) / 10
+	v := math.Round(float64(part) / float64(total) * 1000) / 10
+	if v > 100 {
+		v = 100
+	}
+	return v
 }
 
 func formatAS(asn uint32) string {
@@ -1159,6 +1169,7 @@ type FlowRow struct {
 	DstMAC      string
 	VLAN        uint16
 	EtherType   string
+	TCPFlags    string
 }
 
 // FlowsPageData holds all data for the flows explorer template.
@@ -1275,6 +1286,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			DstMAC:      model.FormatMAC(f.DstMAC),
 			VLAN:        f.VLAN,
 			EtherType:   model.FormatEtherType(f.EtherType),
+			TCPFlags:    model.FormatTCPFlags(f.TCPFlags),
 		})
 	}
 
@@ -2186,6 +2198,7 @@ type SessionEntry struct {
 	Retrans     uint32
 	OOO         uint32
 	Loss        uint32
+	TCPFlags    string
 }
 
 // SessionsPageData holds data for the sessions template.
@@ -2222,6 +2235,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		first, last      time.Time
 		retrans, ooo, loss uint32
 		appProto         string
+		tcpFlags         uint8
 	}
 
 	agg := make(map[sessKey]*sessAgg)
@@ -2244,6 +2258,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			a.retrans += f.Retransmissions
 			a.ooo += f.OutOfOrder
 			a.loss += f.PacketLoss
+			a.tcpFlags |= f.TCPFlags
 			// Track firstSeen as min(f.Timestamp - f.Duration) when Duration > 0,
 			// since collectors typically set Timestamp to the flow end time.
 			flowStart := f.Timestamp
@@ -2268,6 +2283,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 				flowCount: 1, first: flowStart, last: f.Timestamp,
 				retrans: f.Retransmissions, ooo: f.OutOfOrder, loss: f.PacketLoss,
 				appProto: model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort),
+				tcpFlags: f.TCPFlags,
 			}
 		}
 	}
@@ -2301,6 +2317,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			Retrans:    a.retrans,
 			OOO:        a.ooo,
 			Loss:       a.loss,
+			TCPFlags:   model.FormatTCPFlags(a.tcpFlags),
 		})
 		totalBytes += a.bytes
 		totalPackets += a.packets
@@ -2334,19 +2351,42 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, pcapImportMaxSize)
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB in-memory buffer
-		http.Error(w, "File too large (max 200 MB)", http.StatusBadRequest)
+	// Use MultipartReader for streaming instead of ParseMultipartForm.
+	// ParseMultipartForm buffers the file to a temp file for uploads
+	// larger than maxMemory, and reading it back can produce corrupt data
+	// for large (100+ MB) files. Streaming reads directly from the
+	// request body, avoiding temp files entirely.
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "Invalid multipart form", http.StatusBadRequest)
 		return
 	}
 
-	file, _, err := r.FormFile("pcap")
-	if err != nil {
+	// Find the "pcap" file part.
+	var pcapReader io.ReadCloser
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Error reading upload", http.StatusBadRequest)
+			return
+		}
+		if part.FormName() == "pcap" {
+			pcapReader = part
+			break
+		}
+		part.Close()
+	}
+
+	if pcapReader == nil {
 		http.Error(w, "Missing pcap file", http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
+	defer pcapReader.Close()
 
-	flows, err := capture.ReadPcapFlows(file)
+	flows, err := capture.ReadPcapFlows(pcapReader)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to parse PCAP: %v", err), http.StatusBadRequest)
 		return
@@ -2356,6 +2396,9 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No flows decoded from PCAP", http.StatusBadRequest)
 		return
 	}
+
+	// Detect TCP retransmissions from packet-level sequence numbers.
+	model.DetectRetransmissions(flows)
 
 	// Stitch bidirectional flows for RTT estimation.
 	model.StitchFlows(flows)
