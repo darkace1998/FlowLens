@@ -8,20 +8,21 @@
 
 ## 🔒 Security & Hardening
 
-- [ ] **P0** — Add authentication / authorization layer (even basic HTTP Basic Auth or token-based)
-  — Currently anyone with network access to port 8080 can view all flow data and control captures.
-- [ ] **P1** — Add CSRF tokens to state-changing endpoints (`/capture/start`, `/capture/stop`, `/pcap/import`)
-- [ ] **P1** — Bundle Chart.js as a local static asset instead of loading from `cdn.jsdelivr.net`
-  — Eliminates CDN availability risk and supply-chain attack surface (see `bug.md` #7).
-- [ ] **P1** — Add TLS support (built-in or document reverse-proxy setup with example configs)
-- [ ] **P2** — Add rate-limiting on the UDP collector ports to mitigate amplification / DoS
-- [ ] **P2** — Run the container as a non-root user
-  ```dockerfile
-  RUN addgroup -S flowlens && adduser -S flowlens -G flowlens
-  USER flowlens
-  ```
+- [x] **P0** — Add authentication / authorization layer (even basic HTTP Basic Auth or token-based)
+  — HTTP Basic Auth middleware with configurable `username`/`password` in web config. Constant-time credential comparison.
+- [x] **P1** — Add CSRF tokens to state-changing endpoints (`/capture/start`, `/capture/stop`, `/pcap/import`)
+  — Single-use random tokens embedded in forms via `{{csrfToken}}` template function. Validated on POST.
+- [x] **P1** — Bundle Chart.js as a local static asset instead of loading from `cdn.jsdelivr.net`
+  — Chart.js v4.5.1 UMD bundle saved to `static/chart.umd.min.js`. CDN reference removed from dashboard.
+- [x] **P1** — Add TLS support (built-in or document reverse-proxy setup with example configs)
+  — Added `tls_cert`/`tls_key` config options. Server auto-switches to `ListenAndServeTLS` when both are set.
+- [x] **P2** — Add rate-limiting on the UDP collector ports to mitigate amplification / DoS
+  — Per-source-IP packets-per-second limiter with configurable `rate_limit` in collector config. Periodic cleanup of stale entries.
+- [x] **P2** — Run the container as a non-root user
+  — Added `flowlens` user/group to Dockerfile. Container runs as non-root.
 - [ ] **P2** — Pin Docker base images by digest for reproducible builds
-- [ ] **P3** — Add Content-Security-Policy headers to the web server
+- [x] **P3** — Add Content-Security-Policy headers to the web server
+  — CSP middleware on all responses: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'`.
 
 ---
 
@@ -128,7 +129,7 @@
 ## 🐛 Known Limitations (from `bug.md`)
 
 - [ ] **P2** — `formatPPS()` rounds rates < 0.5 pps to "0 pps" — show `<1 pps` or use one decimal place instead (`bug.md` #8)
-- [ ] **P1** — Chart.js loaded from external CDN (`bug.md` #7) — see Security section above
+- [x] **P1** — Chart.js loaded from external CDN (`bug.md` #7) — now bundled locally in `static/chart.umd.min.js`
 
 ---
 
