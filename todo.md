@@ -20,7 +20,8 @@
   — Per-source-IP packets-per-second limiter with configurable `rate_limit` in collector config. Periodic cleanup of stale entries.
 - [x] **P2** — Run the container as a non-root user
   — Added `flowlens` user/group to Dockerfile. Container runs as non-root.
-- [ ] **P2** — Pin Docker base images by digest for reproducible builds
+- [x] **P2** — Pin Docker base images by digest for reproducible builds
+  — Both `golang:1.24-alpine` and `alpine:3.21` pinned by `@sha256:...` digest in Dockerfile.
 - [x] **P3** — Add Content-Security-Policy headers to the web server
   — CSP middleware on all responses: `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'`.
 
@@ -28,22 +29,30 @@
 
 ## 🧪 Testing & Quality
 
-- [ ] **P0** — Add `go test ./...` step to the GitHub Actions release workflow — currently Docker images ship without any test gate
-- [ ] **P1** — Add a `golangci-lint` configuration (`.golangci.yml`) and integrate it into CI
-- [ ] **P1** — Add integration / end-to-end tests (collector → storage → web handler round-trip)
-- [ ] **P2** — Add Go benchmark tests (`Benchmark*`) for hot paths: ring buffer insert/query, flow stitching, protocol decoders
-- [ ] **P2** — Add fuzz tests (`Fuzz*`) for protocol decoders (`netflowv5.go`, `netflowv9.go`, `ipfix.go`, `sflow.go`, `pcap.go`) — these parse untrusted network input
-- [ ] **P2** — Set up code coverage reporting (e.g. Codecov) in CI
-- [ ] **P3** — Add error-injection / chaos tests for storage failures (SQLite disk full, corrupt WAL)
+- [x] **P0** — Add `go test ./...` step to the GitHub Actions release workflow — currently Docker images ship without any test gate
+  — Release workflow now requires a `test` job (with race detector) to pass before the Docker build.
+- [x] **P1** — Add a `golangci-lint` configuration (`.golangci.yml`) and integrate it into CI
+  — `.golangci.yml` with 16 linters configured. Integrated into CI workflow via `golangci-lint-action`.
+- [x] **P1** — Add integration / end-to-end tests (collector → storage → web handler round-trip)
+  — Three integration tests in `internal/integration_test.go` covering collector→ring buffer→dashboard, collector→SQLite→flows page, and multi-packet round-trip.
+- [x] **P2** — Add Go benchmark tests (`Benchmark*`) for hot paths: ring buffer insert/query, flow stitching, protocol decoders
+  — 17 benchmark functions across `model/bench_test.go`, `storage/bench_test.go`, `collector/bench_test.go`.
+- [x] **P2** — Add fuzz tests (`Fuzz*`) for protocol decoders (`netflowv5.go`, `netflowv9.go`, `ipfix.go`, `sflow.go`, `pcap.go`) — these parse untrusted network input
+  — Five `Fuzz*` functions in `collector/fuzz_test.go` and `capture/fuzz_test.go` with valid and edge-case seeds.
+- [x] **P2** — Set up code coverage reporting (e.g. Codecov) in CI
+  — CI workflow generates `coverage.out` and uploads as GitHub Actions artifact.
+- [x] **P3** — Add error-injection / chaos tests for storage failures (SQLite disk full, corrupt WAL)
+  — Seven chaos tests in `storage/chaos_test.go` covering corrupt DB, read-only FS, concurrent access, nil IPs, empty/large inserts, and ring buffer stress overflow.
 
 ---
 
 ## 🚀 CI / CD
 
-- [ ] **P1** — Add a CI workflow that runs on every push / PR (not only on `v*` tags):
+- [x] **P1** — Add a CI workflow that runs on every push / PR (not only on `v*` tags):
   - `go vet ./...`
   - `go test -race ./...`
   - `golangci-lint run`
+  — `.github/workflows/ci.yml` runs lint and test jobs on push/PR to main.
 - [ ] **P1** — Produce cross-compiled binary artifacts (Linux amd64/arm64, macOS, Windows) as GitHub Release assets alongside the Docker image
 - [ ] **P2** — Add SBOM generation and vulnerability scanning (e.g. Trivy, Grype) to the Docker build
 - [ ] **P2** — Sign container images with `cosign`
@@ -146,7 +155,7 @@
 - [x] GeoIP enrichment (built-in ranges + CSV loader)
 - [x] Raw packet capture (Linux AF_PACKET)
 - [x] Responsive CSS with mobile breakpoints
-- [x] Comprehensive test suite (258 tests, ~46% test-to-code ratio)
+- [x] Comprehensive test suite (341 tests including fuzz, benchmarks, integration, and chaos tests)
 - [x] Multi-stage Docker build (Alpine, ~50 MB image)
 - [x] Graceful shutdown with in-flight request draining
 - [x] All 8 documented bugs resolved or acknowledged
