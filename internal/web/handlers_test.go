@@ -650,6 +650,50 @@ func TestFormatBPS(t *testing.T) {
 	}
 }
 
+func TestFormatPkts(t *testing.T) {
+	tests := []struct {
+		input uint64
+		want  string
+	}{
+		{0, "0"},
+		{999, "999"},
+		{1000, "1.0K"},
+		{500000, "500.0K"},
+		{1000000, "1.0M"},
+		{999999999, "1000.0M"},
+		{1000000000, "1.0B"},
+		{5500000000, "5.5B"},
+		{1000000000000, "1.0T"},
+		{86805636224700000, "86805.6T"},
+	}
+	for _, tt := range tests {
+		got := formatPkts(tt.input)
+		if got != tt.want {
+			t.Errorf("formatPkts(%d) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPctOf(t *testing.T) {
+	tests := []struct {
+		part, total uint64
+		want        float64
+	}{
+		{0, 0, 0},
+		{50, 100, 50},
+		{100, 100, 100},
+		{200, 100, 100},     // capped at 100
+		{101, 100, 100},     // minimal overflow capped at 100
+		{1, 3, 33.3},
+	}
+	for _, tt := range tests {
+		got := pctOf(tt.part, tt.total)
+		if got != tt.want {
+			t.Errorf("pctOf(%d, %d) = %v, want %v", tt.part, tt.total, got, tt.want)
+		}
+	}
+}
+
 func TestAdvisories_Empty(t *testing.T) {
 	s, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/advisories", nil)

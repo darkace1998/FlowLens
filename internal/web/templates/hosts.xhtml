@@ -21,6 +21,7 @@
 {{if .Hosts}}
 <div class="panel">
   <p class="flow-summary">Showing {{.TotalHosts}} active hosts in the last {{formatDuration .Window}}.</p>
+  <div class="table-responsive">
   <table class="flows-table">
     <thead>
       <tr>
@@ -52,6 +53,7 @@
       {{end}}
     </tbody>
   </table>
+  </div>
 </div>
 {{else}}
 <p class="empty">No active hosts detected.</p>

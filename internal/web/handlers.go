@@ -101,13 +101,18 @@ func formatBytes(b uint64) string {
 }
 
 func formatPkts(p uint64) string {
-	if p < 1000 {
+	switch {
+	case p < 1000:
 		return fmt.Sprintf("%d", p)
+	case p < 1_000_000:
+		return fmt.Sprintf("%.1fK", float64(p)/1e3)
+	case p < 1_000_000_000:
+		return fmt.Sprintf("%.1fM", float64(p)/1e6)
+	case p < 1_000_000_000_000:
+		return fmt.Sprintf("%.1fB", float64(p)/1e9)
+	default:
+		return fmt.Sprintf("%.1fT", float64(p)/1e12)
 	}
-	if p < 1000000 {
-		return fmt.Sprintf("%.1fK", float64(p)/1000)
-	}
-	return fmt.Sprintf("%.1fM", float64(p)/1000000)
 }
 
 func formatBPS(bytesTotal uint64, duration time.Duration) string {
@@ -281,7 +286,11 @@ func pctOf(part, total uint64) float64 {
 	if total == 0 {
 		return 0
 	}
-	return math.Round(float64(part) / float64(total) * 1000) / 10
+	v := math.Round(float64(part) / float64(total) * 1000) / 10
+	if v > 100 {
+		v = 100
+	}
+	return v
 }
 
 func formatAS(asn uint32) string {
