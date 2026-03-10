@@ -1,0 +1,63 @@
+{{define "title"}}Interface Counters{{end}}
+{{define "head"}}{{end}}
+{{define "content"}}
+<h1>sFlow Interface Counters</h1>
+<p class="flow-summary">{{.TotalCounters}} interfaces reporting</p>
+
+{{if .Counters}}
+<div class="table-responsive">
+<table class="flows-table">
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Interface</th>
+      <th>Speed</th>
+      <th>In Octets</th>
+      <th>In Pkts</th>
+      <th>In Errors</th>
+      <th>In Drops</th>
+      <th>Out Octets</th>
+      <th>Out Pkts</th>
+      <th>Out Errors</th>
+      <th>Out Drops</th>
+      <th>In Util %</th>
+      <th>Out Util %</th>
+      <th>Last Seen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Counters}}
+    <tr>
+      <td>{{.AgentIP}}</td>
+      <td>{{.IfName}} ({{.IfIndex}})</td>
+      <td>{{.IfSpeed}}</td>
+      <td>{{.InOctets}}</td>
+      <td>{{.InPackets}}</td>
+      <td>{{.InErrors}}</td>
+      <td>{{.InDrops}}</td>
+      <td>{{.OutOctets}}</td>
+      <td>{{.OutPackets}}</td>
+      <td>{{.OutErrors}}</td>
+      <td>{{.OutDrops}}</td>
+      <td>
+        <div class="bar-container">
+          <div class="bar" style="width: {{printf "%.1f" .InUtil}}%"></div>
+          <span class="bar-label">{{printf "%.1f" .InUtil}}%</span>
+        </div>
+      </td>
+      <td>
+        <div class="bar-container">
+          <div class="bar" style="width: {{printf "%.1f" .OutUtil}}%"></div>
+          <span class="bar-label">{{printf "%.1f" .OutUtil}}%</span>
+        </div>
+      </td>
+      <td>{{.LastSeen}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty">No sFlow counter data available. Counter samples will appear here when received from sFlow agents.</p>
+{{end}}
+{{end}}

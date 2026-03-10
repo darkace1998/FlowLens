@@ -101,7 +101,7 @@ func TestCollector_RingBuffer_WebHandler(t *testing.T) {
 
 	// Set up web server and verify the dashboard shows data.
 	webCfg := config.WebConfig{Listen: ":0", PageSize: 50}
-	s := web.NewServer(webCfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
+	s := web.NewServer(webCfg, ringBuf, nil, t.TempDir(), nil, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -177,7 +177,7 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 
 	// Verify web flows page.
 	webCfg := config.WebConfig{Listen: ":0", PageSize: 50}
-	s := web.NewServer(webCfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
+	s := web.NewServer(webCfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/flows", nil)
 	w := httptest.NewRecorder()

@@ -45,7 +45,7 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil, nil)
 	return s, ringBuf
 }
 
@@ -63,7 +63,7 @@ func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil, nil)
 	t.Cleanup(func() { sqlStore.Close() })
 	return s, ringBuf, sqlStore
 }
@@ -737,7 +737,7 @@ func TestAdvisories_WithEngine(t *testing.T) {
 	go engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/advisories", nil)
 	w := httptest.NewRecorder()
@@ -1410,7 +1410,7 @@ func TestHandleMap_WithGeo(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1436,7 +1436,7 @@ func TestFlows_CountryColumns(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1459,7 +1459,7 @@ func TestHosts_CountryColumn(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1535,7 +1535,7 @@ func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 
 	flows := []model.Flow{
 		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
@@ -1580,7 +1580,7 @@ func TestCapturePage_WithManager(t *testing.T) {
 		MaxFiles:   10,
 	}
 	mgr := capture.NewManager(capCfg)
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture", nil)
 	w := httptest.NewRecorder()
@@ -1616,7 +1616,7 @@ func TestCaptureStart_NoDevice(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	token := s.csrfToken()
 	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("csrf_token="+token))
@@ -1669,7 +1669,7 @@ func TestCaptureDownload_MissingFile(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture/download?file=nonexistent.pcap", nil)
 	w := httptest.NewRecorder()
@@ -1685,7 +1685,7 @@ func TestCaptureDownload_NoFileParam(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture/download", nil)
 	w := httptest.NewRecorder()

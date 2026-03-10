@@ -78,6 +78,12 @@ func main() {
 		}
 	}()
 
+	// Create sFlow counter store.
+	counterStore := collector.NewCounterStore(cfg.Storage.RingBufferDuration)
+	coll.SetCounterHandler(func(counters []collector.SFlowCounterSample) {
+		counterStore.Insert(counters)
+	})
+
 	// Start additional collector instances from Interfaces config.
 	var captureSources []*capture.Source
 	var extraCollectors []*collector.Collector
@@ -166,7 +172,7 @@ func main() {
 			}
 		}
 	}
-	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine, geoLookup, captureMgr)
+	srv := web.NewServer(cfg.Web, ringBuf, sqlStore, staticDir, engine, geoLookup, captureMgr, counterStore)
 	srv.SetAboutInfo(cfg, Version, time.Now())
 	go func() {
 		if err := srv.Start(); err != nil {

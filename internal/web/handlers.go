@@ -17,6 +17,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/capture"
+	"github.com/darkace1998/FlowLens/internal/collector"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
@@ -2529,4 +2530,124 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 
 	logging.Default().Info("PCAP import: %d flows imported", len(flows))
 	http.Redirect(w, r, "/sessions", http.StatusSeeOther)
+}
+
+// --- sFlow Interface Counters page ---
+
+// CounterEntry represents a single interface counter for display.
+type CounterEntry struct {
+	AgentIP    string
+	IfIndex    uint32
+	IfName     string
+	IfSpeed    string
+	InOctets   string
+	InPackets  uint32
+	InErrors   uint32
+	InDrops    uint32
+	OutOctets  string
+	OutPackets uint32
+	OutErrors  uint32
+	OutDrops   uint32
+	InUtil     float64
+	OutUtil    float64
+	LastSeen   string
+}
+
+// CountersPageData holds data for the counters template.
+type CountersPageData struct {
+	Counters      []CounterEntry
+	TotalCounters int
+}
+
+func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
+	data := CountersPageData{}
+
+	if s.counterStore != nil {
+		window := s.fullCfg.Storage.RingBufferDuration
+		if window <= 0 {
+			window = 10 * time.Minute
+		}
+		samples := s.counterStore.Recent(window)
+
+		// Aggregate by agent+ifIndex, keeping most recent sample.
+		type key struct {
+			agent   string
+			ifIndex uint32
+		}
+		latest := make(map[key]collector.SFlowCounterSample)
+		for _, sample := range samples {
+			k := key{agent: sample.AgentIP.String(), ifIndex: sample.IfIndex}
+			if existing, ok := latest[k]; !ok || sample.Timestamp.After(existing.Timestamp) {
+				latest[k] = sample
+			}
+		}
+
+		for _, cs := range latest {
+			var inUtil, outUtil float64
+			if cs.IfSpeed > 0 {
+				// Approximation from cumulative counters; accurate delta-based
+				// utilization would require tracking previous sample values.
+				inUtil = float64(cs.InOctets*8) / float64(cs.IfSpeed) * 100
+				outUtil = float64(cs.OutOctets*8) / float64(cs.IfSpeed) * 100
+				if inUtil > 100 {
+					inUtil = 100
+				}
+				if outUtil > 100 {
+					outUtil = 100
+				}
+			}
+			ifName := fmt.Sprintf("if%d", cs.IfIndex)
+			if names := s.fullCfg.Collector.InterfaceNames; names != nil {
+				if n, ok := names[strconv.FormatUint(uint64(cs.IfIndex), 10)]; ok {
+					ifName = n
+				}
+			}
+			data.Counters = append(data.Counters, CounterEntry{
+				AgentIP:    cs.AgentIP.String(),
+				IfIndex:    cs.IfIndex,
+				IfName:     ifName,
+				IfSpeed:    formatIfSpeed(cs.IfSpeed),
+				InOctets:   formatBytes(cs.InOctets),
+				InPackets:  cs.InPackets,
+				InErrors:   cs.InErrors,
+				InDrops:    cs.InDrops,
+				OutOctets:  formatBytes(cs.OutOctets),
+				OutPackets: cs.OutPackets,
+				OutErrors:  cs.OutErrors,
+				OutDrops:   cs.OutDrops,
+				InUtil:     inUtil,
+				OutUtil:     outUtil,
+				LastSeen:   timeAgo(cs.Timestamp),
+			})
+		}
+
+		sort.Slice(data.Counters, func(i, j int) bool {
+			if data.Counters[i].AgentIP != data.Counters[j].AgentIP {
+				return data.Counters[i].AgentIP < data.Counters[j].AgentIP
+			}
+			return data.Counters[i].IfIndex < data.Counters[j].IfIndex
+		})
+
+		data.TotalCounters = len(data.Counters)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplCounters.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func formatIfSpeed(speed uint64) string {
+	switch {
+	case speed >= 1_000_000_000:
+		return fmt.Sprintf("%.0f Gbps", float64(speed)/1e9)
+	case speed >= 1_000_000:
+		return fmt.Sprintf("%.0f Mbps", float64(speed)/1e6)
+	case speed >= 1_000:
+		return fmt.Sprintf("%.0f Kbps", float64(speed)/1e3)
+	case speed > 0:
+		return fmt.Sprintf("%d bps", speed)
+	default:
+		return "—"
+	}
 }

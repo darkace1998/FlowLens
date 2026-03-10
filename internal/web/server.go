@@ -9,6 +9,7 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/capture"
+	"github.com/darkace1998/FlowLens/internal/collector"
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
@@ -20,15 +21,16 @@ var templateFS embed.FS
 
 // Server is the HTTP web server for FlowLens.
 type Server struct {
-	cfg      config.WebConfig
-	ringBuf  *storage.RingBuffer
-	sqlStore *storage.SQLiteStore
-	engine   *analysis.Engine
-	geoLookup *geo.Lookup
-	captureMgr *capture.Manager
-	csrf     *csrfManager
-	mux      *http.ServeMux
-	srv      *http.Server
+	cfg          config.WebConfig
+	ringBuf      *storage.RingBuffer
+	sqlStore     *storage.SQLiteStore
+	engine       *analysis.Engine
+	geoLookup    *geo.Lookup
+	captureMgr   *capture.Manager
+	counterStore *collector.CounterStore
+	csrf         *csrfManager
+	mux          *http.ServeMux
+	srv          *http.Server
 
 	// Pre-parsed templates
 	tmplDashboard  *template.Template
@@ -42,6 +44,7 @@ type Server struct {
 	tmplVLANs      *template.Template
 	tmplMACs       *template.Template
 	tmplSessions   *template.Template
+	tmplCounters   *template.Template
 
 	// About page info
 	fullCfg   config.Config
@@ -50,18 +53,19 @@ type Server struct {
 }
 
 // NewServer creates a new web server with the given config and storage backends.
-func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string, engine *analysis.Engine, geoLookup *geo.Lookup, captureMgr *capture.Manager) *Server {
+func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *storage.SQLiteStore, staticDir string, engine *analysis.Engine, geoLookup *geo.Lookup, captureMgr *capture.Manager, counterStore *collector.CounterStore) *Server {
 	csrf := newCSRFManager()
 
 	s := &Server{
-		cfg:        cfg,
-		ringBuf:    ringBuf,
-		sqlStore:   sqlStore,
-		engine:     engine,
-		geoLookup:  geoLookup,
-		captureMgr: captureMgr,
-		csrf:       csrf,
-		mux:        http.NewServeMux(),
+		cfg:          cfg,
+		ringBuf:      ringBuf,
+		sqlStore:     sqlStore,
+		engine:       engine,
+		geoLookup:    geoLookup,
+		captureMgr:   captureMgr,
+		counterStore: counterStore,
+		csrf:         csrf,
+		mux:          http.NewServeMux(),
 	}
 
 	// Parse templates once at startup.
@@ -85,6 +89,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.tmplVLANs = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/vlans.xhtml"))
 	s.tmplMACs = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/macs.xhtml"))
 	s.tmplSessions = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/sessions.xhtml"))
+	s.tmplCounters = template.Must(template.New("layout.xhtml").Funcs(fmap).ParseFS(templateFS, "templates/layout.xhtml", "templates/counters.xhtml"))
 
 	// Register routes. State-changing POST endpoints are CSRF-protected.
 	s.mux.HandleFunc("/", s.handleDashboard)
@@ -103,6 +108,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/vlans", s.handleVLANs)
 	s.mux.HandleFunc("/macs", s.handleMACs)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
+	s.mux.HandleFunc("/counters", s.handleCounters)
 	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
 
 	// JSON API endpoints.

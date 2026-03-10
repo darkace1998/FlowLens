@@ -33,7 +33,7 @@ func newAuthTestServer(t *testing.T) *Server {
 		Username: "admin",
 		Password: "secret",
 	}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil, nil)
 	return s
 }
 
@@ -292,7 +292,7 @@ func TestTLSConfig_SetWhenConfigured(t *testing.T) {
 		TLSCert:  "/tmp/cert.pem",
 		TLSKey:   "/tmp/key.pem",
 	}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil, nil)
 
 	if s.srv.TLSConfig == nil {
 		t.Error("TLS config should be set when cert/key provided")
