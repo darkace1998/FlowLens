@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
@@ -24,6 +25,7 @@ type Collector struct {
 	sflowConns     []*net.UDPConn
 	nfv9Cache      *NFV9TemplateCache
 	ipfixCache     *IPFIXTemplateCache
+	limiter        *rateLimiter
 }
 
 // New creates a new Collector with the given config and flow handler.
@@ -33,6 +35,7 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 		handler:    handler,
 		nfv9Cache:  NewNFV9TemplateCache(),
 		ipfixCache: NewIPFIXTemplateCache(),
+		limiter:    newRateLimiter(cfg.RateLimit),
 	}
 }
 
@@ -100,6 +103,18 @@ func (c *Collector) Start() error {
 		}
 	}
 
+	// Start periodic rate-limiter cleanup if rate limiting is enabled.
+	if c.cfg.RateLimit > 0 {
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				<-ticker.C
+				c.limiter.cleanup()
+			}
+		}()
+	}
+
 	// Run a read loop for each connection; block until all finish.
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(c.conns)+len(c.sflowConns))
@@ -144,6 +159,11 @@ func (c *Collector) readLoop(conn *net.UDPConn) error {
 			continue
 		}
 
+		// Rate-limit per source IP.
+		if !c.limiter.allow(remoteAddr.IP.String()) {
+			continue
+		}
+
 		// Copy data so buffer can be reused immediately.
 		data := make([]byte, n)
 		copy(data, buf[:n])
@@ -172,6 +192,11 @@ func (c *Collector) sflowReadLoop(conn *net.UDPConn) error {
 				return nil
 			}
 			logging.Default().Error("sFlow UDP read error: %v", err)
+			continue
+		}
+
+		// Rate-limit per source IP.
+		if !c.limiter.allow(remoteAddr.IP.String()) {
 			continue
 		}
 

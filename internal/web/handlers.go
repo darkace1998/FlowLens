@@ -2362,8 +2362,9 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the "pcap" file part.
+	// Find the "pcap" file part, validating the CSRF token from earlier parts.
 	var pcapReader io.ReadCloser
+	csrfValid := false
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
@@ -2373,11 +2374,25 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error reading upload", http.StatusBadRequest)
 			return
 		}
+		if part.FormName() == "csrf_token" {
+			tokenBytes, _ := io.ReadAll(io.LimitReader(part, 256))
+			csrfValid = s.csrf.valid(string(tokenBytes))
+			part.Close()
+			continue
+		}
 		if part.FormName() == "pcap" {
 			pcapReader = part
 			break
 		}
 		part.Close()
+	}
+
+	if !csrfValid {
+		if pcapReader != nil {
+			pcapReader.Close()
+		}
+		http.Error(w, "Forbidden — invalid or missing CSRF token", http.StatusForbidden)
+		return
 	}
 
 	if pcapReader == nil {

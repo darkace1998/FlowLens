@@ -21,6 +21,7 @@
 <div class="panel" style="margin-bottom:1rem">
   <h2>Import PCAP</h2>
   <form method="POST" action="/pcap/import" enctype="multipart/form-data" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+    {{csrfToken}}
     <label style="font-size:.75rem;color:var(--muted);text-transform:uppercase">
       PCAP File
       <input type="file" name="pcap" accept=".pcap,.cap" required style="display:block;margin-top:.25rem" />

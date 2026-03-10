@@ -21,10 +21,11 @@ type Config struct {
 type CollectorConfig struct {
 	NetFlowPort    int               `yaml:"netflow_port"`
 	IPFIXPort      int               `yaml:"ipfix_port"`
-	SFlowPort      int               `yaml:"sflow_port"`     // UDP port for sFlow v5 (default: 6343)
+	SFlowPort      int               `yaml:"sflow_port"`      // UDP port for sFlow v5 (default: 6343)
 	BufferSize     int               `yaml:"buffer_size"`
-	InterfaceNames map[string]string `yaml:"interface_names"` // ifIndex → human-readable name (e.g. "1": "eth0")
-	Interfaces     []InterfaceConfig `yaml:"interfaces"`      // multiple collector instances bound to different addresses
+	RateLimit      int               `yaml:"rate_limit"`       // max packets per second per source IP (0 = unlimited)
+	InterfaceNames map[string]string `yaml:"interface_names"`  // ifIndex → human-readable name (e.g. "1": "eth0")
+	Interfaces     []InterfaceConfig `yaml:"interfaces"`       // multiple collector instances bound to different addresses
 }
 
 // InterfaceConfig defines a single collector listener bound to a specific address/port.
@@ -60,6 +61,10 @@ type AnalysisConfig struct {
 type WebConfig struct {
 	Listen   string `yaml:"listen"`
 	PageSize int    `yaml:"page_size"`
+	TLSCert  string `yaml:"tls_cert"`  // path to TLS certificate file (enables HTTPS when set with tls_key)
+	TLSKey   string `yaml:"tls_key"`   // path to TLS private key file
+	Username string `yaml:"username"`  // HTTP Basic Auth username (authentication disabled when empty)
+	Password string `yaml:"password"`  // HTTP Basic Auth password
 }
 
 // CaptureConfig holds settings for packet capture and PCAP storage.

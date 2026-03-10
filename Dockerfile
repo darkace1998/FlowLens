@@ -16,11 +16,19 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata
 
+# Run as non-root user for security.
+RUN addgroup -S flowlens && adduser -S flowlens -G flowlens
+
 WORKDIR /app
 
 COPY --from=builder /flowlens /app/flowlens
 COPY configs/flowlens.yaml /app/configs/flowlens.yaml
 COPY static/ /app/static/
+
+# Ensure the non-root user can write to data directories.
+RUN mkdir -p /app/captures && chown -R flowlens:flowlens /app
+
+USER flowlens
 
 EXPOSE 2055/udp 4739/udp 8080/tcp
 
