@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
@@ -14,15 +15,22 @@ import (
 // basicAuth wraps a handler with HTTP Basic Authentication when
 // username and password are configured. If either is empty,
 // authentication is disabled and the handler is returned as-is.
+// Credentials are SHA-256 hashed before comparison so that
+// subtle.ConstantTimeCompare operates on fixed-length (32-byte)
+// digests, preventing length-based timing side-channels.
 func basicAuth(next http.Handler, username, password string) http.Handler {
 	if username == "" || password == "" {
 		return next
 	}
+	wantUser := sha256.Sum256([]byte(username))
+	wantPass := sha256.Sum256([]byte(password))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
+		gotUser := sha256.Sum256([]byte(u))
+		gotPass := sha256.Sum256([]byte(p))
 		if !ok ||
-			subtle.ConstantTimeCompare([]byte(u), []byte(username)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(p), []byte(password)) != 1 {
+			subtle.ConstantTimeCompare(gotUser[:], wantUser[:]) != 1 ||
+			subtle.ConstantTimeCompare(gotPass[:], wantPass[:]) != 1 {
 			w.Header().Set("WWW-Authenticate", `Basic realm="FlowLens"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -44,11 +52,12 @@ func newCSRFManager() *csrfManager {
 }
 
 // generate creates a new random CSRF token and stores it.
+// If crypto/rand fails, it returns an empty string — callers
+// treat empty tokens as invalid, so CSRF protection fails closed.
 func (m *csrfManager) generate() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to a less secure but still usable token on rand failure.
-		return hex.EncodeToString(b)
+		return ""
 	}
 	token := hex.EncodeToString(b)
 	m.mu.Lock()
@@ -104,6 +113,22 @@ func cspMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// --- Health-check bypass middleware ---
+
+// exemptHealthz routes /healthz requests directly to the mux, bypassing
+// the wrapped handler chain (which includes Basic Auth). This ensures
+// Docker HEALTHCHECK and Kubernetes probes remain functional when
+// authentication is enabled.
+func exemptHealthz(authed http.Handler, mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		authed.ServeHTTP(w, r)
 	})
 }
 

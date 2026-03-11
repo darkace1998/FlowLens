@@ -27,6 +27,7 @@ type Collector struct {
 	nfv9Cache      *NFV9TemplateCache
 	ipfixCache     *IPFIXTemplateCache
 	limiter        *rateLimiter
+	done           chan struct{} // closed by Stop to halt background goroutines
 }
 
 // New creates a new Collector with the given config and flow handler.
@@ -37,6 +38,7 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 		nfv9Cache:  NewNFV9TemplateCache(),
 		ipfixCache: NewIPFIXTemplateCache(),
 		limiter:    newRateLimiter(cfg.RateLimit),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -116,8 +118,12 @@ func (c *Collector) Start() error {
 			ticker := time.NewTicker(10 * time.Second)
 			defer ticker.Stop()
 			for {
-				<-ticker.C
-				c.limiter.cleanup()
+				select {
+				case <-ticker.C:
+					c.limiter.cleanup()
+				case <-c.done:
+					return
+				}
 			}
 		}()
 	}
@@ -245,8 +251,17 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 	}
 }
 
-// Stop closes all UDP connections, causing Start to return.
+// Stop closes all UDP connections and stops background goroutines,
+// causing Start to return.
 func (c *Collector) Stop() {
+	// Signal the rate-limiter cleanup goroutine to exit.
+	select {
+	case <-c.done:
+		// already closed
+	default:
+		close(c.done)
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, conn := range c.conns {

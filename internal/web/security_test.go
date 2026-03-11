@@ -14,10 +14,11 @@ import (
 
 func TestBasicAuth_Disabled(t *testing.T) {
 	// No username/password = auth disabled, pages accessible.
+	// Use the full handler chain (srv.Handler) to verify auth middleware is bypassed.
 	s, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	s.Mux().ServeHTTP(w, req)
+	s.srv.Handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
@@ -93,6 +94,19 @@ func TestBasicAuth_TimingResistant(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestBasicAuth_HealthzExempt(t *testing.T) {
+	// /healthz should be accessible without credentials even when auth is enabled.
+	s := newAuthTestServer(t)
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	w := httptest.NewRecorder()
+	s.srv.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("healthz status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
 

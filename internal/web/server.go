@@ -132,8 +132,11 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
 	// Build the handler chain: Recovery → Request Logging → Request Timeout → CSP → Basic Auth → Mux.
+	// /healthz is exempt from Basic Auth so that Docker HEALTHCHECK and Kubernetes
+	// liveness/readiness probes work when authentication is enabled.
 	var handler http.Handler = s.mux
 	handler = basicAuth(handler, cfg.Username, cfg.Password)
+	handler = exemptHealthz(handler, s.mux)
 	handler = cspMiddleware(handler)
 	handler = requestTimeout(handler, 30*time.Second)
 	handler = requestLogging(handler)
