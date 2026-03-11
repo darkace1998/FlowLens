@@ -67,7 +67,7 @@ func TestEngine_RunsAnalyzers(t *testing.T) {
 	cfg.Interval = 50 * time.Millisecond
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(100 * time.Millisecond)
 	engine.Stop()
 
@@ -82,7 +82,7 @@ func TestEngine_EmptyStore(t *testing.T) {
 	cfg := defaultCfg()
 
 	engine := NewEngine(cfg, rb, TopTalkers{}, ProtocolDistribution{}, ScanDetector{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(50 * time.Millisecond)
 	engine.Stop()
 
@@ -106,7 +106,7 @@ func TestEngine_SortsBySeverity(t *testing.T) {
 	cfg.TopTalkersCount = 2
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(50 * time.Millisecond)
 	engine.Stop()
 
@@ -271,7 +271,7 @@ func TestScanDetector_ScanDetected(t *testing.T) {
 	rb := storage.NewRingBuffer(100000)
 
 	// Simulate a port scan: one source hits 600 unique ports.
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 600)
 	for i := 0; i < 600; i++ {
 		flows = append(flows, makeFlow("10.0.1.100", "192.168.1.1", 50000, uint16(i+1), 6, 100, 1))
 	}
@@ -293,7 +293,7 @@ func TestScanDetector_CriticalScan(t *testing.T) {
 	rb := storage.NewRingBuffer(100000)
 
 	// Simulate a massive scan: 1500+ unique ports (>= 3x threshold of 500).
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 1600)
 	for i := 0; i < 1600; i++ {
 		flows = append(flows, makeFlow("10.0.1.200", "192.168.1.1", 50000, uint16(i+1), 6, 100, 1))
 	}
@@ -323,7 +323,7 @@ func TestScanDetector_IgnoresNonTCPUDP(t *testing.T) {
 	rb := storage.NewRingBuffer(100000)
 
 	// ICMP flows to many destinations shouldn't trigger scan detection.
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 600)
 	for i := 0; i < 600; i++ {
 		flows = append(flows, makeFlow("10.0.1.100", "192.168.1.1", 0, 0, 1, 100, 1))
 	}
@@ -705,7 +705,7 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 	cfg.TopTalkersCount = 1
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(80 * time.Millisecond)
 
 	// Should have the advisory.

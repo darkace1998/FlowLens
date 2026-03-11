@@ -54,14 +54,23 @@ func (RetransmissionDetector) Analyze(store *storage.RingBuffer, cfg config.Anal
 		}
 	}
 
+	retransThresh := cfg.RetransRateThreshold
+	if retransThresh <= 0 {
+		retransThresh = retransmissionRateThreshold
+	}
+	criticalThresh := cfg.RetransCriticalThreshold
+	if criticalThresh <= 0 {
+		criticalThresh = criticalRetransmissionRateThreshold
+	}
+
 	if hasCounters {
-		return analyzeWithCounters(flows)
+		return analyzeWithCounters(flows, retransThresh, criticalThresh)
 	}
 	return analyzeWithHeuristic(flows)
 }
 
 // analyzeWithCounters uses actual IPFIX/NetFlow TCP quality counters.
-func analyzeWithCounters(flows []model.Flow) []Advisory {
+func analyzeWithCounters(flows []model.Flow, retransThresh, criticalThresh float64) []Advisory {
 	type pairKey struct {
 		src, dst         string
 		srcPort, dstPort uint16
@@ -113,7 +122,7 @@ func analyzeWithCounters(flows []model.Flow) []Advisory {
 		if s.packets > 0 {
 			rate = float64(s.retrans) / float64(s.packets) * 100
 		}
-		if rate >= retransmissionRateThreshold || s.ooo > 0 || s.loss > 0 {
+		if rate >= retransThresh || s.ooo > 0 || s.loss > 0 {
 			results = append(results, result{pk: pk, retrans: s.retrans, ooo: s.ooo, loss: s.loss, rate: rate})
 		}
 	}
@@ -127,11 +136,11 @@ func analyzeWithCounters(flows []model.Flow) []Advisory {
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING
-		if r.rate >= criticalRetransmissionRateThreshold || r.loss > 0 {
+		if r.rate >= criticalThresh || r.loss > 0 {
 			sev = CRITICAL
 		}
 
@@ -187,7 +196,7 @@ func analyzeWithHeuristic(flows []model.Flow) []Advisory {
 		avgBytes float64
 		packets  uint64
 	}
-	var results []result
+	results := make([]result, 0, len(pairs))
 
 	for pk, s := range pairs {
 		if s.packets < retransmissionMinPackets {
@@ -209,7 +218,7 @@ func analyzeWithHeuristic(flows []model.Flow) []Advisory {
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING

@@ -45,8 +45,13 @@ func newTestServer(t *testing.T) (*Server, *storage.RingBuffer) {
 	t.Helper()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, nil, nil)
 	return s, ringBuf
+}
+
+// csrfToken generates a valid CSRF token for use in tests.
+func (s *Server) csrfToken() string {
+	return s.csrf.generate()
 }
 
 func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.SQLiteStore) {
@@ -58,7 +63,7 @@ func newTestServerWithSQL(t *testing.T) (*Server, *storage.RingBuffer, *storage.
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil)
+	s := NewServer(cfg, ringBuf, sqlStore, t.TempDir(), nil, nil, nil, nil)
 	t.Cleanup(func() { sqlStore.Close() })
 	return s, ringBuf, sqlStore
 }
@@ -729,10 +734,10 @@ func TestAdvisories_WithEngine(t *testing.T) {
 		analysis.TopTalkers{},
 		analysis.ProtocolDistribution{},
 	)
-	go engine.Start()
+	engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/advisories", nil)
 	w := httptest.NewRecorder()
@@ -1405,7 +1410,7 @@ func TestHandleMap_WithGeo(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1431,7 +1436,7 @@ func TestFlows_CountryColumns(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1454,7 +1459,7 @@ func TestHosts_CountryColumn(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 	s.fullCfg.Storage.RingBufferDuration = 10 * time.Minute
 
 	ringBuf.Insert([]model.Flow{
@@ -1530,7 +1535,7 @@ func TestBuildMapData(t *testing.T) {
 	geoLookup := geo.New()
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, geoLookup, nil, nil)
 
 	flows := []model.Flow{
 		makeTestFlow("8.8.8.8", "192.168.1.1", 443, 54321, 6, 5000, 10),
@@ -1575,7 +1580,7 @@ func TestCapturePage_WithManager(t *testing.T) {
 		MaxFiles:   10,
 	}
 	mgr := capture.NewManager(capCfg)
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture", nil)
 	w := httptest.NewRecorder()
@@ -1595,7 +1600,8 @@ func TestCapturePage_WithManager(t *testing.T) {
 
 func TestCaptureStart_NilManager(t *testing.T) {
 	s, _ := newTestServer(t)
-	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("device=eth0"))
+	token := s.csrfToken()
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("device=eth0&csrf_token="+token))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.Mux().ServeHTTP(w, req)
@@ -1610,9 +1616,10 @@ func TestCaptureStart_NoDevice(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
-	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader(""))
+	token := s.csrfToken()
+	req := httptest.NewRequest("POST", "/capture/start", strings.NewReader("csrf_token="+token))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.Mux().ServeHTTP(w, req)
@@ -1635,7 +1642,8 @@ func TestCaptureStart_MethodNotAllowed(t *testing.T) {
 
 func TestCaptureStop_NilManager(t *testing.T) {
 	s, _ := newTestServer(t)
-	req := httptest.NewRequest("POST", "/capture/stop", strings.NewReader("id=cap-1"))
+	token := s.csrfToken()
+	req := httptest.NewRequest("POST", "/capture/stop", strings.NewReader("id=cap-1&csrf_token="+token))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.Mux().ServeHTTP(w, req)
@@ -1661,7 +1669,7 @@ func TestCaptureDownload_MissingFile(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture/download?file=nonexistent.pcap", nil)
 	w := httptest.NewRecorder()
@@ -1677,7 +1685,7 @@ func TestCaptureDownload_NoFileParam(t *testing.T) {
 	mgr := capture.NewManager(capCfg)
 	ringBuf := storage.NewRingBuffer(1000)
 	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
-	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr)
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
 
 	req := httptest.NewRequest("GET", "/capture/download", nil)
 	w := httptest.NewRecorder()
@@ -1748,8 +1756,8 @@ func TestDashboard_ChartScripts(t *testing.T) {
 	s.Mux().ServeHTTP(w, req)
 	body := w.Body.String()
 
-	if !strings.Contains(body, "chart.js") {
-		t.Error("dashboard should include Chart.js CDN script")
+	if !strings.Contains(body, "/static/chart.umd.min.js") {
+		t.Error("dashboard should include local Chart.js script")
 	}
 	if !strings.Contains(body, "protoChart") {
 		t.Error("dashboard should contain protocol chart canvas")
@@ -2070,9 +2078,11 @@ func TestPcapImport_StreamingUpload(t *testing.T) {
 	pcapBuf.Write(phdr[:])
 	pcapBuf.Write(pkt)
 
-	// Create multipart form body.
+	// Create multipart form body with CSRF token.
+	token := s.csrfToken()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	writer.WriteField("csrf_token", token)
 	part, err := writer.CreateFormFile("pcap", "test.pcap")
 	if err != nil {
 		t.Fatalf("CreateFormFile: %v", err)
@@ -2109,9 +2119,11 @@ func TestPcapImport_PcapngRejected(t *testing.T) {
 	binary.LittleEndian.PutUint32(ghdr[0:4], 0x0a0d0d0a) // pcapng magic
 	pcapBuf.Write(ghdr[:])
 
-	// Create multipart form body.
+	// Create multipart form body with CSRF token.
+	token := s.csrfToken()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	writer.WriteField("csrf_token", token)
 	part, _ := writer.CreateFormFile("pcap", "test.pcapng")
 	part.Write(pcapBuf.Bytes())
 	writer.Close()

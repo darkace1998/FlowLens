@@ -98,9 +98,18 @@ func (VoIPQualityDetector) Analyze(store *storage.RingBuffer, cfg config.Analysi
 	}
 	var results []result
 
+	warnThresh := cfg.MOSWarningThreshold
+	if warnThresh <= 0 {
+		warnThresh = float64(mosWarningThreshold)
+	}
+	critThresh := cfg.MOSCriticalThreshold
+	if critThresh <= 0 {
+		critThresh = float64(mosCriticalThreshold)
+	}
+
 	for key, s := range agg {
 		avg := s.mosSum / float32(s.count)
-		if avg < mosWarningThreshold {
+		if float64(avg) < warnThresh {
 			results = append(results, result{
 				key: key, avgMOS: avg, minMOS: s.minMOS,
 				jitter: s.jitter, loss: s.loss,
@@ -116,11 +125,11 @@ func (VoIPQualityDetector) Analyze(store *storage.RingBuffer, cfg config.Analysi
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING
-		if r.avgMOS < mosCriticalThreshold {
+		if float64(r.avgMOS) < critThresh {
 			sev = CRITICAL
 		}
 

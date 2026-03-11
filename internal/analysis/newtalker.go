@@ -77,7 +77,7 @@ func (NewTalkerDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisC
 		packets uint64
 		flows   int
 	}
-	var results []result
+	results := make([]result, 0, len(recentHosts))
 
 	for ip, info := range recentHosts {
 		if _, inBaseline := baselineHosts[ip]; inBaseline {
@@ -97,7 +97,7 @@ func (NewTalkerDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisC
 		results = results[:10]
 	}
 
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING

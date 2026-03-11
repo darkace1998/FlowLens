@@ -3,6 +3,7 @@ collector:
   ipfix_port: 4739            # UDP port for IPFIX
   sflow_port: 6343            # UDP port for sFlow v5
   buffer_size: 65535          # UDP read buffer size in bytes
+  # rate_limit: 0             # max packets/sec per source IP (0 = unlimited)
   # interface_names:          # optional ifIndex → name mapping for dashboard display
   #   "1": "eth0"
   #   "2": "eth1"
@@ -35,6 +36,10 @@ analysis:
 web:
   listen: ":8080"             # HTTP listen address
   page_size: 50               # rows per page in flow explorer
+  # tls_cert: ""              # path to TLS certificate (enables HTTPS when set with tls_key)
+  # tls_key: ""               # path to TLS private key
+  # username: ""              # HTTP Basic Auth username (disabled when empty)
+  # password: ""              # HTTP Basic Auth password
 
 capture:
   # interfaces:               # network interfaces available for capture

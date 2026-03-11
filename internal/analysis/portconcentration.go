@@ -68,7 +68,7 @@ func (PortConcentrationDetector) Analyze(store *storage.RingBuffer, cfg config.A
 		bytes   uint64
 		packets uint64
 	}
-	var results []result
+	results := make([]result, 0, len(ports))
 
 	for pk, s := range ports {
 		srcCount := len(s.sources)
@@ -87,7 +87,7 @@ func (PortConcentrationDetector) Analyze(store *storage.RingBuffer, cfg config.A
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING

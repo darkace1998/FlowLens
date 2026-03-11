@@ -55,10 +55,19 @@ func (DNSVolume) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) [
 	now := time.Now()
 	var advisories []Advisory
 
+	rateThresh := cfg.DNSRateThreshold
+	if rateThresh <= 0 {
+		rateThresh = dnsRateThreshold
+	}
+	ratioThresh := cfg.DNSRatioThreshold
+	if ratioThresh <= 0 {
+		ratioThresh = dnsRatioThreshold
+	}
+
 	// Check absolute rate threshold.
-	if dnsRatePerMin >= dnsRateThreshold {
+	if dnsRatePerMin >= rateThresh {
 		sev := WARNING
-		if dnsRatePerMin >= dnsRateThreshold*5 {
+		if dnsRatePerMin >= rateThresh*5 {
 			sev = CRITICAL
 		}
 
@@ -71,14 +80,14 @@ func (DNSVolume) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) [
 					"Threshold: %d flows/min.",
 				dnsRatePerMin, dnsFlows,
 				formatBytesShort(dnsBytes), formatCountShort(dnsPackets),
-				dnsRateThreshold,
+				int(rateThresh),
 			),
 			Action: dnsRateAction(sev),
 		})
 	}
 
 	// Check ratio threshold.
-	if dnsRatio >= dnsRatioThreshold {
+	if dnsRatio >= ratioThresh {
 		sev := WARNING
 		if dnsRatio >= 60 {
 			sev = CRITICAL

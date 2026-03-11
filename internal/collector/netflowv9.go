@@ -190,7 +190,7 @@ func decodeNFV9DataFlowSet(data []byte, sourceID uint32, templateID uint16,
 		return nil // no template yet
 	}
 
-	var flows []model.Flow
+	var flows []model.Flow //nolint:prealloc // capacity depends on runtime data size
 	offset := 0
 
 	for offset+tmpl.Size <= len(data) {

@@ -236,6 +236,6 @@ func (m *Manager) StopAll() {
 	m.mu.Unlock()
 
 	for _, id := range ids {
-		m.Stop(id)
+		_ = m.Stop(id)
 	}
 }

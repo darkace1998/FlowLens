@@ -11,9 +11,9 @@
   {{template "head" .}}
 </head>
 <body>
-  <nav class="topnav">
-    <a href="/" class="brand">FlowLens</a>
-    <button class="nav-toggle" onclick="document.querySelector('.topnav').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
+  <nav class="topnav" aria-label="Main navigation">
+    <a href="/" class="brand" aria-label="FlowLens home">FlowLens</a>
+    <button class="nav-toggle" onclick="document.querySelector('.topnav').classList.toggle('open')" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
     <div class="nav-links">
       <a href="/">Dashboard</a>
       <a href="/flows">Flows</a>
@@ -21,6 +21,8 @@
       <a href="/hosts">Hosts</a>
       <a href="/vlans">VLANs</a>
       <a href="/macs">MACs</a>
+      <a href="/counters">Counters</a>
+      <a href="/exporters">Exporters</a>
       <a href="/map">Map</a>
       <a href="/capture">Capture</a>
       <a href="/reports">Reports</a>
@@ -29,6 +31,7 @@
     </div>
     <button class="dark-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode" title="Toggle dark mode">&#9681;</button>
   </nav>
+  <div class="loading-overlay" id="loading-overlay" aria-hidden="true"><div class="loading-spinner" role="status" aria-label="Loading"><span class="sr-only">Loading…</span></div></div>
   <main>
     {{template "content" .}}
   </main>
@@ -43,6 +46,19 @@
   }
   (function(){
     try{if(localStorage.getItem('flowlens-dark')==='1')document.body.classList.add('dark')}catch(e){}
+    // Toggle aria-expanded on hamburger menu
+    var btn=document.querySelector('.nav-toggle');
+    if(btn){btn.addEventListener('click',function(){
+      var expanded=this.getAttribute('aria-expanded')==='true';
+      this.setAttribute('aria-expanded',String(!expanded));
+    });}
+    // Show loading spinner on form submissions and slow navigations
+    document.querySelectorAll('form').forEach(function(f){
+      f.addEventListener('submit',function(){
+        var overlay=document.getElementById('loading-overlay');
+        if(overlay){overlay.classList.add('active');overlay.setAttribute('aria-hidden','false');}
+      });
+    });
   })();
   </script>
 </body>

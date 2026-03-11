@@ -22,8 +22,8 @@ func TestPcapWriter_WritePacket(t *testing.T) {
 	pkt := []byte{0x01, 0x02, 0x03, 0x04, 0x05}
 	ts := time.Date(2025, 1, 15, 10, 30, 0, 500000000, time.UTC)
 
-	if err := pw.WritePacket(pkt, ts); err != nil {
-		t.Fatalf("WritePacket: %v", err)
+	if errW := pw.WritePacket(pkt, ts); errW != nil {
+		t.Fatalf("WritePacket: %v", errW)
 	}
 
 	pkts, bytes := pw.Stats()
@@ -246,8 +246,8 @@ func TestReadPcapFlows(t *testing.T) {
 	pkt[34+13] = 0x02      // SYN flag
 
 	ts := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-	if err := pw.WritePacket(pkt, ts); err != nil {
-		t.Fatalf("WritePacket: %v", err)
+	if errW := pw.WritePacket(pkt, ts); errW != nil {
+		t.Fatalf("WritePacket: %v", errW)
 	}
 	pw.Close()
 

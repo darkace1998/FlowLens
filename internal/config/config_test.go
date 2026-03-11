@@ -186,3 +186,61 @@ collector:
 		t.Errorf("Interfaces[1].Listen = %q, want :9996", iface1.Listen)
 	}
 }
+
+func TestLoadSecurityConfig(t *testing.T) {
+	yamlContent := `
+web:
+  listen: ":8443"
+  username: "admin"
+  password: "s3cret"
+  tls_cert: "/etc/ssl/cert.pem"
+  tls_key: "/etc/ssl/key.pem"
+collector:
+  rate_limit: 5000
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "security.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if cfg.Web.Username != "admin" {
+		t.Errorf("expected Username admin, got %s", cfg.Web.Username)
+	}
+	if cfg.Web.Password != "s3cret" {
+		t.Errorf("expected Password s3cret, got %s", cfg.Web.Password)
+	}
+	if cfg.Web.TLSCert != "/etc/ssl/cert.pem" {
+		t.Errorf("expected TLSCert /etc/ssl/cert.pem, got %s", cfg.Web.TLSCert)
+	}
+	if cfg.Web.TLSKey != "/etc/ssl/key.pem" {
+		t.Errorf("expected TLSKey /etc/ssl/key.pem, got %s", cfg.Web.TLSKey)
+	}
+	if cfg.Collector.RateLimit != 5000 {
+		t.Errorf("expected RateLimit 5000, got %d", cfg.Collector.RateLimit)
+	}
+}
+
+func TestDefaultsSecurityFieldsEmpty(t *testing.T) {
+	cfg := Defaults()
+	if cfg.Web.Username != "" {
+		t.Errorf("expected empty Username by default, got %s", cfg.Web.Username)
+	}
+	if cfg.Web.Password != "" {
+		t.Errorf("expected empty Password by default, got %s", cfg.Web.Password)
+	}
+	if cfg.Web.TLSCert != "" {
+		t.Errorf("expected empty TLSCert by default, got %s", cfg.Web.TLSCert)
+	}
+	if cfg.Web.TLSKey != "" {
+		t.Errorf("expected empty TLSKey by default, got %s", cfg.Web.TLSKey)
+	}
+	if cfg.Collector.RateLimit != 0 {
+		t.Errorf("expected RateLimit 0 by default, got %d", cfg.Collector.RateLimit)
+	}
+}

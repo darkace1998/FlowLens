@@ -2,8 +2,8 @@ package web
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"math"
 	"net"
@@ -16,290 +16,12 @@ import (
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
 	"github.com/darkace1998/FlowLens/internal/capture"
+	"github.com/darkace1998/FlowLens/internal/collector"
 	"github.com/darkace1998/FlowLens/internal/geo"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
-
-// --- Template helpers ---
-
-var funcMap = template.FuncMap{
-	"formatBytes":    formatBytes,
-	"formatPkts":     formatPkts,
-	"formatBPS":      formatBPS,
-	"formatPPS":      formatPPS,
-	"formatDuration": formatDuration,
-	"protoName":      model.ProtocolName,
-	"appProto":       model.AppProtocol,
-	"appCategory":    model.AppCategory,
-	"asName":         model.ASName,
-	"timeAgo":        timeAgo,
-	"formatTime":     formatTime,
-	"seq":            seq,
-	"pageWindow":     pageWindow,
-	"add":            func(a, b int) int { return a + b },
-	"sub":            func(a, b int) int { return a - b },
-	"pctOf":          pctOf,
-	"severityClass":  severityClass,
-	"formatAS":       formatAS,
-	"formatJitter":   formatJitter,
-	"formatMOS":      formatMOS,
-	"int":           func(v interface{}) int {
-		switch n := v.(type) {
-		case int:
-			return n
-		case int64:
-			return int(n)
-		case uint64:
-			return int(n)
-		case float64:
-			return int(n)
-		default:
-			return 0
-		}
-	},
-	"uint64": func(v interface{}) uint64 {
-		switch n := v.(type) {
-		case int:
-			return uint64(n)
-		case int64:
-			return uint64(n)
-		case uint64:
-			return n
-		case float64:
-			return uint64(n)
-		default:
-			return 0
-		}
-	},
-	"gt": func(a, b int) bool { return a > b },
-}
-
-func severityClass(sev analysis.Severity) string {
-	switch sev {
-	case analysis.CRITICAL:
-		return "critical"
-	case analysis.WARNING:
-		return "warning"
-	default:
-		return "info"
-	}
-}
-
-func formatBytes(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func formatPkts(p uint64) string {
-	switch {
-	case p < 1000:
-		return fmt.Sprintf("%d", p)
-	case p < 1_000_000:
-		return fmt.Sprintf("%.1fK", float64(p)/1e3)
-	case p < 1_000_000_000:
-		return fmt.Sprintf("%.1fM", float64(p)/1e6)
-	case p < 1_000_000_000_000:
-		return fmt.Sprintf("%.1fB", float64(p)/1e9)
-	default:
-		return fmt.Sprintf("%.1fT", float64(p)/1e12)
-	}
-}
-
-func formatBPS(bytesTotal uint64, duration time.Duration) string {
-	if duration == 0 {
-		return "0 bps"
-	}
-	bps := float64(bytesTotal*8) / duration.Seconds()
-	switch {
-	case bps >= 1e9:
-		return fmt.Sprintf("%.2f Gbps", bps/1e9)
-	case bps >= 1e6:
-		return fmt.Sprintf("%.2f Mbps", bps/1e6)
-	case bps >= 1e3:
-		return fmt.Sprintf("%.2f Kbps", bps/1e3)
-	default:
-		return fmt.Sprintf("%.0f bps", bps)
-	}
-}
-
-func formatPPS(pktsTotal uint64, duration time.Duration) string {
-	if duration == 0 {
-		return "0 pps"
-	}
-	pps := float64(pktsTotal) / duration.Seconds()
-	switch {
-	case pps >= 1e6:
-		return fmt.Sprintf("%.2f Mpps", pps/1e6)
-	case pps >= 1e3:
-		return fmt.Sprintf("%.2f Kpps", pps/1e3)
-	default:
-		return fmt.Sprintf("%.0f pps", pps)
-	}
-}
-
-func formatThroughput(bps float64) string {
-	if bps <= 0 {
-		return "—"
-	}
-	switch {
-	case bps >= 1e9:
-		return fmt.Sprintf("%.2f Gbps", bps/1e9)
-	case bps >= 1e6:
-		return fmt.Sprintf("%.2f Mbps", bps/1e6)
-	case bps >= 1e3:
-		return fmt.Sprintf("%.2f Kbps", bps/1e3)
-	default:
-		return fmt.Sprintf("%.0f bps", bps)
-	}
-}
-
-func formatRTT(us int64) string {
-	if us <= 0 {
-		return "—"
-	}
-	if us < 1000 {
-		return fmt.Sprintf("%dµs", us)
-	}
-	ms := float64(us) / 1000
-	if ms < 1000 {
-		return fmt.Sprintf("%.1fms", ms)
-	}
-	return fmt.Sprintf("%.2fs", ms/1000)
-}
-
-func formatJitter(us int64) string {
-	if us <= 0 {
-		return "—"
-	}
-	if us < 1000 {
-		return fmt.Sprintf("%dµs", us)
-	}
-	return fmt.Sprintf("%.1fms", float64(us)/1000)
-}
-
-func formatMOS(mos float32) string {
-	if mos <= 0 {
-		return "—"
-	}
-	return fmt.Sprintf("%.2f", mos)
-}
-
-func mosQuality(mos float32) string {
-	switch {
-	case mos >= 4.0:
-		return "good"
-	case mos >= 3.5:
-		return "fair"
-	case mos >= 3.0:
-		return "poor"
-	default:
-		return "bad"
-	}
-}
-
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
-}
-
-func formatTime(t time.Time) string {
-	return t.Format("2006-01-02 15:04:05")
-}
-
-// formatDuration returns a human-friendly duration string (e.g. "10m" instead of "10m0s").
-func formatDuration(d time.Duration) string {
-	if d < time.Second {
-		return d.String()
-	}
-	totalSecs := int(d.Seconds())
-	h := totalSecs / 3600
-	m := (totalSecs % 3600) / 60
-	s := totalSecs % 60
-	switch {
-	case h > 0 && m > 0:
-		return fmt.Sprintf("%dh %dm", h, m)
-	case h > 0:
-		return fmt.Sprintf("%dh", h)
-	case m > 0 && s > 0:
-		return fmt.Sprintf("%dm %ds", m, s)
-	case m > 0:
-		return fmt.Sprintf("%dm", m)
-	default:
-		return fmt.Sprintf("%ds", s)
-	}
-}
-
-func seq(start, end int) []int {
-	var s []int
-	for i := start; i <= end; i++ {
-		s = append(s, i)
-	}
-	return s
-}
-
-// pageWindow returns a sliding window of page numbers around the current page,
-// showing at most 5 pages centered on the current page.
-func pageWindow(currentPage, totalPages int) []int {
-	const windowSize = 5
-	start := currentPage - windowSize/2
-	end := start + windowSize - 1
-
-	if start < 1 {
-		start = 1
-		end = start + windowSize - 1
-	}
-	if end > totalPages {
-		end = totalPages
-		start = end - windowSize + 1
-		if start < 1 {
-			start = 1
-		}
-	}
-
-	var pages []int
-	for i := start; i <= end; i++ {
-		pages = append(pages, i)
-	}
-	return pages
-}
-
-func pctOf(part, total uint64) float64 {
-	if total == 0 {
-		return 0
-	}
-	v := math.Round(float64(part) / float64(total) * 1000) / 10
-	if v > 100 {
-		v = 100
-	}
-	return v
-}
-
-func formatAS(asn uint32) string {
-	name := model.ASName(asn)
-	if asn == 0 {
-		return name
-	}
-	return fmt.Sprintf("AS%d (%s)", asn, name)
-}
 
 // --- Dashboard data structures ---
 
@@ -449,6 +171,7 @@ type DashboardData struct {
 	VoIP         VoIPStats
 	Interfaces   []InterfaceEntry
 	IfaceFilter  string // current interface filter value (from query param)
+	SelectedRange string // currently selected time-range (e.g. "5m", "15m", "1h")
 
 	// Chart data for interactive Chart.js visualizations.
 	ChartProtoLabels  []string
@@ -496,10 +219,27 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+
+	// Parse optional time-range selector.
+	selectedRange := r.URL.Query().Get("range")
+	switch selectedRange {
+	case "5m":
+		window = 5 * time.Minute
+	case "15m":
+		window = 15 * time.Minute
+	case "1h":
+		window = 1 * time.Hour
+	case "6h":
+		window = 6 * time.Hour
+	case "24h":
+		window = 24 * time.Hour
+	default:
+		selectedRange = "" // use default, no selection
+	}
+
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Dashboard query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -525,6 +265,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := buildDashboardData(flows, window, s.fullCfg.Collector.InterfaceNames)
 	data.IfaceFilter = ifaceFilter
+	data.SelectedRange = selectedRange
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplDashboard.ExecuteTemplate(w, "layout", data); err != nil {
@@ -663,7 +404,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 	topSrc := topN(srcMap, totalBytes, 10)
 	topDst := topN(dstMap, totalBytes, 10)
 
-	var protocols []ProtocolEntry
+	protocols := make([]ProtocolEntry, 0, len(protoMap))
 	for _, e := range protoMap {
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		protocols = append(protocols, *e)
@@ -947,7 +688,7 @@ func computeTCPHealthStats(flows []model.Flow) TCPHealthStats {
 	if stats.TotalTCPPackets > 0 {
 		stats.RetransRate = math.Round(float64(stats.TotalRetrans)/float64(stats.TotalTCPPackets)*10000) / 100
 		stats.OOORate = math.Round(float64(stats.TotalOOO)/float64(stats.TotalTCPPackets)*10000) / 100
-		total := stats.TotalTCPPackets + uint64(stats.TotalLoss)
+		total := stats.TotalTCPPackets + stats.TotalLoss
 		stats.LossRate = math.Round(float64(stats.TotalLoss)/float64(total)*10000) / 100
 	}
 
@@ -1075,7 +816,7 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 	}
 
 	// Build top VoIP flows (sorted by worst MOS first).
-	var topFlows []VoIPFlowEntry
+	topFlows := make([]VoIPFlowEntry, 0, len(agg))
 	for key, a := range agg {
 		avgMOS := float32(0)
 		if a.count > 0 && a.mosSum > 0 {
@@ -1212,10 +953,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Flows query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1240,7 +980,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		end = totalFlows
 	}
 
-	var pageFlows []FlowRow
+	pageFlows := make([]FlowRow, 0, end-start)
 	for _, f := range filtered[start:end] {
 		appProto := f.AppProto
 		appCat := f.AppCat
@@ -1311,6 +1051,107 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleFlowsExport exports filtered flows as CSV or JSON.
+func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "csv"
+	}
+
+	filterSrcIP := strings.TrimSpace(r.URL.Query().Get("src_ip"))
+	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
+	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
+	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
+	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
+	if err != nil {
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
+		return
+	}
+
+	model.StitchFlows(allFlows)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+
+	switch format {
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-flows.json")
+		type exportFlow struct {
+			Timestamp string `json:"timestamp"`
+			SrcAddr   string `json:"src_addr"`
+			DstAddr   string `json:"dst_addr"`
+			SrcPort   uint16 `json:"src_port"`
+			DstPort   uint16 `json:"dst_port"`
+			Protocol  string `json:"protocol"`
+			Bytes     uint64 `json:"bytes"`
+			Packets   uint64 `json:"packets"`
+			Duration  string `json:"duration"`
+			AppProto  string `json:"app_proto"`
+			Category  string `json:"category"`
+		}
+		out := make([]exportFlow, 0, len(filtered))
+		for _, f := range filtered {
+			appProto := f.AppProto
+			appCat := f.AppCat
+			if appProto == "" {
+				appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+				appCat = model.AppCategory(appProto)
+			}
+			out = append(out, exportFlow{
+				Timestamp: f.Timestamp.Format(time.RFC3339),
+				SrcAddr:   model.SafeIPString(f.SrcAddr),
+				DstAddr:   model.SafeIPString(f.DstAddr),
+				SrcPort:   f.SrcPort,
+				DstPort:   f.DstPort,
+				Protocol:  model.ProtocolName(f.Protocol),
+				Bytes:     f.Bytes,
+				Packets:   f.Packets,
+				Duration:  f.Duration.String(),
+				AppProto:  appProto,
+				Category:  appCat,
+			})
+		}
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			logging.Default().Error("Flow JSON export error: %v", err)
+		}
+	default: // CSV
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-flows.csv")
+		csvWriter := csv.NewWriter(w)
+		_ = csvWriter.Write([]string{"timestamp", "src_addr", "dst_addr", "src_port", "dst_port", "protocol", "bytes", "packets", "duration", "app_proto", "category"})
+		for _, f := range filtered {
+			appProto := f.AppProto
+			appCat := f.AppCat
+			if appProto == "" {
+				appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+				appCat = model.AppCategory(appProto)
+			}
+			_ = csvWriter.Write([]string{
+				f.Timestamp.Format(time.RFC3339),
+				model.SafeIPString(f.SrcAddr),
+				model.SafeIPString(f.DstAddr),
+				fmt.Sprintf("%d", f.SrcPort),
+				fmt.Sprintf("%d", f.DstPort),
+				model.ProtocolName(f.Protocol),
+				fmt.Sprintf("%d", f.Bytes),
+				fmt.Sprintf("%d", f.Packets),
+				f.Duration.String(),
+				appProto,
+				appCat,
+			})
+		}
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			logging.Default().Error("Flow CSV export error: %v", err)
+		}
+	}
+}
+
 func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) []model.Flow {
 	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" {
 		return flows
@@ -1341,7 +1182,7 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 		}
 	}
 
-	var result []model.Flow
+	result := make([]model.Flow, 0, len(flows))
 	for _, f := range flows {
 		if srcIP != "" && !matchIP(f.SrcAddr, srcIP) {
 			continue
@@ -1378,10 +1219,9 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Hosts query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1495,10 +1335,9 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 	if window <= 0 {
 		window = 10 * time.Minute
 	}
-	flows, err := s.ringBuf.Recent(window, 0)
+	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("Map query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1519,7 +1358,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 		}
 	}
 
-	var markers []MapMarker
+	markers := make([]MapMarker, 0, len(hostBytes))
 	for ip, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
@@ -1610,37 +1449,37 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data.Error = "Invalid start time format"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 	endTime, err := time.Parse("2006-01-02T15:04", data.EndTime)
 	if err != nil {
 		data.Error = "Invalid end time format"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
-	if s.sqlStore == nil {
+	if s.reportSvc == nil {
 		data.Error = "SQLite store not configured"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
 	// Run aggregate query.
-	rows, err := s.sqlStore.QueryReport(startTime, endTime, data.GroupBy)
+	rows, err := s.reportSvc.QueryReport(startTime, endTime, data.GroupBy)
 	if err != nil {
 		data.Error = fmt.Sprintf("Report query failed: %v", err)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
 	// Run time-series query — auto-select bucket size.
 	dur := endTime.Sub(startTime)
 	bucketSec := chooseBucket(dur)
-	ts, err := s.sqlStore.QueryTimeSeries(startTime, endTime, bucketSec)
+	ts, err := s.reportSvc.QueryTimeSeries(startTime, endTime, bucketSec)
 	if err != nil {
 		logging.Default().Warn("Time-series query failed: %v", err)
 	}
@@ -1707,14 +1546,14 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 		groupBy = "app_proto"
 	}
 
-	if s.sqlStore == nil {
+	if s.reportSvc == nil {
 		http.Error(w, "SQLite store not configured", http.StatusInternalServerError)
 		return
 	}
 
-	rows, err := s.sqlStore.QueryReport(startTime, endTime, groupBy)
+	rows, err := s.reportSvc.QueryReport(startTime, endTime, groupBy)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Query failed", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1735,9 +1574,9 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.csv")
 		csvWriter := csv.NewWriter(w)
-		csvWriter.Write([]string{groupBy, "bytes", "packets", "flows", "avg_bytes"})
+		_ = csvWriter.Write([]string{groupBy, "bytes", "packets", "flows", "avg_bytes"})
 		for _, row := range rows {
-			csvWriter.Write([]string{
+			_ = csvWriter.Write([]string{
 				row.GroupKey,
 				fmt.Sprintf("%d", row.TotalBytes),
 				fmt.Sprintf("%d", row.TotalPackets),
@@ -1833,7 +1672,7 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		ScanThreshold:    s.fullCfg.Analysis.ScanThreshold,
 		WebListen:        s.fullCfg.Web.Listen,
 		PageSize:         s.fullCfg.Web.PageSize,
-		FlowCount:        s.ringBuf.Len(),
+		FlowCount:        s.flowSvc.FlowCount(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1924,7 +1763,7 @@ func (s *Server) handleCaptureStart(w http.ResponseWriter, r *http.Request) {
 
 	_, err := s.captureMgr.Start(device, bpf)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start capture: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Failed to start capture", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -1949,7 +1788,7 @@ func (s *Server) handleCaptureStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.captureMgr.Stop(id); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to stop capture: %v", err), http.StatusInternalServerError)
+		httpError(w, r, "Failed to stop capture", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -2010,10 +1849,9 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("VLAN query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -2041,7 +1879,7 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 		agg.hosts[dst] += f.Bytes
 	}
 
-	var entries []VLANEntry
+	entries := make([]VLANEntry, 0, len(vlans))
 	for vid, agg := range vlans {
 		e := VLANEntry{
 			ID:       vid,
@@ -2100,10 +1938,9 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
 	}
-	allFlows, err := s.ringBuf.Recent(recentWindow, 0)
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
-		http.Error(w, "Failed to query flows", http.StatusInternalServerError)
-		logging.Default().Error("MAC query error: %v", err)
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
 		return
 	}
 
@@ -2145,7 +1982,7 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var entries []MACEntry
+	entries := make([]MACEntry, 0, len(macs))
 	for mac, agg := range macs {
 		ips := make([]string, 0, len(agg.ips))
 		for ip := range agg.ips {
@@ -2172,6 +2009,117 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmplMACs.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("MAC template error: %v", err)
+	}
+}
+
+// --- Multi-exporter view ---
+
+// ExporterEntry represents a single exporter's aggregate statistics.
+type ExporterEntry struct {
+	IP        string
+	Bytes     uint64
+	Packets   uint64
+	FlowCount int
+	Pct       float64
+	TopProto  string // most common protocol
+	FirstSeen string
+	LastSeen  string
+}
+
+// ExportersPageData holds all data for the exporters template.
+type ExportersPageData struct {
+	Exporters      []ExporterEntry
+	TotalExporters int
+	TotalBytes     uint64
+	Window         time.Duration
+}
+
+func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	flows, err := s.flowSvc.RecentFlows(window, 0)
+	if err != nil {
+		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
+		return
+	}
+
+	type exporterAgg struct {
+		bytes, packets uint64
+		flowCount      int
+		protoCount     map[uint8]int
+		first, last    time.Time
+	}
+
+	aggMap := make(map[string]*exporterAgg)
+	var totalBytes uint64
+
+	for _, f := range flows {
+		totalBytes += f.Bytes
+		ip := model.SafeIPString(f.ExporterIP)
+		if ip == "" || ip == "<nil>" {
+			ip = "unknown"
+		}
+		if a, ok := aggMap[ip]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flowCount++
+			a.protoCount[f.Protocol]++
+			if f.Timestamp.Before(a.first) {
+				a.first = f.Timestamp
+			}
+			if f.Timestamp.After(a.last) {
+				a.last = f.Timestamp
+			}
+		} else {
+			aggMap[ip] = &exporterAgg{
+				bytes:      f.Bytes,
+				packets:    f.Packets,
+				flowCount:  1,
+				protoCount: map[uint8]int{f.Protocol: 1},
+				first:      f.Timestamp,
+				last:       f.Timestamp,
+			}
+		}
+	}
+
+	entries := make([]ExporterEntry, 0, len(aggMap))
+	for ip, a := range aggMap {
+		var topProto uint8
+		var maxCount int
+		for proto, count := range a.protoCount {
+			if count > maxCount {
+				topProto = proto
+				maxCount = count
+			}
+		}
+		entries = append(entries, ExporterEntry{
+			IP:        ip,
+			Bytes:     a.bytes,
+			Packets:   a.packets,
+			FlowCount: a.flowCount,
+			Pct:       pctOf(a.bytes, totalBytes),
+			TopProto:  model.ProtocolName(topProto),
+			FirstSeen: timeAgo(a.first),
+			LastSeen:  timeAgo(a.last),
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Bytes > entries[j].Bytes
+	})
+
+	data := ExportersPageData{
+		Exporters:      entries,
+		TotalExporters: len(entries),
+		TotalBytes:     totalBytes,
+		Window:         window,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplExporters.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
 	}
 }
 
@@ -2216,7 +2164,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		window = time.Hour
 	}
 
-	all, err := s.ringBuf.Recent(window, 0)
+	all, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		logging.Default().Warn("Sessions: ring buffer query error: %v", err)
 	}
@@ -2288,7 +2236,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var entries []SessionEntry
+	entries := make([]SessionEntry, 0, len(agg))
 	var totalBytes, totalPackets uint64
 
 	for _, a := range agg {
@@ -2362,22 +2310,37 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the "pcap" file part.
+	// Find the "pcap" file part, validating the CSRF token from earlier parts.
 	var pcapReader io.ReadCloser
+	csrfValid := false
 	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
+		part, errPart := mr.NextPart()
+		if errPart == io.EOF {
 			break
 		}
-		if err != nil {
+		if errPart != nil {
 			http.Error(w, "Error reading upload", http.StatusBadRequest)
 			return
+		}
+		if part.FormName() == "csrf_token" {
+			tokenBytes, _ := io.ReadAll(io.LimitReader(part, 256))
+			csrfValid = s.csrf.valid(string(tokenBytes))
+			part.Close()
+			continue
 		}
 		if part.FormName() == "pcap" {
 			pcapReader = part
 			break
 		}
 		part.Close()
+	}
+
+	if !csrfValid {
+		if pcapReader != nil {
+			pcapReader.Close()
+		}
+		http.Error(w, "Forbidden — invalid or missing CSRF token", http.StatusForbidden)
+		return
 	}
 
 	if pcapReader == nil {
@@ -2404,11 +2367,149 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(flows)
 
 	// Insert into ring buffer for analysis.
-	if err := s.ringBuf.Insert(flows); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to import flows: %v", err), http.StatusInternalServerError)
+	if err := s.flowSvc.InsertFlows(flows); err != nil {
+		httpError(w, r, "Failed to import flows", http.StatusInternalServerError, err)
 		return
 	}
 
 	logging.Default().Info("PCAP import: %d flows imported", len(flows))
 	http.Redirect(w, r, "/sessions", http.StatusSeeOther)
+}
+
+// --- sFlow Interface Counters page ---
+
+// CounterEntry represents a single interface counter for display.
+type CounterEntry struct {
+	AgentIP    string
+	IfIndex    uint32
+	IfName     string
+	IfSpeed    string
+	InOctets   string
+	InPackets  uint32
+	InErrors   uint32
+	InDrops    uint32
+	OutOctets  string
+	OutPackets uint32
+	OutErrors  uint32
+	OutDrops   uint32
+	InUtil     float64
+	OutUtil    float64
+	LastSeen   string
+}
+
+// CountersPageData holds data for the counters template.
+type CountersPageData struct {
+	Counters      []CounterEntry
+	TotalCounters int
+}
+
+func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
+	data := CountersPageData{}
+
+	if s.counterStore != nil {
+		window := s.fullCfg.Storage.RingBufferDuration
+		if window <= 0 {
+			window = 10 * time.Minute
+		}
+		samples := s.counterStore.Recent(window)
+
+		// Aggregate by agent+ifIndex: keep the two most recent samples to compute
+		// delta-based utilization (bytes transferred between samples / elapsed time).
+		type key struct {
+			agent   string
+			ifIndex uint32
+		}
+		type samplePair struct {
+			prev, latest collector.SFlowCounterSample
+			hasPrev      bool
+		}
+		pairs := make(map[key]*samplePair)
+		for _, sample := range samples {
+			k := key{agent: sample.AgentIP.String(), ifIndex: sample.IfIndex}
+			if p, ok := pairs[k]; ok {
+				if sample.Timestamp.After(p.latest.Timestamp) {
+					p.prev = p.latest
+					p.latest = sample
+					p.hasPrev = true
+				} else if !p.hasPrev || sample.Timestamp.After(p.prev.Timestamp) {
+					p.prev = sample
+					p.hasPrev = true
+				}
+			} else {
+				pairs[k] = &samplePair{latest: sample}
+			}
+		}
+
+		for _, p := range pairs {
+			cs := p.latest
+			var inUtil, outUtil float64
+			if p.hasPrev && cs.IfSpeed > 0 {
+				dt := cs.Timestamp.Sub(p.prev.Timestamp).Seconds()
+				if dt > 0 {
+					deltaIn := cs.InOctets - p.prev.InOctets
+					deltaOut := cs.OutOctets - p.prev.OutOctets
+					inUtil = float64(deltaIn*8) / (dt * float64(cs.IfSpeed)) * 100
+					outUtil = float64(deltaOut*8) / (dt * float64(cs.IfSpeed)) * 100
+					if inUtil > 100 {
+						inUtil = 100
+					}
+					if outUtil > 100 {
+						outUtil = 100
+					}
+				}
+			}
+			ifName := fmt.Sprintf("if%d", cs.IfIndex)
+			if names := s.fullCfg.Collector.InterfaceNames; names != nil {
+				if n, ok := names[strconv.FormatUint(uint64(cs.IfIndex), 10)]; ok {
+					ifName = n
+				}
+			}
+			data.Counters = append(data.Counters, CounterEntry{
+				AgentIP:    cs.AgentIP.String(),
+				IfIndex:    cs.IfIndex,
+				IfName:     ifName,
+				IfSpeed:    formatIfSpeed(cs.IfSpeed),
+				InOctets:   formatBytes(cs.InOctets),
+				InPackets:  cs.InPackets,
+				InErrors:   cs.InErrors,
+				InDrops:    cs.InDrops,
+				OutOctets:  formatBytes(cs.OutOctets),
+				OutPackets: cs.OutPackets,
+				OutErrors:  cs.OutErrors,
+				OutDrops:   cs.OutDrops,
+				InUtil:     inUtil,
+				OutUtil:     outUtil,
+				LastSeen:   timeAgo(cs.Timestamp),
+			})
+		}
+
+		sort.Slice(data.Counters, func(i, j int) bool {
+			if data.Counters[i].AgentIP != data.Counters[j].AgentIP {
+				return data.Counters[i].AgentIP < data.Counters[j].AgentIP
+			}
+			return data.Counters[i].IfIndex < data.Counters[j].IfIndex
+		})
+
+		data.TotalCounters = len(data.Counters)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmplCounters.ExecuteTemplate(w, "layout", data); err != nil {
+		logging.Default().Error("Template execute error: %v", err)
+	}
+}
+
+func formatIfSpeed(speed uint64) string {
+	switch {
+	case speed >= 1_000_000_000:
+		return fmt.Sprintf("%.0f Gbps", float64(speed)/1e9)
+	case speed >= 1_000_000:
+		return fmt.Sprintf("%.0f Mbps", float64(speed)/1e6)
+	case speed >= 1_000:
+		return fmt.Sprintf("%.0f Kbps", float64(speed)/1e3)
+	case speed > 0:
+		return fmt.Sprintf("%d bps", speed)
+	default:
+		return "—"
+	}
 }

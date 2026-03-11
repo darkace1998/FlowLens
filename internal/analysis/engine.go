@@ -54,26 +54,30 @@ func NewEngine(cfg config.AnalysisConfig, store *storage.RingBuffer, analyzers .
 	}
 }
 
-// Start begins the periodic analysis loop. It runs immediately once, then on the
-// configured interval. It blocks until Stop is called.
+// Start launches the periodic analysis loop in a background goroutine. It runs
+// the analyzers immediately once, then on the configured interval. The goroutine
+// exits when Stop is called. Start returns immediately and is safe to call from
+// the same goroutine that later calls Stop.
 func (e *Engine) Start() {
 	e.wg.Add(1)
-	defer e.wg.Done()
+	go func() {
+		defer e.wg.Done()
 
-	// Run immediately on start.
-	e.runAll()
+		// Run immediately on start.
+		e.runAll()
 
-	ticker := time.NewTicker(e.cfg.Interval)
-	defer ticker.Stop()
+		ticker := time.NewTicker(e.cfg.Interval)
+		defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			e.runAll()
-		case <-e.stop:
-			return
+		for {
+			select {
+			case <-ticker.C:
+				e.runAll()
+			case <-e.stop:
+				return
+			}
 		}
-	}
+	}()
 }
 
 // Stop signals the engine to stop and waits for it to finish.
@@ -115,8 +119,9 @@ func (e *Engine) runAll() {
 
 	now := time.Now()
 
+	var added []Advisory
+
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	// Mark previously-active advisories as resolved if they are no longer reported.
 	for i := range e.advisories {
@@ -141,6 +146,7 @@ func (e *Engine) runAll() {
 	for _, a := range newAdvisories {
 		if _, exists := existingActive[a.Title]; !exists {
 			e.advisories = append(e.advisories, a)
+			added = append(added, a)
 		}
 	}
 
@@ -161,4 +167,9 @@ func (e *Engine) runAll() {
 	if len(e.advisories) > maxAdvisoryHistory {
 		e.advisories = e.advisories[:maxAdvisoryHistory]
 	}
+
+	e.mu.Unlock()
+
+	// Send new advisories to webhook (outside lock).
+	sendWebhook(e.cfg.WebhookURL, added)
 }

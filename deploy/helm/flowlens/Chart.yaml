@@ -1,0 +1,18 @@
+apiVersion: v2
+name: flowlens
+description: Lightweight NetFlow/IPFIX/sFlow collector, analyzer, and web dashboard
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/darkace1998/FlowLens
+sources:
+  - https://github.com/darkace1998/FlowLens
+keywords:
+  - netflow
+  - ipfix
+  - sflow
+  - network
+  - monitoring
+maintainers:
+  - name: darkace1998
+    url: https://github.com/darkace1998

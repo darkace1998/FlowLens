@@ -1,10 +1,20 @@
 {{define "title"}}Dashboard{{end}}
 {{define "head"}}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="/static/chart.umd.min.js"></script>
 {{end}}
 {{define "content"}}
 <h1>Dashboard</h1>
-<div class="refresh-indicator">Auto-refresh in <span id="countdown">30</span>s</div>
+<div style="display: flex; align-items: center; gap: 1em; flex-wrap: wrap; margin-bottom: 0.5em;">
+  <div class="refresh-indicator">Auto-refresh in <span id="countdown">30</span>s</div>
+  <div class="time-range-selector">
+    <a href="/?range=5m" class="btn btn-sm{{if eq .SelectedRange "5m"}} active{{end}}">5m</a>
+    <a href="/?range=15m" class="btn btn-sm{{if eq .SelectedRange "15m"}} active{{end}}">15m</a>
+    <a href="/?range=1h" class="btn btn-sm{{if eq .SelectedRange "1h"}} active{{end}}">1h</a>
+    <a href="/?range=6h" class="btn btn-sm{{if eq .SelectedRange "6h"}} active{{end}}">6h</a>
+    <a href="/?range=24h" class="btn btn-sm{{if eq .SelectedRange "24h"}} active{{end}}">24h</a>
+    <a href="/" class="btn btn-sm{{if eq .SelectedRange ""}} active{{end}}">Default</a>
+  </div>
+</div>
 
 <div class="stats-grid">
   <div class="stat-card">

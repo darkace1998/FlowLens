@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
@@ -20,10 +21,13 @@ type Collector struct {
 	cfg            config.CollectorConfig
 	handler        FlowHandler
 	counterHandler CounterHandler
+	mu             sync.RWMutex // protects conns and sflowConns
 	conns          []*net.UDPConn
 	sflowConns     []*net.UDPConn
 	nfv9Cache      *NFV9TemplateCache
 	ipfixCache     *IPFIXTemplateCache
+	limiter        *rateLimiter
+	done           chan struct{} // closed by Stop to halt background goroutines
 }
 
 // New creates a new Collector with the given config and flow handler.
@@ -33,6 +37,8 @@ func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
 		handler:    handler,
 		nfv9Cache:  NewNFV9TemplateCache(),
 		ipfixCache: NewIPFIXTemplateCache(),
+		limiter:    newRateLimiter(cfg.RateLimit),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -64,16 +70,20 @@ func (c *Collector) Start() error {
 		conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
 		if err != nil {
 			// Close any already-opened connections on failure.
+			c.mu.Lock()
 			for _, prev := range c.conns {
 				prev.Close()
 			}
 			c.conns = nil
+			c.mu.Unlock()
 			return err
 		}
 		if err := conn.SetReadBuffer(c.cfg.BufferSize); err != nil {
 			logging.Default().Warn("Failed to set UDP read buffer to %d on port %d: %v", c.cfg.BufferSize, port, err)
 		}
+		c.mu.Lock()
 		c.conns = append(c.conns, conn)
+		c.mu.Unlock()
 		logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", port)
 	}
 
@@ -94,53 +104,74 @@ func (c *Collector) Start() error {
 				if err := sConn.SetReadBuffer(c.cfg.BufferSize); err != nil {
 					logging.Default().Warn("Failed to set UDP read buffer to %d on sFlow port %d: %v", c.cfg.BufferSize, c.cfg.SFlowPort, err)
 				}
+				c.mu.Lock()
 				c.sflowConns = append(c.sflowConns, sConn)
+				c.mu.Unlock()
 				logging.Default().Info("Collector listening on UDP :%d (sFlow v5)", c.cfg.SFlowPort)
 			}
 		}
 	}
 
+	// Start periodic rate-limiter cleanup if rate limiting is enabled.
+	if c.cfg.RateLimit > 0 {
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					c.limiter.cleanup()
+				case <-c.done:
+					return
+				}
+			}
+		}()
+	}
+
+	// Snapshot the connection slices under lock, then release before launching goroutines.
+	c.mu.RLock()
+	conns := make([]*net.UDPConn, len(c.conns))
+	copy(conns, c.conns)
+	sflowConns := make([]*net.UDPConn, len(c.sflowConns))
+	copy(sflowConns, c.sflowConns)
+	c.mu.RUnlock()
+
 	// Run a read loop for each connection; block until all finish.
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(c.conns)+len(c.sflowConns))
-	for _, conn := range c.conns {
+	for _, conn := range conns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
-			if err := c.readLoop(conn); err != nil {
-				errCh <- err
-			}
+			c.readLoop(conn)
 		}(conn)
 	}
-	for _, conn := range c.sflowConns {
+	for _, conn := range sflowConns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
-			if err := c.sflowReadLoop(conn); err != nil {
-				errCh <- err
-			}
+			c.sflowReadLoop(conn)
 		}(conn)
 	}
 	wg.Wait()
-	close(errCh)
 
-	// Return the first error, if any.
-	for err := range errCh {
-		return err
-	}
 	return nil
 }
 
 // readLoop reads and processes packets from a single UDP connection.
-func (c *Collector) readLoop(conn *net.UDPConn) error {
+func (c *Collector) readLoop(conn *net.UDPConn) {
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				return nil
+				return
 			}
 			logging.Default().Error("UDP read error: %v", err)
+			continue
+		}
+
+		// Rate-limit per source IP.
+		if !c.limiter.allow(remoteAddr.IP.String()) {
 			continue
 		}
 
@@ -163,15 +194,20 @@ func (c *Collector) readLoop(conn *net.UDPConn) error {
 }
 
 // sflowReadLoop reads and processes sFlow packets from a dedicated UDP connection.
-func (c *Collector) sflowReadLoop(conn *net.UDPConn) error {
+func (c *Collector) sflowReadLoop(conn *net.UDPConn) {
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				return nil
+				return
 			}
 			logging.Default().Error("sFlow UDP read error: %v", err)
+			continue
+		}
+
+		// Rate-limit per source IP.
+		if !c.limiter.allow(remoteAddr.IP.String()) {
 			continue
 		}
 
@@ -215,21 +251,32 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 	}
 }
 
-// Stop closes all UDP connections, causing Start to return.
+// Stop closes all UDP connections and stops background goroutines,
+// causing Start to return.
 func (c *Collector) Stop() {
+	// Signal the rate-limiter cleanup goroutine to exit.
+	select {
+	case <-c.done:
+		// already closed
+	default:
+		close(c.done)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, conn := range c.conns {
 		conn.Close()
 	}
-	c.conns = nil
 	for _, conn := range c.sflowConns {
 		conn.Close()
 	}
-	c.sflowConns = nil
 }
 
 // Addr returns the local address of the first listener,
 // or nil if the collector has not been started.
 func (c *Collector) Addr() net.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if len(c.conns) > 0 {
 		return c.conns[0].LocalAddr()
 	}
@@ -238,6 +285,8 @@ func (c *Collector) Addr() net.Addr {
 
 // Addrs returns the local addresses of all listeners (NetFlow/IPFIX and sFlow).
 func (c *Collector) Addrs() []net.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	addrs := make([]net.Addr, 0, len(c.conns)+len(c.sflowConns))
 	for _, conn := range c.conns {
 		addrs = append(addrs, conn.LocalAddr())

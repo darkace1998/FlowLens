@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flowlens.fullname" . }}
+  labels:
+    {{- include "flowlens.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.webPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.service.netflowPort }}
+      targetPort: netflow
+      protocol: UDP
+      name: netflow
+    - port: {{ .Values.service.ipfixPort }}
+      targetPort: ipfix
+      protocol: UDP
+      name: ipfix
+    - port: {{ .Values.service.sflowPort }}
+      targetPort: sflow
+      protocol: UDP
+      name: sflow
+  selector:
+    {{- include "flowlens.selectorLabels" . | nindent 4 }}

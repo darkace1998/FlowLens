@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+// Network protocol constants used across packet parsing and flow analysis.
+const (
+	// EtherType values (IEEE 802.3).
+	EtherTypeIPv4 = 0x0800
+	EtherTypeIPv6 = 0x86DD
+	EtherTypeARP  = 0x0806
+	EtherTypeVLAN = 0x8100 // 802.1Q VLAN tag
+	EtherTypeMPLS = 0x8847
+	EtherTypeLLDP = 0x88CC
+
+	// IP protocol numbers (IANA).
+	ProtoICMP = 1
+	ProtoTCP  = 6
+	ProtoUDP  = 17
+
+	// IP header sizes.
+	IPv4MinHeaderSize       = 20 // Minimum IPv4 header (no options)
+	IPv6HeaderSize          = 40 // Fixed IPv6 header size
+	TCPMinHeaderSize        = 20 // Minimum TCP header (no options)
+	MinIPv4AndTCPHeaderSize = IPv4MinHeaderSize + TCPMinHeaderSize // 40 bytes
+	MinIPv6AndTCPHeaderSize = IPv6HeaderSize + TCPMinHeaderSize    // 60 bytes
+)
+
 // Flow represents a unified flow record decoded from any NetFlow/IPFIX version.
 type Flow struct {
 	Timestamp    time.Time
@@ -199,16 +222,15 @@ func StitchFlows(flows []Flow) {
 	}
 }
 
-// DetectRetransmissions analyses per-packet TCP flows (as produced by PCAP
+// DetectRetransmissions analyzes per-packet TCP flows (as produced by PCAP
 // decoding where Packets == 1 and TCPSeqNum is populated) and sets the
 // Retransmissions field to 1 on flows whose sequence number has already been
 // seen for the same directed connection. Flows are modified in place.
 func DetectRetransmissions(flows []Flow) {
 	const (
-		minIPAndTCPHeader = 40   // 20-byte IP + 20-byte TCP minimum
-		tcpFlagFIN        = 0x01 // TCP FIN flag
-		tcpFlagSYN        = 0x02 // TCP SYN flag
-		tcpFlagSYNorFIN   = tcpFlagSYN | tcpFlagFIN
+		tcpFlagFIN      = 0x01 // TCP FIN flag
+		tcpFlagSYN      = 0x02 // TCP SYN flag
+		tcpFlagSYNorFIN = tcpFlagSYN | tcpFlagFIN
 	)
 
 	type connKey struct {
@@ -223,7 +245,7 @@ func DetectRetransmissions(flows []Flow) {
 
 	for i := range flows {
 		f := &flows[i]
-		if f.Protocol != 6 {
+		if f.Protocol != ProtoTCP {
 			continue
 		}
 		ck := connKey{
@@ -236,10 +258,10 @@ func DetectRetransmissions(flows []Flow) {
 		// Choose the correct header size based on EtherType.
 		var headerLen uint64
 		switch f.EtherType {
-		case 0x86DD: // IPv6: 40-byte IP + 20-byte TCP (minimum headers)
-			headerLen = 60
-		default: // IPv4 (0x0800) or unknown: 20-byte IP + 20-byte TCP (minimum headers)
-			headerLen = minIPAndTCPHeader
+		case EtherTypeIPv6:
+			headerLen = MinIPv6AndTCPHeaderSize
+		default: // IPv4 or unknown
+			headerLen = MinIPv4AndTCPHeaderSize
 		}
 		var payloadLen uint64
 		if f.Bytes > headerLen {
@@ -326,7 +348,7 @@ func SafeIPString(ip net.IP) string {
 
 // AppProtocol returns a human-readable Layer-7 application protocol name
 // based on well-known port numbers and the L4 protocol. When the port is
-// not recognised, it returns "Other".
+// not recognized, it returns "Other".
 func AppProtocol(proto uint8, srcPort, dstPort uint16) string {
 	// Use the lower (well-known) port as the indicator.
 	port := dstPort
@@ -435,7 +457,7 @@ func AppCategory(appProto string) string {
 	}
 }
 
-// wellKnownAS maps common AS numbers to their organisation names.
+// wellKnownAS maps common AS numbers to their organization names.
 var wellKnownAS = map[uint32]string{
 	0:     "Private/Unknown",
 	13335: "Cloudflare",
@@ -498,7 +520,7 @@ var wellKnownAS = map[uint32]string{
 	13238: "Yandex",
 }
 
-// ASName returns a human-readable organisation name for common AS numbers.
+// ASName returns a human-readable organization name for common AS numbers.
 // If the AS number is not in the well-known list, it returns "AS<number>".
 func ASName(asn uint32) string {
 	if name, ok := wellKnownAS[asn]; ok {
@@ -564,17 +586,17 @@ func FormatTCPFlags(flags uint8) string {
 // FormatEtherType returns a human-readable name for common EtherType values.
 func FormatEtherType(et uint16) string {
 	switch et {
-	case 0x0800:
+	case EtherTypeIPv4:
 		return "IPv4"
-	case 0x86DD:
+	case EtherTypeIPv6:
 		return "IPv6"
-	case 0x0806:
+	case EtherTypeARP:
 		return "ARP"
-	case 0x8100:
+	case EtherTypeVLAN:
 		return "802.1Q"
-	case 0x8847:
+	case EtherTypeMPLS:
 		return "MPLS"
-	case 0x88CC:
+	case EtherTypeLLDP:
 		return "LLDP"
 	case 0:
 		return "—"
