@@ -37,7 +37,7 @@ func TestSQLiteStore_ReadOnlyFS(t *testing.T) {
 	defer os.Chmod(dir, 0755)
 
 	// Attempting to insert more data may fail due to read-only filesystem.
-	// The test verifies no panic occurs — the error itself depends on OS/SQLite behaviour.
+	// The test verifies no panic occurs — the error itself depends on OS/SQLite behavior.
 	_ = store.Insert(flows)
 }
 

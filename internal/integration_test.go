@@ -151,8 +151,8 @@ func TestCollector_SQLite_WebHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	if _, err := conn.Write(pkt); err != nil {
-		t.Fatalf("write: %v", err)
+	if _, errW := conn.Write(pkt); errW != nil {
+		t.Fatalf("write: %v", errW)
 	}
 	conn.Close()
 

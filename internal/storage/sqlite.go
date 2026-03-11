@@ -181,7 +181,7 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 		 jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
 	}
 	defer stmt.Close()
@@ -219,7 +219,7 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 			f.EtherType,
 		)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("insert flow: %w", err)
 		}
 	}
@@ -374,7 +374,7 @@ func (s *SQLiteStore) QueryReport(start, end time.Time, groupBy string) ([]Repor
 	}
 	defer rows.Close()
 
-	var results []ReportRow
+	var results []ReportRow //nolint:prealloc // row count unknown before iteration
 	for rows.Next() {
 		var r ReportRow
 		if err := rows.Scan(&r.GroupKey, &r.TotalBytes, &r.TotalPackets, &r.FlowCount, &r.AvgBytes); err != nil {
@@ -409,7 +409,7 @@ func (s *SQLiteStore) QueryTimeSeries(start, end time.Time, bucketSec int) ([]Ti
 	}
 	defer rows.Close()
 
-	var points []TimeSeriesPoint
+	var points []TimeSeriesPoint //nolint:prealloc // row count unknown before iteration
 	for rows.Next() {
 		var p TimeSeriesPoint
 		if err := rows.Scan(&p.Bucket, &p.TotalBytes, &p.TotalPackets, &p.FlowCount); err != nil {

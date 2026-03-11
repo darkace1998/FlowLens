@@ -26,11 +26,6 @@ func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisCon
 		sampleWindow = 60 * time.Second
 	}
 
-	baselineWindow := cfg.AnomalyBaselineWindow
-	if baselineWindow <= 0 {
-		baselineWindow = 7 * 24 * time.Hour
-	}
-
 	// We need at least 2 sample windows in the baseline to compute meaningful stats.
 	// Since the ring buffer only holds ~10 min of data, use what we have.
 	window := queryWindow(cfg)

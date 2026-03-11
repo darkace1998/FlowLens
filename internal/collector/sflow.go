@@ -475,7 +475,7 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		off = sflowCounterSampleHeaderLen
 	}
 
-	var counters []SFlowCounterSample
+	counters := make([]SFlowCounterSample, 0, int(numRecords))
 
 	for r := uint32(0); r < numRecords; r++ {
 		if len(data) < off+sflowSampleRecordHeaderLen {

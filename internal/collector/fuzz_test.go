@@ -8,7 +8,7 @@ import (
 
 // --- Fuzz tests for protocol decoders ---
 // These exercise the parsers with random/mutated input to find panics,
-// out-of-bounds reads, or other undefined behaviour in untrusted-input paths.
+// out-of-bounds reads, or other undefined behavior in untrusted-input paths.
 
 // FuzzDecodeNetFlowV5 fuzzes the NetFlow v5 decoder with arbitrary byte slices.
 func FuzzDecodeNetFlowV5(f *testing.F) {

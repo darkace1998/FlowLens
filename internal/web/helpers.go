@@ -237,7 +237,7 @@ func formatDuration(d time.Duration) string {
 }
 
 func seq(start, end int) []int {
-	var s []int
+	s := make([]int, 0, end-start+1)
 	for i := start; i <= end; i++ {
 		s = append(s, i)
 	}
@@ -263,7 +263,7 @@ func pageWindow(currentPage, totalPages int) []int {
 		}
 	}
 
-	var pages []int
+	pages := make([]int, 0, end-start+1)
 	for i := start; i <= end; i++ {
 		pages = append(pages, i)
 	}

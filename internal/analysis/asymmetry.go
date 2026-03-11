@@ -86,7 +86,6 @@ func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfi
 	}
 
 	now := time.Now()
-	var advisories []Advisory
 
 	// Collect asymmetric pairs for sorting.
 	type asymResult struct {
@@ -97,7 +96,7 @@ func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfi
 		largeDir string
 		smallDir string
 	}
-	var results []asymResult
+	results := make([]asymResult, 0, len(pairs))
 
 	asymThresh := cfg.AsymmetryThreshold
 	if asymThresh <= 0 {
@@ -149,6 +148,8 @@ func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfi
 	if len(results) > 10 {
 		results = results[:10]
 	}
+
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING

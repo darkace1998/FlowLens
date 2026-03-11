@@ -132,43 +132,33 @@ func (c *Collector) Start() error {
 
 	// Run a read loop for each connection; block until all finish.
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(conns)+len(sflowConns))
 	for _, conn := range conns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
-			if err := c.readLoop(conn); err != nil {
-				errCh <- err
-			}
+			c.readLoop(conn)
 		}(conn)
 	}
 	for _, conn := range sflowConns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
-			if err := c.sflowReadLoop(conn); err != nil {
-				errCh <- err
-			}
+			c.sflowReadLoop(conn)
 		}(conn)
 	}
 	wg.Wait()
-	close(errCh)
 
-	// Return the first error, if any.
-	for err := range errCh {
-		return err
-	}
 	return nil
 }
 
 // readLoop reads and processes packets from a single UDP connection.
-func (c *Collector) readLoop(conn *net.UDPConn) error {
+func (c *Collector) readLoop(conn *net.UDPConn) {
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				return nil
+				return
 			}
 			logging.Default().Error("UDP read error: %v", err)
 			continue
@@ -198,13 +188,13 @@ func (c *Collector) readLoop(conn *net.UDPConn) error {
 }
 
 // sflowReadLoop reads and processes sFlow packets from a dedicated UDP connection.
-func (c *Collector) sflowReadLoop(conn *net.UDPConn) error {
+func (c *Collector) sflowReadLoop(conn *net.UDPConn) {
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				return nil
+				return
 			}
 			logging.Default().Error("sFlow UDP read error: %v", err)
 			continue

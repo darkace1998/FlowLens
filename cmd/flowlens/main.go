@@ -42,7 +42,7 @@ func main() {
 
 	log.Info("FlowLens %s starting", Version)
 
-	// Initialise storage backends.
+	// Initialize storage backends.
 	ringCapacity := cfg.Storage.RingBufferCapacity
 	if ringCapacity <= 0 {
 		ringCapacity = 10000
@@ -148,7 +148,7 @@ func main() {
 	)
 	engine.Start()
 
-	// Initialise GeoIP lookup.
+	// Initialize GeoIP lookup.
 	geoLookup := geo.New()
 	if cfg.Storage.GeoIPPath != "" {
 		if err := geoLookup.LoadCSV(cfg.Storage.GeoIPPath); err != nil {
@@ -158,7 +158,7 @@ func main() {
 		}
 	}
 
-	// Initialise capture manager.
+	// Initialize capture manager.
 	captureMgr := capture.NewManager(cfg.Capture)
 
 	// Start web server.

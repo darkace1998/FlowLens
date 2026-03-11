@@ -75,7 +75,7 @@ func (s *Source) startCapture(device string, snapLen int) error {
 }
 
 // htons converts a uint16 from host to network byte order (big-endian).
-func htons(v uint16) uint16 {
+func htons(v uint16) uint16 { //nolint:unparam // utility function kept general
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, v)
 	return binary.NativeEndian.Uint16(buf)

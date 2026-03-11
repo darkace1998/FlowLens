@@ -404,7 +404,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 	topSrc := topN(srcMap, totalBytes, 10)
 	topDst := topN(dstMap, totalBytes, 10)
 
-	var protocols []ProtocolEntry
+	protocols := make([]ProtocolEntry, 0, len(protoMap))
 	for _, e := range protoMap {
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		protocols = append(protocols, *e)
@@ -688,7 +688,7 @@ func computeTCPHealthStats(flows []model.Flow) TCPHealthStats {
 	if stats.TotalTCPPackets > 0 {
 		stats.RetransRate = math.Round(float64(stats.TotalRetrans)/float64(stats.TotalTCPPackets)*10000) / 100
 		stats.OOORate = math.Round(float64(stats.TotalOOO)/float64(stats.TotalTCPPackets)*10000) / 100
-		total := stats.TotalTCPPackets + uint64(stats.TotalLoss)
+		total := stats.TotalTCPPackets + stats.TotalLoss
 		stats.LossRate = math.Round(float64(stats.TotalLoss)/float64(total)*10000) / 100
 	}
 
@@ -816,7 +816,7 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 	}
 
 	// Build top VoIP flows (sorted by worst MOS first).
-	var topFlows []VoIPFlowEntry
+	topFlows := make([]VoIPFlowEntry, 0, len(agg))
 	for key, a := range agg {
 		avgMOS := float32(0)
 		if a.count > 0 && a.mosSum > 0 {
@@ -980,7 +980,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		end = totalFlows
 	}
 
-	var pageFlows []FlowRow
+	pageFlows := make([]FlowRow, 0, end-start)
 	for _, f := range filtered[start:end] {
 		appProto := f.AppProto
 		appCat := f.AppCat
@@ -1123,7 +1123,7 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-flows.csv")
 		csvWriter := csv.NewWriter(w)
-		csvWriter.Write([]string{"timestamp", "src_addr", "dst_addr", "src_port", "dst_port", "protocol", "bytes", "packets", "duration", "app_proto", "category"})
+		_ = csvWriter.Write([]string{"timestamp", "src_addr", "dst_addr", "src_port", "dst_port", "protocol", "bytes", "packets", "duration", "app_proto", "category"})
 		for _, f := range filtered {
 			appProto := f.AppProto
 			appCat := f.AppCat
@@ -1131,7 +1131,7 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 				appProto = model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
 				appCat = model.AppCategory(appProto)
 			}
-			csvWriter.Write([]string{
+			_ = csvWriter.Write([]string{
 				f.Timestamp.Format(time.RFC3339),
 				model.SafeIPString(f.SrcAddr),
 				model.SafeIPString(f.DstAddr),
@@ -1182,7 +1182,7 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 		}
 	}
 
-	var result []model.Flow
+	result := make([]model.Flow, 0, len(flows))
 	for _, f := range flows {
 		if srcIP != "" && !matchIP(f.SrcAddr, srcIP) {
 			continue
@@ -1358,7 +1358,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 		}
 	}
 
-	var markers []MapMarker
+	markers := make([]MapMarker, 0, len(hostBytes))
 	for ip, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
@@ -1449,21 +1449,21 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data.Error = "Invalid start time format"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 	endTime, err := time.Parse("2006-01-02T15:04", data.EndTime)
 	if err != nil {
 		data.Error = "Invalid end time format"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
 	if s.reportSvc == nil {
 		data.Error = "SQLite store not configured"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -1472,7 +1472,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		data.Error = fmt.Sprintf("Report query failed: %v", err)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		s.tmplReports.ExecuteTemplate(w, "layout", data)
+		_ = s.tmplReports.ExecuteTemplate(w, "layout", data)
 		return
 	}
 
@@ -1574,9 +1574,9 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.csv")
 		csvWriter := csv.NewWriter(w)
-		csvWriter.Write([]string{groupBy, "bytes", "packets", "flows", "avg_bytes"})
+		_ = csvWriter.Write([]string{groupBy, "bytes", "packets", "flows", "avg_bytes"})
 		for _, row := range rows {
-			csvWriter.Write([]string{
+			_ = csvWriter.Write([]string{
 				row.GroupKey,
 				fmt.Sprintf("%d", row.TotalBytes),
 				fmt.Sprintf("%d", row.TotalPackets),
@@ -1879,7 +1879,7 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 		agg.hosts[dst] += f.Bytes
 	}
 
-	var entries []VLANEntry
+	entries := make([]VLANEntry, 0, len(vlans))
 	for vid, agg := range vlans {
 		e := VLANEntry{
 			ID:       vid,
@@ -1982,7 +1982,7 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var entries []MACEntry
+	entries := make([]MACEntry, 0, len(macs))
 	for mac, agg := range macs {
 		ips := make([]string, 0, len(agg.ips))
 		for ip := range agg.ips {
@@ -2236,7 +2236,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var entries []SessionEntry
+	entries := make([]SessionEntry, 0, len(agg))
 	var totalBytes, totalPackets uint64
 
 	for _, a := range agg {
@@ -2314,11 +2314,11 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	var pcapReader io.ReadCloser
 	csrfValid := false
 	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
+		part, errPart := mr.NextPart()
+		if errPart == io.EOF {
 			break
 		}
-		if err != nil {
+		if errPart != nil {
 			http.Error(w, "Error reading upload", http.StatusBadRequest)
 			return
 		}

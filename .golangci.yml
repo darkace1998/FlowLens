@@ -8,7 +8,7 @@ linters:
     - unused
     - bodyclose
     - durationcheck
-    - exportloopref
+    - copyloopvar
     - misspell
     - nilerr
     - prealloc

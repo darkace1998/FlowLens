@@ -136,7 +136,7 @@ func analyzeWithCounters(flows []model.Flow, retransThresh, criticalThresh float
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING
@@ -196,7 +196,7 @@ func analyzeWithHeuristic(flows []model.Flow) []Advisory {
 		avgBytes float64
 		packets  uint64
 	}
-	var results []result
+	results := make([]result, 0, len(pairs))
 
 	for pk, s := range pairs {
 		if s.packets < retransmissionMinPackets {
@@ -218,7 +218,7 @@ func analyzeWithHeuristic(flows []model.Flow) []Advisory {
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING

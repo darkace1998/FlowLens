@@ -412,12 +412,12 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 
 	topSrc := make([]APITalkerEntry, len(data.TopSrc))
 	for i, t := range data.TopSrc {
-		topSrc[i] = APITalkerEntry{IP: t.IP, Bytes: t.Bytes, Packets: t.Packets, Pct: t.Pct}
+		topSrc[i] = APITalkerEntry(t)
 	}
 
 	topDst := make([]APITalkerEntry, len(data.TopDst))
 	for i, t := range data.TopDst {
-		topDst[i] = APITalkerEntry{IP: t.IP, Bytes: t.Bytes, Packets: t.Packets, Pct: t.Pct}
+		topDst[i] = APITalkerEntry(t)
 	}
 
 	protocols := make([]APIProtocolEntry, len(data.Protocols))

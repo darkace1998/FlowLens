@@ -163,8 +163,8 @@ func TestCollector_DualPort_IPFIXOnSeparatePort(t *testing.T) {
 		t.Fatalf("failed to dial NetFlow port: %v", err)
 	}
 	defer nfConn.Close()
-	if _, err := nfConn.Write(v9Pkt); err != nil {
-		t.Fatalf("failed to send v9 packet: %v", err)
+	if _, errW := nfConn.Write(v9Pkt); errW != nil {
+		t.Fatalf("failed to send v9 packet: %v", errW)
 	}
 
 	// Send IPFIX to the IPFIX port.

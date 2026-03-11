@@ -44,6 +44,5 @@ func TestDefaultFlowService(t *testing.T) {
 
 // TestFlowServiceInterface verifies that defaultFlowService satisfies FlowService.
 func TestFlowServiceInterface(t *testing.T) {
-	rb := storage.NewRingBuffer(10)
-	var _ FlowService = &defaultFlowService{rb: rb}
+	var _ FlowService = (*defaultFlowService)(nil)
 }

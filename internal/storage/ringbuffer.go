@@ -47,7 +47,7 @@ func (rb *RingBuffer) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 	defer rb.mu.RUnlock()
 
 	cutoff := time.Now().Add(-d)
-	var result []model.Flow
+	result := make([]model.Flow, 0, rb.count)
 
 	// Walk backwards from most recent entry.
 	for i := 0; i < rb.count; i++ {

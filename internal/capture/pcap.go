@@ -199,7 +199,7 @@ func ListPcapFiles(dir string) ([]PcapFileInfo, error) {
 		return nil, err
 	}
 
-	var files []PcapFileInfo
+	files := make([]PcapFileInfo, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".pcap") {
 			continue

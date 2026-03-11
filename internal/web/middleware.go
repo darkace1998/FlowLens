@@ -51,7 +51,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 
 // httpError sends an HTTP error response and logs the error in a consistent
 // format. Use this instead of separate http.Error + logging calls.
-func httpError(w http.ResponseWriter, r *http.Request, msg string, code int, err error) {
+func httpError(w http.ResponseWriter, r *http.Request, msg string, code int, err error) { //nolint:unparam // code is kept as parameter for flexibility
 	if err != nil {
 		logging.Default().Error("%s %s: %s: %v", r.Method, r.URL.Path, msg, err)
 	} else {

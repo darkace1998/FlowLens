@@ -76,7 +76,7 @@ func (UnreachableDetector) Analyze(store *storage.RingBuffer, cfg config.Analysi
 		sources    int
 		tinyPct    float64
 	}
-	var results []result
+	results := make([]result, 0, len(dsts))
 
 	for dk, s := range dsts {
 		if s.tinyFlows < unreachableMinFlows {

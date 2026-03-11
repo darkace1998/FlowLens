@@ -223,7 +223,7 @@ func decodeIPFIXDataSet(data []byte, obsDomainID uint32, templateID uint16,
 		return nil
 	}
 
-	var flows []model.Flow
+	var flows []model.Flow //nolint:prealloc // capacity depends on runtime data size
 	offset := 0
 
 	for offset+tmpl.Size <= len(data) {

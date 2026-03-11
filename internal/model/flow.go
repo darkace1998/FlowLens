@@ -222,7 +222,7 @@ func StitchFlows(flows []Flow) {
 	}
 }
 
-// DetectRetransmissions analyses per-packet TCP flows (as produced by PCAP
+// DetectRetransmissions analyzes per-packet TCP flows (as produced by PCAP
 // decoding where Packets == 1 and TCPSeqNum is populated) and sets the
 // Retransmissions field to 1 on flows whose sequence number has already been
 // seen for the same directed connection. Flows are modified in place.
@@ -348,7 +348,7 @@ func SafeIPString(ip net.IP) string {
 
 // AppProtocol returns a human-readable Layer-7 application protocol name
 // based on well-known port numbers and the L4 protocol. When the port is
-// not recognised, it returns "Other".
+// not recognized, it returns "Other".
 func AppProtocol(proto uint8, srcPort, dstPort uint16) string {
 	// Use the lower (well-known) port as the indicator.
 	port := dstPort
@@ -457,7 +457,7 @@ func AppCategory(appProto string) string {
 	}
 }
 
-// wellKnownAS maps common AS numbers to their organisation names.
+// wellKnownAS maps common AS numbers to their organization names.
 var wellKnownAS = map[uint32]string{
 	0:     "Private/Unknown",
 	13335: "Cloudflare",
@@ -520,7 +520,7 @@ var wellKnownAS = map[uint32]string{
 	13238: "Yandex",
 }
 
-// ASName returns a human-readable organisation name for common AS numbers.
+// ASName returns a human-readable organization name for common AS numbers.
 // If the AS number is not in the well-known list, it returns "AS<number>".
 func ASName(asn uint32) string {
 	if name, ok := wellKnownAS[asn]; ok {
