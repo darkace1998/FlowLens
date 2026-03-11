@@ -243,7 +243,7 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		outputIface = outputIface & sflowIfIndexMask
 	}
 
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, int(numRecords))
 
 	for r := uint32(0); r < numRecords; r++ {
 		if len(data) < off+sflowSampleRecordHeaderLen {

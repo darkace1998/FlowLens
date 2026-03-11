@@ -56,7 +56,7 @@ func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(srcPorts))
 
 	for src, ports := range srcPorts {
 		uniqueCount := len(ports)

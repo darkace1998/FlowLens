@@ -68,7 +68,7 @@ func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) 
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, n)
 
 	talkerPct := cfg.TopTalkerPercent
 	if talkerPct <= 0 {

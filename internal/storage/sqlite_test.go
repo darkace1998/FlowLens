@@ -57,7 +57,7 @@ func TestSQLiteStore_RecentWithLimit(t *testing.T) {
 	defer store.Close()
 
 	now := time.Now().UTC()
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 10)
 	for i := 0; i < 10; i++ {
 		flows = append(flows, makeTestFlow("10.0.1.1", "192.168.1.1", uint16(1000+i), 80,
 			now.Add(-time.Duration(i)*time.Minute)))

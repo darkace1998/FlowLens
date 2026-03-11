@@ -252,7 +252,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 	}
 	defer rows.Close()
 
-	var flows []model.Flow
+	var flows []model.Flow //nolint:prealloc // row count unknown until iteration
 	for rows.Next() {
 		var f model.Flow
 		var ts time.Time

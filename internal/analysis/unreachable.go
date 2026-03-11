@@ -103,7 +103,7 @@ func (UnreachableDetector) Analyze(store *storage.RingBuffer, cfg config.Analysi
 	}
 
 	now := time.Now()
-	var advisories []Advisory
+	advisories := make([]Advisory, 0, len(results))
 
 	for _, r := range results {
 		sev := WARNING
