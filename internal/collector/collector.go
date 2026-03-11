@@ -122,11 +122,18 @@ func (c *Collector) Start() error {
 		}()
 	}
 
-	// Run a read loop for each connection; block until all finish.
+	// Snapshot the connection slices under lock, then release before launching goroutines.
 	c.mu.RLock()
+	conns := make([]*net.UDPConn, len(c.conns))
+	copy(conns, c.conns)
+	sflowConns := make([]*net.UDPConn, len(c.sflowConns))
+	copy(sflowConns, c.sflowConns)
+	c.mu.RUnlock()
+
+	// Run a read loop for each connection; block until all finish.
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(c.conns)+len(c.sflowConns))
-	for _, conn := range c.conns {
+	errCh := make(chan error, len(conns)+len(sflowConns))
+	for _, conn := range conns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
@@ -135,7 +142,7 @@ func (c *Collector) Start() error {
 			}
 		}(conn)
 	}
-	for _, conn := range c.sflowConns {
+	for _, conn := range sflowConns {
 		wg.Add(1)
 		go func(conn *net.UDPConn) {
 			defer wg.Done()
@@ -144,7 +151,6 @@ func (c *Collector) Start() error {
 			}
 		}(conn)
 	}
-	c.mu.RUnlock()
 	wg.Wait()
 	close(errCh)
 
@@ -251,8 +257,8 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 
 // Stop closes all UDP connections, causing Start to return.
 func (c *Collector) Stop() {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, conn := range c.conns {
 		conn.Close()
 	}
