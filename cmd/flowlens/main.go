@@ -146,7 +146,7 @@ func main() {
 		analysis.NewTalkerDetector{},
 		analysis.VoIPQualityDetector{},
 	)
-	go engine.Start()
+	engine.Start()
 
 	// Initialise GeoIP lookup.
 	geoLookup := geo.New()

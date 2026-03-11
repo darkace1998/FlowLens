@@ -21,6 +21,7 @@ type Collector struct {
 	cfg            config.CollectorConfig
 	handler        FlowHandler
 	counterHandler CounterHandler
+	mu             sync.RWMutex // protects conns and sflowConns
 	conns          []*net.UDPConn
 	sflowConns     []*net.UDPConn
 	nfv9Cache      *NFV9TemplateCache
@@ -67,16 +68,20 @@ func (c *Collector) Start() error {
 		conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
 		if err != nil {
 			// Close any already-opened connections on failure.
+			c.mu.Lock()
 			for _, prev := range c.conns {
 				prev.Close()
 			}
 			c.conns = nil
+			c.mu.Unlock()
 			return err
 		}
 		if err := conn.SetReadBuffer(c.cfg.BufferSize); err != nil {
 			logging.Default().Warn("Failed to set UDP read buffer to %d on port %d: %v", c.cfg.BufferSize, port, err)
 		}
+		c.mu.Lock()
 		c.conns = append(c.conns, conn)
+		c.mu.Unlock()
 		logging.Default().Info("Collector listening on UDP :%d (NetFlow v5/v9/IPFIX)", port)
 	}
 
@@ -97,7 +102,9 @@ func (c *Collector) Start() error {
 				if err := sConn.SetReadBuffer(c.cfg.BufferSize); err != nil {
 					logging.Default().Warn("Failed to set UDP read buffer to %d on sFlow port %d: %v", c.cfg.BufferSize, c.cfg.SFlowPort, err)
 				}
+				c.mu.Lock()
 				c.sflowConns = append(c.sflowConns, sConn)
+				c.mu.Unlock()
 				logging.Default().Info("Collector listening on UDP :%d (sFlow v5)", c.cfg.SFlowPort)
 			}
 		}
@@ -116,6 +123,7 @@ func (c *Collector) Start() error {
 	}
 
 	// Run a read loop for each connection; block until all finish.
+	c.mu.RLock()
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(c.conns)+len(c.sflowConns))
 	for _, conn := range c.conns {
@@ -136,6 +144,7 @@ func (c *Collector) Start() error {
 			}
 		}(conn)
 	}
+	c.mu.RUnlock()
 	wg.Wait()
 	close(errCh)
 
@@ -242,6 +251,8 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 
 // Stop closes all UDP connections, causing Start to return.
 func (c *Collector) Stop() {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	for _, conn := range c.conns {
 		conn.Close()
 	}
@@ -253,6 +264,8 @@ func (c *Collector) Stop() {
 // Addr returns the local address of the first listener,
 // or nil if the collector has not been started.
 func (c *Collector) Addr() net.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if len(c.conns) > 0 {
 		return c.conns[0].LocalAddr()
 	}
@@ -261,6 +274,8 @@ func (c *Collector) Addr() net.Addr {
 
 // Addrs returns the local addresses of all listeners (NetFlow/IPFIX and sFlow).
 func (c *Collector) Addrs() []net.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	addrs := make([]net.Addr, 0, len(c.conns)+len(c.sflowConns))
 	for _, conn := range c.conns {
 		addrs = append(addrs, conn.LocalAddr())

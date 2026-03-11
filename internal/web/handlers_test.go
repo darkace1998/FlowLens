@@ -734,7 +734,7 @@ func TestAdvisories_WithEngine(t *testing.T) {
 		analysis.TopTalkers{},
 		analysis.ProtocolDistribution{},
 	)
-	go engine.Start()
+	engine.Start()
 	time.Sleep(100 * time.Millisecond)
 
 	s := NewServer(cfg, ringBuf, nil, t.TempDir(), engine, nil, nil, nil)

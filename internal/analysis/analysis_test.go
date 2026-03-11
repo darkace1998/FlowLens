@@ -67,7 +67,7 @@ func TestEngine_RunsAnalyzers(t *testing.T) {
 	cfg.Interval = 50 * time.Millisecond
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(100 * time.Millisecond)
 	engine.Stop()
 
@@ -82,7 +82,7 @@ func TestEngine_EmptyStore(t *testing.T) {
 	cfg := defaultCfg()
 
 	engine := NewEngine(cfg, rb, TopTalkers{}, ProtocolDistribution{}, ScanDetector{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(50 * time.Millisecond)
 	engine.Stop()
 
@@ -106,7 +106,7 @@ func TestEngine_SortsBySeverity(t *testing.T) {
 	cfg.TopTalkersCount = 2
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(50 * time.Millisecond)
 	engine.Stop()
 
@@ -705,7 +705,7 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 	cfg.TopTalkersCount = 1
 
 	engine := NewEngine(cfg, rb, TopTalkers{})
-	go engine.Start()
+	engine.Start()
 	time.Sleep(80 * time.Millisecond)
 
 	// Should have the advisory.
