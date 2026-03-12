@@ -184,6 +184,16 @@ func TestCalcThroughput(t *testing.T) {
 	if f2.ThroughputBPS != 0 {
 		t.Errorf("ThroughputBPS with zero duration = %f, want 0", f2.ThroughputBPS)
 	}
+
+	// Large byte values should not overflow uint64 in the Bytes*8 computation.
+	// 3 EB (3e18 bytes) * 8 = 24e18 which exceeds uint64 max (~18.4e18).
+	// The result must still be a correct float64 value.
+	f3 := Flow{Bytes: 3_000_000_000_000_000_000, Duration: 10 * time.Second}
+	f3.CalcThroughput()
+	expected := float64(3_000_000_000_000_000_000) * 8 / 10
+	if f3.ThroughputBPS != expected {
+		t.Errorf("ThroughputBPS for large bytes = %e, want %e", f3.ThroughputBPS, expected)
+	}
 }
 
 func TestClassifySetsThruput(t *testing.T) {

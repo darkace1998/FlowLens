@@ -1245,38 +1245,41 @@ func buildHostsData(flows []model.Flow, window time.Duration, geoLookup *geo.Loo
 	hostMap := make(map[string]*hostAccum)
 	var totalBytes uint64
 
-	for _, f := range flows {
-		totalBytes += f.Bytes
-
-		// Track both source and destination as active hosts.
-		for _, ip := range []string{model.SafeIPString(f.SrcAddr), model.SafeIPString(f.DstAddr)} {
-			if h, ok := hostMap[ip]; ok {
-				h.Bytes += f.Bytes
-				h.Packets += f.Packets
-				h.FlowCount++
-				if f.Timestamp.Before(h.FirstSeen) {
-					h.FirstSeen = f.Timestamp
-				}
-				if f.Timestamp.After(h.LastSeen) {
-					h.LastSeen = f.Timestamp
-				}
-			} else {
-				hostMap[ip] = &hostAccum{
-					Bytes:     f.Bytes,
-					Packets:   f.Packets,
-					FlowCount: 1,
-					FirstSeen: f.Timestamp,
-					LastSeen:  f.Timestamp,
-				}
+	addHost := func(ip string, bytes, packets uint64, ts time.Time) {
+		if h, ok := hostMap[ip]; ok {
+			h.Bytes += bytes
+			h.Packets += packets
+			h.FlowCount++
+			if ts.Before(h.FirstSeen) {
+				h.FirstSeen = ts
+			}
+			if ts.After(h.LastSeen) {
+				h.LastSeen = ts
+			}
+		} else {
+			hostMap[ip] = &hostAccum{
+				Bytes:     bytes,
+				Packets:   packets,
+				FlowCount: 1,
+				FirstSeen: ts,
+				LastSeen:  ts,
 			}
 		}
 	}
 
-	hosts := make([]HostEntry, 0, len(hostMap))
-	var totalHostBytes uint64
-	for _, h := range hostMap {
-		totalHostBytes += h.Bytes
+	for _, f := range flows {
+		totalBytes += f.Bytes
+
+		// Attribute bytes/packets to the source IP (the sender).
+		// The destination IP is tracked as active but does not
+		// accumulate duplicate byte/packet counts.
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		addHost(src, f.Bytes, f.Packets, f.Timestamp)
+		addHost(dst, 0, 0, f.Timestamp)
 	}
+
+	hosts := make([]HostEntry, 0, len(hostMap))
 	for ip, h := range hostMap {
 		entry := HostEntry{
 			IP:        ip,
@@ -1285,7 +1288,7 @@ func buildHostsData(flows []model.Flow, window time.Duration, geoLookup *geo.Loo
 			FlowCount: h.FlowCount,
 			FirstSeen: h.FirstSeen,
 			LastSeen:  h.LastSeen,
-			Pct:       pctOf(h.Bytes, totalHostBytes),
+			Pct:       pctOf(h.Bytes, totalBytes),
 		}
 		if geoLookup != nil {
 			info := geoLookup.Find(ip)
@@ -1351,10 +1354,14 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 	// Collect unique hosts with byte counts.
+	// Attribute bytes to the source IP only to avoid double-counting.
 	hostBytes := make(map[string]uint64)
 	for _, f := range flows {
-		for _, ip := range []string{model.SafeIPString(f.SrcAddr), model.SafeIPString(f.DstAddr)} {
-			hostBytes[ip] += f.Bytes
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		hostBytes[src] += f.Bytes
+		if _, ok := hostBytes[dst]; !ok {
+			hostBytes[dst] = 0
 		}
 	}
 

@@ -72,7 +72,7 @@ type Flow struct {
 // It should be called after all flow fields are set.
 func (f *Flow) CalcThroughput() {
 	if f.Duration > 0 {
-		f.ThroughputBPS = float64(f.Bytes*8) / f.Duration.Seconds()
+		f.ThroughputBPS = float64(f.Bytes) * 8 / f.Duration.Seconds()
 	}
 }
 

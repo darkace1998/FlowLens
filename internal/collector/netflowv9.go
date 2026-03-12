@@ -298,9 +298,11 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 	}
 }
 
-// readUintN reads a big-endian unsigned integer of 1, 2, 4, or 8 bytes.
+// readUintN reads a big-endian unsigned integer of arbitrary length (1–8 bytes).
 func readUintN(data []byte) uint64 {
 	switch len(data) {
+	case 0:
+		return 0
 	case 1:
 		return uint64(data[0])
 	case 2:
@@ -310,6 +312,13 @@ func readUintN(data []byte) uint64 {
 	case 8:
 		return binary.BigEndian.Uint64(data)
 	default:
-		return 0
+		if len(data) > 8 {
+			return 0
+		}
+		var v uint64
+		for _, b := range data {
+			v = v<<8 | uint64(b)
+		}
+		return v
 	}
 }

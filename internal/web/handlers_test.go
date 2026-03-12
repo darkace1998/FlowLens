@@ -410,6 +410,47 @@ func TestHosts_WithData(t *testing.T) {
 	}
 }
 
+func TestBuildHostsData_NoDuplicateBytes(t *testing.T) {
+	flows := []model.Flow{
+		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
+	}
+
+	data := buildHostsData(flows, 10*time.Minute, nil)
+
+	// Total bytes should be the sum of all flow bytes (not doubled).
+	if data.TotalBytes != 15000 {
+		t.Errorf("TotalBytes = %d, want 15000 (5000 + 10000)", data.TotalBytes)
+	}
+
+	// Sum of all per-host bytes should equal total (no double-counting).
+	var hostBytesSum uint64
+	for _, h := range data.Hosts {
+		hostBytesSum += h.Bytes
+	}
+	if hostBytesSum != data.TotalBytes {
+		t.Errorf("sum of host bytes = %d, want %d (should not double-count)", hostBytesSum, data.TotalBytes)
+	}
+
+	// Verify source IPs got the bytes.
+	for _, h := range data.Hosts {
+		switch h.IP {
+		case "10.0.1.1":
+			if h.Bytes != 5000 {
+				t.Errorf("10.0.1.1 bytes = %d, want 5000", h.Bytes)
+			}
+		case "10.0.1.2":
+			if h.Bytes != 10000 {
+				t.Errorf("10.0.1.2 bytes = %d, want 10000", h.Bytes)
+			}
+		case "192.168.1.1":
+			if h.Bytes != 0 {
+				t.Errorf("192.168.1.1 (dst only) bytes = %d, want 0", h.Bytes)
+			}
+		}
+	}
+}
+
 func TestFlows_FilterByHostIP(t *testing.T) {
 	s, rb := newTestServer(t)
 	flows := []model.Flow{
@@ -652,6 +693,13 @@ func TestFormatBPS(t *testing.T) {
 	got := formatBPS(1000000, 10*time.Minute)
 	if !strings.Contains(got, "Kbps") {
 		t.Errorf("formatBPS(1MB, 10m) = %q, expected Kbps range", got)
+	}
+
+	// Large byte values that would overflow if computed as uint64(bytes*8).
+	// 3 EB * 8 = 24e18 which exceeds uint64 max (~18.4e18).
+	got = formatBPS(3_000_000_000_000_000_000, 10*time.Minute)
+	if !strings.Contains(got, "Pbps") {
+		t.Errorf("formatBPS(3EB, 10m) = %q, expected Pbps range (not overflow)", got)
 	}
 }
 
