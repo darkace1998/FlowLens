@@ -1276,7 +1276,9 @@ func buildHostsData(flows []model.Flow, window time.Duration, geoLookup *geo.Loo
 		src := model.SafeIPString(f.SrcAddr)
 		dst := model.SafeIPString(f.DstAddr)
 		addHost(src, f.Bytes, f.Packets, f.Timestamp)
-		addHost(dst, 0, 0, f.Timestamp)
+		if dst != src {
+			addHost(dst, 0, 0, f.Timestamp)
+		}
 	}
 
 	hosts := make([]HostEntry, 0, len(hostMap))

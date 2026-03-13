@@ -703,6 +703,28 @@ func TestFormatBPS(t *testing.T) {
 	}
 }
 
+func TestFormatPPS(t *testing.T) {
+	tests := []struct {
+		pkts     uint64
+		duration time.Duration
+		want     string
+	}{
+		{0, 10 * time.Minute, "0 pps"},
+		{1000, 0, "0 pps"},
+		{6000, 10 * time.Second, "600 pps"},
+		{60000, 10 * time.Second, "6.00 Kpps"},
+		{60000000, 10 * time.Second, "6.00 Mpps"},
+		{60000000000, 10 * time.Second, "6.00 Gpps"},
+		{60000000000000, 10 * time.Second, "6.00 Tpps"},
+	}
+	for _, tt := range tests {
+		got := formatPPS(tt.pkts, tt.duration)
+		if got != tt.want {
+			t.Errorf("formatPPS(%d, %v) = %q, want %q", tt.pkts, tt.duration, got, tt.want)
+		}
+	}
+}
+
 func TestFormatPkts(t *testing.T) {
 	tests := []struct {
 		input uint64
@@ -1018,6 +1040,9 @@ func TestFormatThroughput(t *testing.T) {
 		{5000, "5.00 Kbps"},
 		{5000000, "5.00 Mbps"},
 		{5000000000, "5.00 Gbps"},
+		{5e12, "5.00 Tbps"},
+		{5e15, "5.00 Pbps"},
+		{5e18, "5.00 Ebps"},
 	}
 	for _, tt := range tests {
 		got := formatThroughput(tt.bps)
