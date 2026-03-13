@@ -107,8 +107,14 @@ func formatBPS(bytesTotal uint64, duration time.Duration) string {
 	if duration == 0 {
 		return "0 bps"
 	}
-	bps := float64(bytesTotal*8) / duration.Seconds()
+	bps := float64(bytesTotal) * 8 / duration.Seconds()
 	switch {
+	case bps >= 1e18:
+		return fmt.Sprintf("%.2f Ebps", bps/1e18)
+	case bps >= 1e15:
+		return fmt.Sprintf("%.2f Pbps", bps/1e15)
+	case bps >= 1e12:
+		return fmt.Sprintf("%.2f Tbps", bps/1e12)
 	case bps >= 1e9:
 		return fmt.Sprintf("%.2f Gbps", bps/1e9)
 	case bps >= 1e6:
@@ -126,6 +132,10 @@ func formatPPS(pktsTotal uint64, duration time.Duration) string {
 	}
 	pps := float64(pktsTotal) / duration.Seconds()
 	switch {
+	case pps >= 1e12:
+		return fmt.Sprintf("%.2f Tpps", pps/1e12)
+	case pps >= 1e9:
+		return fmt.Sprintf("%.2f Gpps", pps/1e9)
 	case pps >= 1e6:
 		return fmt.Sprintf("%.2f Mpps", pps/1e6)
 	case pps >= 1e3:
@@ -140,6 +150,12 @@ func formatThroughput(bps float64) string {
 		return "—"
 	}
 	switch {
+	case bps >= 1e18:
+		return fmt.Sprintf("%.2f Ebps", bps/1e18)
+	case bps >= 1e15:
+		return fmt.Sprintf("%.2f Pbps", bps/1e15)
+	case bps >= 1e12:
+		return fmt.Sprintf("%.2f Tbps", bps/1e12)
 	case bps >= 1e9:
 		return fmt.Sprintf("%.2f Gbps", bps/1e9)
 	case bps >= 1e6:
