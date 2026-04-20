@@ -94,8 +94,9 @@ func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) 
 			Timestamp: now,
 			Title:     fmt.Sprintf("Top Talker: %s", e.IP),
 			Description: fmt.Sprintf(
-				"%s is responsible for %.1f%% of traffic (%s, %s packets) in the last 10 minutes.",
+				"%s is responsible for %.1f%% of traffic (%s, %s packets) in the last %s.",
 				e.IP, pct, formatBytesShort(e.Bytes), formatCountShort(e.Packets),
+				formatWindowShort(queryWindow(cfg)),
 			),
 			Action: actionForTalker(sev, e.IP),
 		})

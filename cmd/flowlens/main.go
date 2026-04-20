@@ -162,9 +162,12 @@ func main() {
 	captureMgr := capture.NewManager(cfg.Capture)
 
 	// Start web server.
-	// Resolve static directory relative to binary location if "static" doesn't exist in CWD.
+	// Resolve static directory relative to binary location if "static" doesn't
+	// exist in CWD. If neither exists, the server falls back to its embedded
+	// static assets, so the binary remains self-contained.
 	staticDir := "static"
 	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		staticDir = ""
 		if exe, err := os.Executable(); err == nil {
 			candidate := filepath.Join(filepath.Dir(exe), "static")
 			if _, err := os.Stat(candidate); err == nil {

@@ -11,14 +11,14 @@ import (
 
 // sFlow v5 constants (RFC 3176 / sFlow v5 spec).
 const (
-	sflowVersion5           = 5
-	sflowDatagramMinLen     = 28 // version(4)+agentAddr(8)+subAgentID(4)+seqNo(4)+uptime(4)+numSamples(4)
-	sflowSampleTypeFlow     = 1  // enterprise=0, format=1 — flow sample
-	sflowSampleTypeCounter  = 2  // enterprise=0, format=2 — counter sample
-	sflowSampleTypeExpandedFlow    = 3 // enterprise=0, format=3 — expanded flow sample
-	sflowSampleTypeExpandedCounter = 4 // enterprise=0, format=4 — expanded counter sample
-	sflowRawPacketHeader    = 1  // enterprise=0, format=1 — raw packet header record
-	sflowGenericIfCounters  = 1  // enterprise=0, format=1 — generic interface counters
+	sflowVersion5                  = 5
+	sflowDatagramMinLen            = 28 // version(4)+agentAddr(8)+subAgentID(4)+seqNo(4)+uptime(4)+numSamples(4)
+	sflowSampleTypeFlow            = 1  // enterprise=0, format=1 — flow sample
+	sflowSampleTypeCounter         = 2  // enterprise=0, format=2 — counter sample
+	sflowSampleTypeExpandedFlow    = 3  // enterprise=0, format=3 — expanded flow sample
+	sflowSampleTypeExpandedCounter = 4  // enterprise=0, format=4 — expanded counter sample
+	sflowRawPacketHeader           = 1  // enterprise=0, format=1 — raw packet header record
+	sflowGenericIfCounters         = 1  // enterprise=0, format=1 — generic interface counters
 )
 
 // Packet parsing constants — network protocol header sizes and field offsets.
@@ -71,8 +71,8 @@ const (
 	sflowSampleRecordHeaderLen = 8
 
 	// sFlow enterprise/format bit masks.
-	sflowFormatMask    = 0xFFF        // Bottom 12 bits for sample format
-	sflowIfIndexMask   = 0x3FFFFFFF   // Mask to strip format bits from interface indices
+	sflowFormatMask  = 0xFFF      // Bottom 12 bits for sample format
+	sflowIfIndexMask = 0x3FFFFFFF // Mask to strip format bits from interface indices
 
 	// Generic interface counters record size (sFlow v5 spec).
 	sflowGenericIfCountersLen = 88
@@ -80,21 +80,21 @@ const (
 
 // SFlowCounterSample represents a decoded sFlow counter sample for interface utilization.
 type SFlowCounterSample struct {
-	IfIndex      uint32
-	IfType       uint32
-	IfSpeed      uint64
-	IfDirection  uint32 // 0=unknown, 1=full-duplex, 2=half-duplex, 3=in, 4=out
-	IfStatus     uint32 // bit0=ifAdminStatus, bit1=ifOperStatus
-	InOctets     uint64
-	InPackets    uint32
-	InErrors     uint32
-	InDrops      uint32
-	OutOctets    uint64
-	OutPackets   uint32
-	OutErrors    uint32
-	OutDrops     uint32
-	AgentIP      net.IP
-	Timestamp    time.Time
+	IfIndex     uint32
+	IfType      uint32
+	IfSpeed     uint64
+	IfDirection uint32 // 0=unknown, 1=full-duplex, 2=half-duplex, 3=in, 4=out
+	IfStatus    uint32 // bit0=ifAdminStatus, bit1=ifOperStatus
+	InOctets    uint64
+	InPackets   uint32
+	InErrors    uint32
+	InDrops     uint32
+	OutOctets   uint64
+	OutPackets  uint32
+	OutErrors   uint32
+	OutDrops    uint32
+	AgentIP     net.IP
+	Timestamp   time.Time
 }
 
 // CounterHandler is a callback for decoded sFlow counter samples.
@@ -161,7 +161,7 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 		sampleLen := binary.BigEndian.Uint32(data[offset+4 : offset+8])
 		offset += sflowSampleRecordHeaderLen
 
-		if len(data) < offset+int(sampleLen) {
+		if uint64(offset)+uint64(sampleLen) > uint64(len(data)) {
 			break
 		}
 
@@ -254,7 +254,7 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		recordLen := binary.BigEndian.Uint32(data[off+4 : off+8])
 		off += sflowSampleRecordHeaderLen
 
-		if len(data) < off+int(recordLen) {
+		if uint64(off)+uint64(recordLen) > uint64(len(data)) {
 			break
 		}
 
@@ -275,8 +275,8 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 
 		// Apply sampling rate multiplier to byte/packet counts.
 		if samplingRate > 1 {
-			f.Bytes *= uint64(samplingRate)
-			f.Packets *= uint64(samplingRate)
+			f.Bytes = saturatingMulUint64(f.Bytes, samplingRate)
+			f.Packets = saturatingMulUint64(f.Packets, samplingRate)
 		}
 
 		f.InputIface = inputIface
@@ -486,7 +486,7 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		recordLen := binary.BigEndian.Uint32(data[off+4 : off+8])
 		off += sflowSampleRecordHeaderLen
 
-		if len(data) < off+int(recordLen) {
+		if uint64(off)+uint64(recordLen) > uint64(len(data)) {
 			break
 		}
 
@@ -506,29 +506,42 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		}
 
 		cs := SFlowCounterSample{
-			IfIndex:    binary.BigEndian.Uint32(recordData[0:4]),
-			IfType:     binary.BigEndian.Uint32(recordData[4:8]),
-			IfSpeed:    binary.BigEndian.Uint64(recordData[8:16]),
+			IfIndex:     binary.BigEndian.Uint32(recordData[0:4]),
+			IfType:      binary.BigEndian.Uint32(recordData[4:8]),
+			IfSpeed:     binary.BigEndian.Uint64(recordData[8:16]),
 			IfDirection: binary.BigEndian.Uint32(recordData[16:20]),
-			IfStatus:   binary.BigEndian.Uint32(recordData[20:24]),
-			InOctets:   binary.BigEndian.Uint64(recordData[24:32]),
-			InPackets:  binary.BigEndian.Uint32(recordData[32:36]) +
+			IfStatus:    binary.BigEndian.Uint32(recordData[20:24]),
+			InOctets:    binary.BigEndian.Uint64(recordData[24:32]),
+			InPackets: binary.BigEndian.Uint32(recordData[32:36]) +
 				binary.BigEndian.Uint32(recordData[36:40]) +
 				binary.BigEndian.Uint32(recordData[40:44]),
-			InDrops:    binary.BigEndian.Uint32(recordData[44:48]),
-			InErrors:   binary.BigEndian.Uint32(recordData[48:52]),
-			OutOctets:  binary.BigEndian.Uint64(recordData[56:64]),
+			InDrops:   binary.BigEndian.Uint32(recordData[44:48]),
+			InErrors:  binary.BigEndian.Uint32(recordData[48:52]),
+			OutOctets: binary.BigEndian.Uint64(recordData[56:64]),
 			OutPackets: binary.BigEndian.Uint32(recordData[64:68]) +
 				binary.BigEndian.Uint32(recordData[68:72]) +
 				binary.BigEndian.Uint32(recordData[72:76]),
-			OutDrops:   binary.BigEndian.Uint32(recordData[76:80]),
-			OutErrors:  binary.BigEndian.Uint32(recordData[80:84]),
-			AgentIP:    agentIP,
-			Timestamp:  ts,
+			OutDrops:  binary.BigEndian.Uint32(recordData[76:80]),
+			OutErrors: binary.BigEndian.Uint32(recordData[80:84]),
+			AgentIP:   agentIP,
+			Timestamp: ts,
 		}
 
 		counters = append(counters, cs)
 	}
 
 	return counters
+}
+
+func saturatingMulUint64(v uint64, m uint32) uint64 {
+	const maxUint64 = ^uint64(0)
+
+	if v == 0 || m <= 1 {
+		return v
+	}
+	mul := uint64(m)
+	if v > maxUint64/mul {
+		return maxUint64
+	}
+	return v * mul
 }

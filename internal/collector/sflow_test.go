@@ -20,9 +20,9 @@ func buildSFlowDatagram(agentIP net.IP, samples ...[]byte) []byte {
 	}
 	copy(pkt[8:12], ip4)
 
-	binary.BigEndian.PutUint32(pkt[12:16], 0)          // subAgentID
-	binary.BigEndian.PutUint32(pkt[16:20], 1)           // seqNumber
-	binary.BigEndian.PutUint32(pkt[20:24], 600000)      // sysUptime (600s)
+	binary.BigEndian.PutUint32(pkt[12:16], 0)                    // subAgentID
+	binary.BigEndian.PutUint32(pkt[16:20], 1)                    // seqNumber
+	binary.BigEndian.PutUint32(pkt[20:24], 600000)               // sysUptime (600s)
 	binary.BigEndian.PutUint32(pkt[24:28], uint32(len(samples))) // numSamples
 
 	for _, s := range samples {
@@ -139,15 +139,15 @@ func buildSFlowCounterSample(ifIndex uint32, ifSpeed uint64, inOctets, outOctets
 	binary.BigEndian.PutUint32(rec[0:4], ifIndex)
 	binary.BigEndian.PutUint32(rec[4:8], 6) // ifType=ethernet
 	binary.BigEndian.PutUint64(rec[8:16], ifSpeed)
-	binary.BigEndian.PutUint32(rec[16:20], 1)  // ifDirection=full-duplex
-	binary.BigEndian.PutUint32(rec[20:24], 3)  // ifStatus=admin+oper up
+	binary.BigEndian.PutUint32(rec[16:20], 1) // ifDirection=full-duplex
+	binary.BigEndian.PutUint32(rec[20:24], 3) // ifStatus=admin+oper up
 	binary.BigEndian.PutUint64(rec[24:32], inOctets)
-	binary.BigEndian.PutUint32(rec[32:36], inPkts)  // inUcastPkts
-	binary.BigEndian.PutUint32(rec[36:40], 0)       // inMulticastPkts
-	binary.BigEndian.PutUint32(rec[40:44], 0)       // inBroadcastPkts
-	binary.BigEndian.PutUint32(rec[44:48], 0)       // inDiscards
-	binary.BigEndian.PutUint32(rec[48:52], 0)       // inErrors
-	binary.BigEndian.PutUint32(rec[52:56], 0)       // inUnknownProtos
+	binary.BigEndian.PutUint32(rec[32:36], inPkts) // inUcastPkts
+	binary.BigEndian.PutUint32(rec[36:40], 0)      // inMulticastPkts
+	binary.BigEndian.PutUint32(rec[40:44], 0)      // inBroadcastPkts
+	binary.BigEndian.PutUint32(rec[44:48], 0)      // inDiscards
+	binary.BigEndian.PutUint32(rec[48:52], 0)      // inErrors
+	binary.BigEndian.PutUint32(rec[52:56], 0)      // inUnknownProtos
 	binary.BigEndian.PutUint64(rec[56:64], outOctets)
 	binary.BigEndian.PutUint32(rec[64:68], outPkts) // outUcastPkts
 	binary.BigEndian.PutUint32(rec[68:72], 0)       // outMulticastPkts
@@ -447,9 +447,9 @@ func TestDecodeSFlow_NonEthernetProtocol(t *testing.T) {
 	binary.BigEndian.PutUint32(sample[4:8], uint32(sampleDataLen))
 
 	off := 8
-	binary.BigEndian.PutUint32(sample[off:off+4], 1)   // seqNo
-	binary.BigEndian.PutUint32(sample[off+4:off+8], 1)  // srcID
-	binary.BigEndian.PutUint32(sample[off+8:off+12], 1) // samplingRate
+	binary.BigEndian.PutUint32(sample[off:off+4], 1)     // seqNo
+	binary.BigEndian.PutUint32(sample[off+4:off+8], 1)   // srcID
+	binary.BigEndian.PutUint32(sample[off+8:off+12], 1)  // samplingRate
 	binary.BigEndian.PutUint32(sample[off+12:off+16], 0) // samplePool
 	binary.BigEndian.PutUint32(sample[off+16:off+20], 0) // drops
 	binary.BigEndian.PutUint32(sample[off+20:off+24], 1) // input
@@ -461,9 +461,9 @@ func TestDecodeSFlow_NonEthernetProtocol(t *testing.T) {
 	binary.BigEndian.PutUint32(sample[off:off+4], 1) // record type
 	binary.BigEndian.PutUint32(sample[off+4:off+8], uint32(recordDataLen))
 	off += 8
-	binary.BigEndian.PutUint32(sample[off:off+4], 2) // headerProtocol=2 (not Ethernet)
-	binary.BigEndian.PutUint32(sample[off+4:off+8], 40) // frameLength
-	binary.BigEndian.PutUint32(sample[off+8:off+12], 0) // strippedBytes
+	binary.BigEndian.PutUint32(sample[off:off+4], 2)      // headerProtocol=2 (not Ethernet)
+	binary.BigEndian.PutUint32(sample[off+4:off+8], 40)   // frameLength
+	binary.BigEndian.PutUint32(sample[off+8:off+12], 0)   // strippedBytes
 	binary.BigEndian.PutUint32(sample[off+12:off+16], 40) // headerLength
 	copy(sample[off+16:], rawPkt)
 
@@ -475,5 +475,79 @@ func TestDecodeSFlow_NonEthernetProtocol(t *testing.T) {
 	}
 	if len(flows) != 0 {
 		t.Errorf("expected 0 flows for non-Ethernet protocol, got %d", len(flows))
+	}
+}
+
+func TestDecodeSFlow_LargeSamplingRateScaling(t *testing.T) {
+	agentIP := net.ParseIP("10.0.0.1")
+	exporterIP := net.ParseIP("172.16.0.1")
+
+	rawPkt := buildEtherIPv4TCP(net.ParseIP("10.1.0.1"), net.ParseIP("10.2.0.1"), 1234, 80)
+	sample := buildSFlowFlowSample(^uint32(0), 1, 2, rawPkt)
+	// Force frameLength to max uint32 to exercise overflow-safe multiplication.
+	binary.BigEndian.PutUint32(sample[52:56], ^uint32(0))
+
+	datagram := buildSFlowDatagram(agentIP, sample)
+	flows, _, err := DecodeSFlow(datagram, exporterIP)
+	if err != nil {
+		t.Fatalf("DecodeSFlow error: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+
+	f := flows[0]
+	expectedBytes := uint64(^uint32(0)) * uint64(^uint32(0))
+	if f.Bytes != expectedBytes {
+		t.Errorf("Bytes = %d, want %d", f.Bytes, expectedBytes)
+	}
+	if f.Packets != uint64(^uint32(0)) {
+		t.Errorf("Packets = %d, want %d", f.Packets, uint64(^uint32(0)))
+	}
+}
+
+func TestDecodeSFlow_MalformedLengthsNoPanic(t *testing.T) {
+	agentIP := net.ParseIP("10.0.0.1")
+	exporterIP := net.ParseIP("172.16.0.1")
+	rawPkt := buildEtherIPv4TCP(net.ParseIP("10.1.0.1"), net.ParseIP("10.2.0.1"), 12345, 443)
+
+	cases := []struct {
+		name   string
+		mutate func(sample []byte)
+	}{
+		{
+			name: "oversized sample length",
+			mutate: func(sample []byte) {
+				binary.BigEndian.PutUint32(sample[4:8], ^uint32(0))
+			},
+		},
+		{
+			name: "oversized record length",
+			mutate: func(sample []byte) {
+				binary.BigEndian.PutUint32(sample[44:48], ^uint32(0))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("DecodeSFlow panicked: %v", r)
+				}
+			}()
+
+			sample := buildSFlowFlowSample(1, 1, 2, rawPkt)
+			tc.mutate(sample)
+			datagram := buildSFlowDatagram(agentIP, sample)
+
+			flows, counters, err := DecodeSFlow(datagram, exporterIP)
+			if err != nil {
+				t.Fatalf("DecodeSFlow returned unexpected error: %v", err)
+			}
+			if len(flows) != 0 || len(counters) != 0 {
+				t.Fatalf("expected no decoded records for malformed lengths, got flows=%d counters=%d", len(flows), len(counters))
+			}
+		})
 	}
 }

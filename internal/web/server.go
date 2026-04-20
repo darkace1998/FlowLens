@@ -4,7 +4,9 @@ import (
 	"crypto/tls"
 	"embed"
 	"html/template"
+	"io/fs"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
@@ -18,6 +20,9 @@ import (
 
 //go:embed templates/*.xhtml
 var templateFS embed.FS
+
+//go:embed static
+var staticFS embed.FS
 
 // Server is the HTTP web server for FlowLens.
 type Server struct {
@@ -129,7 +134,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/api/advisories", s.handleAPIAdvisories)
 	s.mux.HandleFunc("/api/dashboard", s.handleAPIDashboard)
 
-	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(staticFileSystem(staticDir))))
 
 	// Build the handler chain: Recovery → Request Logging → Request Timeout → CSP → Basic Auth → Mux.
 	// /healthz is exempt from Basic Auth so that Docker HEALTHCHECK and Kubernetes
@@ -186,4 +191,21 @@ func (s *Server) SetAboutInfo(cfg config.Config, version string, startTime time.
 // Mux returns the underlying ServeMux for testing purposes.
 func (s *Server) Mux() *http.ServeMux {
 	return s.mux
+}
+
+// staticFileSystem returns an http.FileSystem serving /static assets. If
+// staticDir points to an existing directory on disk, it is preferred (useful
+// for development so edits take effect without rebuilding). Otherwise the
+// embedded static files are used, making the binary self-contained.
+func staticFileSystem(staticDir string) http.FileSystem {
+if staticDir != "" {
+if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
+return http.Dir(staticDir)
+}
+}
+sub, err := fs.Sub(staticFS, "static")
+if err != nil {
+return http.FS(staticFS)
+}
+return http.FS(sub)
 }

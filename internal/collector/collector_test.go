@@ -445,3 +445,31 @@ func TestCollector_SFlowOnDedicatedPort(t *testing.T) {
 		t.Errorf("sFlow counter InOctets = %d, want 100000", cs.InOctets)
 	}
 }
+
+func TestCollector_StopConcurrentNoPanic(t *testing.T) {
+	c := New(config.CollectorConfig{}, nil)
+
+	const callers = 32
+	var wg sync.WaitGroup
+	panicCh := make(chan any, callers)
+
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicCh <- r
+				}
+			}()
+			c.Stop()
+		}()
+	}
+
+	wg.Wait()
+	close(panicCh)
+
+	if len(panicCh) > 0 {
+		t.Fatalf("Collector.Stop panicked under concurrent calls")
+	}
+}

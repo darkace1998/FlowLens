@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,10 +44,11 @@ type Manager struct {
 }
 
 type activeSession struct {
-	session Session
-	source  *Source
-	writer  *PcapWriter
-	stopCh  chan struct{}
+	session  Session
+	source   *Source
+	writer   *PcapWriter
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // NewManager creates a new capture manager.
@@ -126,7 +128,15 @@ func (m *Manager) runCapture(as *activeSession) error {
 	pcapWriter := as.writer
 
 	handler := func(data []byte, ts time.Time) {
+		select {
+		case <-as.stopCh:
+			return
+		default:
+		}
 		if err := pcapWriter.WritePacket(data, ts); err != nil {
+			if errors.Is(err, ErrPcapWriterClosed) {
+				return
+			}
 			logging.Default().Warn("PCAP write error: %v", err)
 		}
 	}
@@ -150,16 +160,11 @@ func (m *Manager) Stop(id string) error {
 	}
 	m.mu.Unlock()
 
-	// Signal stop.
-	select {
-	case <-as.stopCh:
-		// Already stopped.
-	default:
+	// Signal stop and close writer exactly once.
+	as.stopOnce.Do(func() {
 		close(as.stopCh)
-	}
-
-	// Close PCAP writer.
-	as.writer.Close()
+		_ = as.writer.Close()
+	})
 
 	// Update session state.
 	m.mu.Lock()

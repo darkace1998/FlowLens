@@ -3,6 +3,7 @@ package capture
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,15 +28,19 @@ const pcapVersionMinor = 4
 // linkTypeEthernet is the PCAP link-layer type for Ethernet.
 const linkTypeEthernet = 1
 
+// ErrPcapWriterClosed is returned when writing to a writer that has been closed.
+var ErrPcapWriterClosed = errors.New("pcap: writer closed")
+
 // PcapWriter writes packets to a PCAP file with optional size-based rotation.
 type PcapWriter struct {
 	mu        sync.Mutex
 	dir       string
 	prefix    string
 	snapLen   uint32
-	maxBytes  int64  // max file size in bytes before rotation (0 = no limit)
-	maxFiles  int    // max number of PCAP files to keep (0 = no limit)
+	maxBytes  int64 // max file size in bytes before rotation (0 = no limit)
+	maxFiles  int   // max number of PCAP files to keep (0 = no limit)
 	file      *os.File
+	closed    bool
 	written   int64
 	pktCount  int64
 	startTime time.Time
@@ -60,6 +65,9 @@ func NewPcapWriter(dir, prefix string, snapLen uint32, maxSizeMB, maxFiles int) 
 
 // openNewFile creates a new PCAP file with a timestamp-based name and writes the global header.
 func (pw *PcapWriter) openNewFile() error {
+	if pw.closed {
+		return ErrPcapWriterClosed
+	}
 	if pw.file != nil {
 		pw.file.Close()
 	}
@@ -105,6 +113,10 @@ func (pw *PcapWriter) WritePacket(data []byte, ts time.Time) error {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 
+	if pw.closed {
+		return ErrPcapWriterClosed
+	}
+
 	if pw.file == nil {
 		if err := pw.openNewFile(); err != nil {
 			return err
@@ -149,6 +161,7 @@ func (pw *PcapWriter) WritePacket(data []byte, ts time.Time) error {
 func (pw *PcapWriter) Close() error {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
+	pw.closed = true
 	if pw.file != nil {
 		err := pw.file.Close()
 		pw.file = nil

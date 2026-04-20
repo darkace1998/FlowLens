@@ -36,6 +36,23 @@ const (
 	ipfixFieldFlowEndSec       = 151
 	ipfixFieldFlowStartMilli   = 152
 	ipfixFieldFlowEndMilli     = 153
+	// Alternative total counters (used by some exporters instead of deltaCount).
+	ipfixFieldOctetTotalCount  = 85
+	ipfixFieldPacketTotalCount = 86
+	// Biflow counters (RFC 5103) used by many vendor exporters.
+	ipfixFieldInitiatorOctets  = 231
+	ipfixFieldResponderOctets  = 232
+	ipfixFieldInitiatorPackets = 298
+	ipfixFieldResponderPackets = 299
+	// NAT event fields (RFC 8158). Presence of IE 230 natEvent in a template
+	// identifies a NAT-logging record rather than a traffic flow; such records
+	// carry no byte/packet counters and would otherwise pollute flow statistics.
+	ipfixFieldPostNATSourceIPv4      = 225
+	ipfixFieldPostNATDestIPv4        = 226
+	ipfixFieldPostNAPTSourcePort     = 227
+	ipfixFieldPostNAPTDestPort       = 228
+	ipfixFieldNatEvent               = 230
+	ipfixFieldObservationTimeMilli   = 323
 	// TCP quality metrics (IANA IPFIX assignments).
 	// Note: Actual IE support varies by exporter vendor. These IDs cover
 	// common implementations; exporters that use different IDs will simply
@@ -67,8 +84,9 @@ type ipfixTemplateField struct {
 
 // ipfixTemplate holds a cached IPFIX template.
 type ipfixTemplate struct {
-	Fields []ipfixTemplateField
-	Size   int // total bytes per data record
+	Fields     []ipfixTemplateField
+	Size       int // total bytes per data record
+	IsNATEvent bool // true if template contains natEvent IE (RFC 8158); records are NAT logs, not flows
 }
 
 // IPFIXTemplateCache stores IPFIX templates keyed by (observation domain, template ID).
@@ -196,6 +214,9 @@ func parseIPFIXTemplates(data []byte, obsDomainID uint32, cache *IPFIXTemplateCa
 
 			tmpl.Fields = append(tmpl.Fields, field)
 			tmpl.Size += int(fLen)
+			if !field.IsEnterprise && field.ID == ipfixFieldNatEvent {
+				tmpl.IsNATEvent = true
+			}
 		}
 
 		cache.set(obsDomainID, templateID, tmpl)
@@ -206,12 +227,28 @@ func parseIPFIXTemplates(data []byte, obsDomainID uint32, cache *IPFIXTemplateCa
 type ipfixRecordContext struct {
 	flowStartSysUp uint32
 	flowEndSysUp   uint32
+	flowStartSec   uint32
+	flowEndSec     uint32
 	flowStartMilli uint64
 	flowEndMilli   uint64
+	bytesDelta     uint64
+	bytesTotal     uint64
+	bytesBiflow    uint64
+	packetsDelta   uint64
+	packetsTotal   uint64
+	packetsBiflow  uint64
 	hasStartSysUp  bool
 	hasEndSysUp    bool
+	hasStartSec    bool
+	hasEndSec      bool
 	hasStartMilli  bool
 	hasEndMilli    bool
+	hasBytesDelta  bool
+	hasBytesTotal  bool
+	hasBytesBiflow bool
+	hasPktsDelta   bool
+	hasPktsTotal   bool
+	hasPktsBiflow  bool
 }
 
 // decodeIPFIXDataSet decodes data records in a Data Set using the cached template.
@@ -220,6 +257,12 @@ func decodeIPFIXDataSet(data []byte, obsDomainID uint32, templateID uint16,
 
 	tmpl := cache.get(obsDomainID, templateID)
 	if tmpl == nil || tmpl.Size == 0 {
+		return nil
+	}
+	// NAT-event records (RFC 8158) contain no byte/packet counters and
+	// represent NAT state changes, not traffic flows. Skip them so they do
+	// not pollute flow statistics with zero-counter entries.
+	if tmpl.IsNATEvent {
 		return nil
 	}
 
@@ -245,12 +288,38 @@ func decodeIPFIXDataSet(data []byte, obsDomainID uint32, templateID uint16,
 			offset += int(field.Length)
 		}
 
-		// Calculate duration and timestamp
+		// Choose packet/byte counters by precedence:
+		// deltaCount > totalCount > biflow sum.
+		switch {
+		case ctx.hasBytesDelta:
+			f.Bytes = ctx.bytesDelta
+		case ctx.hasBytesTotal:
+			f.Bytes = ctx.bytesTotal
+		case ctx.hasBytesBiflow:
+			f.Bytes = ctx.bytesBiflow
+		}
+		switch {
+		case ctx.hasPktsDelta:
+			f.Packets = ctx.packetsDelta
+		case ctx.hasPktsTotal:
+			f.Packets = ctx.packetsTotal
+		case ctx.hasPktsBiflow:
+			f.Packets = ctx.packetsBiflow
+		}
+
+		// Calculate duration (prefer higher-precision timestamp fields).
 		if ctx.hasStartMilli && ctx.hasEndMilli && ctx.flowEndMilli >= ctx.flowStartMilli {
 			f.Duration = time.Duration(ctx.flowEndMilli-ctx.flowStartMilli) * time.Millisecond
-			f.Timestamp = time.UnixMilli(int64(ctx.flowEndMilli))
+		} else if ctx.hasStartSec && ctx.hasEndSec && ctx.flowEndSec >= ctx.flowStartSec {
+			f.Duration = time.Duration(ctx.flowEndSec-ctx.flowStartSec) * time.Second
 		} else if ctx.hasStartSysUp && ctx.hasEndSysUp && ctx.flowEndSysUp >= ctx.flowStartSysUp {
 			f.Duration = time.Duration(ctx.flowEndSysUp-ctx.flowStartSysUp) * time.Millisecond
+		}
+		// Timestamp should reflect the exporter-provided flow end time when available.
+		if ctx.hasEndMilli {
+			f.Timestamp = time.UnixMilli(int64(ctx.flowEndMilli))
+		} else if ctx.hasEndSec {
+			f.Timestamp = time.Unix(int64(ctx.flowEndSec), 0)
 		}
 
 		f.Classify()
@@ -296,9 +365,35 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 			f.Protocol = data[0]
 		}
 	case ipfixFieldOctetDeltaCount:
-		f.Bytes = readUintN(data)
+		ctx.bytesDelta = readUintN(data)
+		ctx.hasBytesDelta = true
 	case ipfixFieldPacketDeltaCount:
-		f.Packets = readUintN(data)
+		ctx.packetsDelta = readUintN(data)
+		ctx.hasPktsDelta = true
+	case ipfixFieldOctetTotalCount:
+		ctx.bytesTotal = readUintN(data)
+		ctx.hasBytesTotal = true
+	case ipfixFieldPacketTotalCount:
+		ctx.packetsTotal = readUintN(data)
+		ctx.hasPktsTotal = true
+	case ipfixFieldInitiatorOctets, ipfixFieldResponderOctets:
+		ctx.bytesBiflow += readUintN(data)
+		ctx.hasBytesBiflow = true
+	case ipfixFieldInitiatorPackets, ipfixFieldResponderPackets:
+		ctx.packetsBiflow += readUintN(data)
+		ctx.hasPktsBiflow = true
+	case ipfixFieldObservationTimeMilli:
+		if len(data) == 8 {
+			ms := binary.BigEndian.Uint64(data)
+			if !ctx.hasEndMilli {
+				ctx.flowEndMilli = ms
+				ctx.hasEndMilli = true
+			}
+			if !ctx.hasStartMilli {
+				ctx.flowStartMilli = ms
+				ctx.hasStartMilli = true
+			}
+		}
 	case ipfixFieldTCPControlBits:
 		if len(data) >= 1 {
 			f.TCPFlags = data[len(data)-1] // may be 1 or 2 bytes; use last byte
@@ -324,6 +419,16 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 		if len(data) == 4 {
 			ctx.flowEndSysUp = binary.BigEndian.Uint32(data)
 			ctx.hasEndSysUp = true
+		}
+	case ipfixFieldFlowStartSec:
+		if len(data) == 4 {
+			ctx.flowStartSec = binary.BigEndian.Uint32(data)
+			ctx.hasStartSec = true
+		}
+	case ipfixFieldFlowEndSec:
+		if len(data) == 4 {
+			ctx.flowEndSec = binary.BigEndian.Uint32(data)
+			ctx.hasEndSec = true
 		}
 	case ipfixFieldFlowStartMilli:
 		if len(data) == 8 {

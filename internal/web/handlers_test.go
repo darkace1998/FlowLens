@@ -668,6 +668,18 @@ func TestFilterFlows(t *testing.T) {
 	if len(result) != 2 {
 		t.Errorf("filter ip=10.0.1 (prefix): got %d flows, want 2", len(result))
 	}
+
+	// Invalid port filter should fail closed.
+	result = filterFlows(flows, "", "", "not-a-port", "", "")
+	if len(result) != 0 {
+		t.Errorf("invalid port filter should return 0 flows, got %d", len(result))
+	}
+
+	// Invalid protocol filter should fail closed.
+	result = filterFlows(flows, "", "", "", "not-a-proto", "")
+	if len(result) != 0 {
+		t.Errorf("invalid protocol filter should return 0 flows, got %d", len(result))
+	}
 }
 
 func TestFormatBytes(t *testing.T) {
@@ -711,6 +723,7 @@ func TestFormatPPS(t *testing.T) {
 	}{
 		{0, 10 * time.Minute, "0 pps"},
 		{1000, 0, "0 pps"},
+		{152, 10 * time.Minute, "0.25 pps"}, // bug #8: was "0 pps"
 		{6000, 10 * time.Second, "600 pps"},
 		{60000, 10 * time.Second, "6.00 Kpps"},
 		{60000000, 10 * time.Second, "6.00 Mpps"},
@@ -757,8 +770,8 @@ func TestPctOf(t *testing.T) {
 		{0, 0, 0},
 		{50, 100, 50},
 		{100, 100, 100},
-		{200, 100, 100},     // capped at 100
-		{101, 100, 100},     // minimal overflow capped at 100
+		{200, 100, 100}, // capped at 100
+		{101, 100, 100}, // minimal overflow capped at 100
 		{1, 3, 33.3},
 	}
 	for _, tt := range tests {
@@ -2119,28 +2132,30 @@ func TestPcapImport_StreamingUpload(t *testing.T) {
 	// Global header (24 bytes) — little-endian.
 	var ghdr [24]byte
 	binary.LittleEndian.PutUint32(ghdr[0:4], 0xa1b2c3d4) // magic
-	binary.LittleEndian.PutUint16(ghdr[4:6], 2)           // version major
-	binary.LittleEndian.PutUint16(ghdr[6:8], 4)           // version minor
-	binary.LittleEndian.PutUint32(ghdr[16:20], 65535)      // snapLen
-	binary.LittleEndian.PutUint32(ghdr[20:24], 1)          // link type = Ethernet
+	binary.LittleEndian.PutUint16(ghdr[4:6], 2)          // version major
+	binary.LittleEndian.PutUint16(ghdr[6:8], 4)          // version minor
+	binary.LittleEndian.PutUint32(ghdr[16:20], 65535)    // snapLen
+	binary.LittleEndian.PutUint32(ghdr[20:24], 1)        // link type = Ethernet
 	pcapBuf.Write(ghdr[:])
 
 	// Build a minimal Ethernet + IPv4 + TCP packet (54 bytes).
 	pkt := make([]byte, 54)
-	pkt[12] = 0x08; pkt[13] = 0x00 // EtherType = IPv4
-	pkt[14] = 0x45                  // version=4, IHL=5
-	pkt[14+3] = 40                  // total length
-	pkt[14+9] = 6                   // protocol = TCP
-	pkt[14+12] = 10                 // src IP: 10.0.0.1
+	pkt[12] = 0x08
+	pkt[13] = 0x00  // EtherType = IPv4
+	pkt[14] = 0x45  // version=4, IHL=5
+	pkt[14+3] = 40  // total length
+	pkt[14+9] = 6   // protocol = TCP
+	pkt[14+12] = 10 // src IP: 10.0.0.1
 	pkt[14+15] = 1
-	pkt[14+16] = 192               // dst IP: 192.168.1.1
+	pkt[14+16] = 192 // dst IP: 192.168.1.1
 	pkt[14+17] = 168
 	pkt[14+18] = 1
 	pkt[14+19] = 1
-	pkt[35] = 80                    // src port = 80
-	pkt[36] = 0x01; pkt[37] = 0xBB // dst port = 443
+	pkt[35] = 80 // src port = 80
+	pkt[36] = 0x01
+	pkt[37] = 0xBB // dst port = 443
 	pkt[34+12] = 0x50
-	pkt[34+13] = 0x02              // SYN
+	pkt[34+13] = 0x02 // SYN
 
 	// Packet header (16 bytes).
 	var phdr [16]byte

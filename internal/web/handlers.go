@@ -71,50 +71,50 @@ type CategoryEntry struct {
 
 // LatencyStats holds percentile-based latency/throughput statistics.
 type LatencyStats struct {
-	AvgRTT     string
-	P50RTT     string
-	P95RTT     string
-	P99RTT     string
-	AvgThru    string
-	P50Thru    string
-	P95Thru    string
-	P99Thru    string
-	FlowsWithRTT int
+	AvgRTT        string
+	P50RTT        string
+	P95RTT        string
+	P99RTT        string
+	AvgThru       string
+	P50Thru       string
+	P95Thru       string
+	P99Thru       string
+	FlowsWithRTT  int
 	FlowsWithThru int
 }
 
 // TCPHealthStats holds aggregate TCP quality metrics for the dashboard.
 type TCPHealthStats struct {
-	TotalTCPFlows      int
-	FlowsWithRetrans   int
-	FlowsWithOOO       int
-	FlowsWithLoss      int
-	TotalRetrans       uint64
-	TotalOOO           uint64
-	TotalLoss          uint64
-	TotalTCPPackets    uint64
-	RetransRate        float64 // percentage of TCP packets that are retransmissions
-	OOORate            float64 // percentage of TCP packets that are out-of-order
-	LossRate           float64 // percentage of packets lost
-	TopRetransFlows    []TCPFlowEntry
+	TotalTCPFlows    int
+	FlowsWithRetrans int
+	FlowsWithOOO     int
+	FlowsWithLoss    int
+	TotalRetrans     uint64
+	TotalOOO         uint64
+	TotalLoss        uint64
+	TotalTCPPackets  uint64
+	RetransRate      float64 // percentage of TCP packets that are retransmissions
+	OOORate          float64 // percentage of TCP packets that are out-of-order
+	LossRate         float64 // percentage of packets lost
+	TopRetransFlows  []TCPFlowEntry
 }
 
 // TCPFlowEntry is a flow with TCP quality information for the dashboard.
 type TCPFlowEntry struct {
-	SrcAddr      string
-	DstAddr      string
-	SrcPort      uint16
-	DstPort      uint16
-	Retrans      uint32
-	OOO          uint32
-	Loss         uint32
-	Packets      uint64
-	RetransRate  float64
+	SrcAddr     string
+	DstAddr     string
+	SrcPort     uint16
+	DstPort     uint16
+	Retrans     uint32
+	OOO         uint32
+	Loss        uint32
+	Packets     uint64
+	RetransRate float64
 }
 
 // VoIPStats holds aggregate VoIP quality metrics for the dashboard.
 type VoIPStats struct {
-	TotalVoIPFlows int
+	TotalVoIPFlows  int
 	FlowsWithJitter int
 	FlowsWithMOS    int
 	AvgJitter       string
@@ -122,7 +122,7 @@ type VoIPStats struct {
 	P95Jitter       string
 	AvgMOS          string
 	MinMOS          string
-	FlowsBelowMOS35 int     // MOS < 3.5 (poor quality)
+	FlowsBelowMOS35 int // MOS < 3.5 (poor quality)
 	TopVoIPFlows    []VoIPFlowEntry
 }
 
@@ -152,25 +152,25 @@ type InterfaceEntry struct {
 
 // DashboardData holds all data for the dashboard template.
 type DashboardData struct {
-	TotalBytes   uint64
-	TotalPackets uint64
-	BPS          string
-	PPS          string
-	FlowCount    int
-	ActiveFlows  int
-	ActiveHosts  int
-	Window       time.Duration
-	TopSrc       []TalkerEntry
-	TopDst       []TalkerEntry
-	Protocols    []ProtocolEntry
-	TopAS        []ASEntry
-	AppProtocols []AppProtoEntry
-	Categories   []CategoryEntry
-	Latency      LatencyStats
-	TCPHealth    TCPHealthStats
-	VoIP         VoIPStats
-	Interfaces   []InterfaceEntry
-	IfaceFilter  string // current interface filter value (from query param)
+	TotalBytes    uint64
+	TotalPackets  uint64
+	BPS           string
+	PPS           string
+	FlowCount     int
+	ActiveFlows   int
+	ActiveHosts   int
+	Window        time.Duration
+	TopSrc        []TalkerEntry
+	TopDst        []TalkerEntry
+	Protocols     []ProtocolEntry
+	TopAS         []ASEntry
+	AppProtocols  []AppProtoEntry
+	Categories    []CategoryEntry
+	Latency       LatencyStats
+	TCPHealth     TCPHealthStats
+	VoIP          VoIPStats
+	Interfaces    []InterfaceEntry
+	IfaceFilter   string // current interface filter value (from query param)
 	SelectedRange string // currently selected time-range (e.g. "5m", "15m", "1h")
 
 	// Chart data for interactive Chart.js visualizations.
@@ -525,27 +525,37 @@ func buildChartTime(flows []model.Flow, window time.Duration) ([]string, []uint6
 	if len(flows) == 0 {
 		return nil, nil
 	}
-	const numBuckets = 20
-	bucketDur := window / numBuckets
+	const desiredBuckets = 20
+	bucketDur := window / desiredBuckets
 	if bucketDur < time.Second {
 		bucketDur = time.Second
 	}
+	// Compute the effective bucket count so that labels don't run into the future
+	// when window / desiredBuckets was clamped up to 1s.
+	numBuckets := int(window / bucketDur)
+	if numBuckets < 1 {
+		numBuckets = 1
+	}
+	if numBuckets > desiredBuckets {
+		numBuckets = desiredBuckets
+	}
 
 	now := time.Now()
+	effectiveWindow := bucketDur * time.Duration(numBuckets)
 	labels := make([]string, numBuckets)
 	values := make([]uint64, numBuckets)
 
 	for i := 0; i < numBuckets; i++ {
-		t := now.Add(-window).Add(time.Duration(i) * bucketDur).Add(bucketDur / 2)
+		t := now.Add(-effectiveWindow).Add(time.Duration(i) * bucketDur).Add(bucketDur / 2)
 		labels[i] = t.Format("15:04")
 	}
 
 	for _, f := range flows {
 		age := now.Sub(f.Timestamp)
-		if age < 0 || age > window {
+		if age < 0 || age > effectiveWindow {
 			continue
 		}
-		idx := int((window - age) / bucketDur)
+		idx := int((effectiveWindow - age) / bucketDur)
 		if idx >= numBuckets {
 			idx = numBuckets - 1
 		}
@@ -827,8 +837,8 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 			avgJitter = a.jitterSum / int64(a.count)
 		}
 		topFlows = append(topFlows, VoIPFlowEntry{
-			SrcAddr:  key.src, DstAddr: key.dst,
-			SrcPort:  key.srcPort, DstPort: key.dstPort,
+			SrcAddr: key.src, DstAddr: key.dst,
+			SrcPort: key.srcPort, DstPort: key.dstPort,
 			Jitter:   formatJitter(avgJitter),
 			MOS:      formatMOS(avgMOS),
 			MOSVal:   avgMOS,
@@ -1158,27 +1168,36 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 	}
 
 	var portNum uint16
+	portFilterSet := false
 	if port != "" {
 		p, err := strconv.ParseUint(port, 10, 16)
-		if err == nil {
-			portNum = uint16(p)
+		if err != nil {
+			return nil
 		}
+		portNum = uint16(p)
+		portFilterSet = true
 	}
 
 	var protoNum uint8
+	protoFilterSet := false
 	if proto != "" {
 		switch strings.ToLower(proto) {
 		case "tcp", "6":
 			protoNum = 6
+			protoFilterSet = true
 		case "udp", "17":
 			protoNum = 17
+			protoFilterSet = true
 		case "icmp", "1":
 			protoNum = 1
+			protoFilterSet = true
 		default:
 			p, err := strconv.ParseUint(proto, 10, 8)
-			if err == nil {
-				protoNum = uint8(p)
+			if err != nil {
+				return nil
 			}
+			protoNum = uint8(p)
+			protoFilterSet = true
 		}
 	}
 
@@ -1193,10 +1212,10 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 		if hostIP != "" && !matchIP(f.SrcAddr, hostIP) && !matchIP(f.DstAddr, hostIP) {
 			continue
 		}
-		if port != "" && f.SrcPort != portNum && f.DstPort != portNum {
+		if portFilterSet && f.SrcPort != portNum && f.DstPort != portNum {
 			continue
 		}
-		if proto != "" && f.Protocol != protoNum {
+		if protoFilterSet && f.Protocol != protoNum {
 			continue
 		}
 		result = append(result, f)
@@ -1404,10 +1423,10 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 // ReportPageData holds all data for the reports template.
 type ReportPageData struct {
 	// Form values for persistence.
-	StartTime  string
-	EndTime    string
-	GroupBy    string
-	Metric     string
+	StartTime string
+	EndTime   string
+	GroupBy   string
+	Metric    string
 
 	// Results.
 	Rows       []storage.ReportRow
@@ -2136,26 +2155,26 @@ func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
 
 // SessionEntry represents a bidirectional flow session (conversation).
 type SessionEntry struct {
-	SrcAddr     string
-	DstAddr     string
-	SrcPort     uint16
-	DstPort     uint16
-	Protocol    string
-	Proto       uint8
-	Bytes       uint64
-	Packets     uint64
-	FlowCount   int
-	BytesStr    string
-	PktsStr     string
-	FirstSeen   time.Time
-	LastSeen    time.Time
-	Duration    string
-	Throughput  string
-	AppProto    string
-	Retrans     uint32
-	OOO         uint32
-	Loss        uint32
-	TCPFlags    string
+	SrcAddr    string
+	DstAddr    string
+	SrcPort    uint16
+	DstPort    uint16
+	Protocol   string
+	Proto      uint8
+	Bytes      uint64
+	Packets    uint64
+	FlowCount  int
+	BytesStr   string
+	PktsStr    string
+	FirstSeen  time.Time
+	LastSeen   time.Time
+	Duration   string
+	Throughput string
+	AppProto   string
+	Retrans    uint32
+	OOO        uint32
+	Loss       uint32
+	TCPFlags   string
 }
 
 // SessionsPageData holds data for the sessions template.
@@ -2179,20 +2198,20 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type sessKey struct {
-		lo, hi           string
-		loPort, hiPort   uint16
-		proto            uint8
+		lo, hi         string
+		loPort, hiPort uint16
+		proto          uint8
 	}
 	type sessAgg struct {
-		srcAddr, dstAddr string
-		srcPort, dstPort uint16
-		proto            uint8
-		bytes, packets   uint64
-		flowCount        int
-		first, last      time.Time
+		srcAddr, dstAddr   string
+		srcPort, dstPort   uint16
+		proto              uint8
+		bytes, packets     uint64
+		flowCount          int
+		first, last        time.Time
 		retrans, ooo, loss uint32
-		appProto         string
-		tcpFlags         uint8
+		appProto           string
+		tcpFlags           uint8
 	}
 
 	agg := make(map[sessKey]*sessAgg)
@@ -2487,7 +2506,7 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 				OutErrors:  cs.OutErrors,
 				OutDrops:   cs.OutDrops,
 				InUtil:     inUtil,
-				OutUtil:     outUtil,
+				OutUtil:    outUtil,
 				LastSeen:   timeAgo(cs.Timestamp),
 			})
 		}

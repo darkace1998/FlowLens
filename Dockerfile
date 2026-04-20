@@ -32,7 +32,8 @@ WORKDIR /app
 
 COPY --from=builder /flowlens /app/flowlens
 COPY configs/flowlens.yaml /app/configs/flowlens.yaml
-COPY static/ /app/static/
+# Static assets are embedded into the binary via //go:embed in internal/web.
+# No need to copy the static/ directory at runtime.
 
 # Ensure the non-root user can write to data directories.
 RUN mkdir -p /app/captures && chown -R flowlens:flowlens /app

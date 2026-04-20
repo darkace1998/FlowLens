@@ -22,6 +22,7 @@ type Collector struct {
 	handler        FlowHandler
 	counterHandler CounterHandler
 	mu             sync.RWMutex // protects conns and sflowConns
+	stopOnce       sync.Once
 	conns          []*net.UDPConn
 	sflowConns     []*net.UDPConn
 	nfv9Cache      *NFV9TemplateCache
@@ -255,12 +256,7 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 // causing Start to return.
 func (c *Collector) Stop() {
 	// Signal the rate-limiter cleanup goroutine to exit.
-	select {
-	case <-c.done:
-		// already closed
-	default:
-		close(c.done)
-	}
+	c.stopOnce.Do(func() { close(c.done) })
 
 	c.mu.Lock()
 	defer c.mu.Unlock()

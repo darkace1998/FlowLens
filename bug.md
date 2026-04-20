@@ -116,14 +116,115 @@ The Protocol Breakdown table and other statistics tables still display correct d
 
 ---
 
-## Bug #8: PPS Shows "0 pps" for Low Packet Rates
+## Bug #8: PPS Shows "0 pps" for Low Packet Rates (FIXED)
 
 **Severity:** Low  
 **Component:** `internal/web/handlers.go` — `formatPPS()`  
-**Status:** ⚠️ Known Limitation
+**Status:** ✅ Fixed
 
 **Description:**  
-When the packets-per-second rate is below 0.5, `formatPPS` rounds to `"0 pps"` due to the `"%.0f pps"` format string. This can be confusing when there are clearly packets in the window (e.g. 152 packets over 10 minutes = 0.25 pps shows as "0 pps").
+When the packets-per-second rate is below 0.5, `formatPPS` rounded to `"0 pps"` due to the `"%.0f pps"` format string. This was confusing when there were clearly packets in the window (e.g. 152 packets over 10 minutes = 0.25 pps was shown as "0 pps").
 
-**Workaround:**  
-The "Total Packets" stat card still shows the correct packet count.
+**Root Cause:**  
+The fallback format branch used `%.0f`, rounding any sub-integer rate to zero.
+
+**Fix:**  
+Added a dedicated sub-1-pps branch that prints two decimals (e.g. `0.25 pps`), and an explicit zero-rate branch. Integer rates ≥ 1 pps still print as `"<n> pps"`. Added a regression test.
+
+---
+
+## Bug #9: DNS Rate/Minute Calculated With Hardcoded 10-Minute Window (FIXED)
+
+**Severity:** Medium  
+**Component:** `internal/analysis/dns.go` — `DNSVolume.Analyze`  
+**Status:** ✅ Fixed
+
+**Description:**  
+The DNS volume analyzer computed flows-per-minute as `dnsFlows / 10.0`, assuming the query window was always 10 minutes. The window is configurable via `AnalysisConfig.QueryWindow`, so any non-10-minute window produced an incorrect rate (and, by extension, wrong advisory severity and threshold comparisons).
+
+**Root Cause:**  
+The divisor `10.0` was a literal, not derived from `queryWindow(cfg)`.
+
+**Fix:**  
+Replaced the divisor with `queryWindow(cfg).Minutes()` and guarded against a zero/negative window by falling back to 1 minute.
+
+---
+
+## Bug #10: Dashboard Throughput-Over-Time Labels Drift Into the Future (FIXED)
+
+**Severity:** Low  
+**Component:** `internal/web/handlers.go` — `buildChartTime()`  
+**Status:** ✅ Fixed
+
+**Description:**  
+When the dashboard window divided by the bucket count produced a sub-second bucket width, the code clamped `bucketDur` to 1 s but kept `numBuckets = 20`. The label loop then walked 20 × 1 s = 20 s starting at `now - window`, so labels for higher indices were printed with future timestamps and their values stayed empty because the fill loop used the (smaller) real window for `age` filtering.
+
+**Root Cause:**  
+`numBuckets` was a compile-time constant not recomputed after `bucketDur` was clamped, and the label/fill paths used `window` instead of `bucketDur × numBuckets`.
+
+**Fix:**  
+Recompute `numBuckets = window / bucketDur` (capped at 20) after the clamp and use `effectiveWindow = bucketDur × numBuckets` consistently for labels and age filtering.
+
+---
+
+## Bug #11: Advisory Descriptions Hardcoded "last 10 minutes" (FIXED)
+
+**Severity:** Low  
+**Component:** `internal/analysis/toptalkers.go`, `scanner.go`, `dns.go`  
+**Status:** ✅ Fixed
+
+**Description:**  
+Three analyzers described the evaluation window as "in the last 10 minutes" regardless of the configured `QueryWindow`, misrepresenting the data when operators tune the analysis window.
+
+**Fix:**  
+Introduced `formatWindowShort()` in `internal/analysis/engine.go` and replaced each hardcoded literal with the formatted actual query window (e.g. "5m", "1h 30m").
+
+---
+
+## Bug #12: IPFIX NAT-event records pollute flow statistics with zero counters
+
+**Severity:** High (real-world data corruption)
+**Component:** `internal/collector/ipfix.go`
+**Status:** ✅ Fixed
+
+**Description:**
+RFC 8158 NAT-event templates (identified by IE 230 `natEvent`) contain no byte
+or packet counters — they record NAT state changes, not traffic. Sophos XG/SG
+firewalls and other stateful exporters frequently emit these alongside real
+flow templates. FlowLens was decoding each NAT-event record into a `Flow` with
+`Bytes=0, Packets=0, Duration=0s`, which poisoned `/api/dashboard` totals,
+top-talkers, protocol breakdowns, and rates (observed live: 29 flows, all zero).
+
+**Fix:**
+Detect `natEvent` (IE 230) during template parsing and flag the template as
+`IsNATEvent`; `decodeIPFIXDataSet` returns no flows for such templates. Also
+added handlers for commonly-missing counter IEs so other exporters decode
+correctly:
+- IE 85 `octetTotalCount`, IE 86 `packetTotalCount` (fill only if delta counters absent)
+- IE 231/232 `initiator/responderOctets` → summed into `Bytes` (RFC 5103 biflow)
+- IE 298/299 `initiator/responderPackets` → summed into `Packets`
+- IE 323 `observationTimeMilliseconds` → used as flow end/start when flow*Milli absent
+
+Tests: `TestDecodeIPFIX_NATEventTemplateSkipped`, `TestDecodeIPFIX_BiflowAndTotalCounters`.
+
+---
+
+## Bug #13: Web UI loses all styling when binary run from arbitrary CWD
+
+**Severity:** Medium (UX/packaging)
+**Component:** `internal/web/server.go`, `cmd/flowlens/main.go`, `Dockerfile`
+**Status:** ✅ Fixed
+
+**Description:**
+The web server resolved `/static/*` via `http.Dir(staticDir)` where
+`staticDir` fell back only to `./static` in CWD or `<exe-dir>/static`.
+Running the binary from any other working directory silently returned 404s
+for `style.css` and `chart.umd.min.js`, producing an unstyled page with no
+charts — with no error logged at startup.
+
+**Fix:**
+Moved `static/` into `internal/web/static/` and embedded it via
+`//go:embed static`. New `staticFileSystem()` helper prefers an on-disk
+directory if one exists (for development hot-reload) and falls back to the
+embedded FS, making the binary fully self-contained. Updated `Dockerfile`
+to stop copying the directory at runtime.

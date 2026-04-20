@@ -74,8 +74,8 @@ func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig
 			Timestamp: now,
 			Title:     fmt.Sprintf("Port Scan Detected: %s", src),
 			Description: fmt.Sprintf(
-				"%s contacted %d unique destination port/IP combinations in the last 10 minutes (threshold: %d).",
-				src, uniqueCount, threshold,
+				"%s contacted %d unique destination port/IP combinations in the last %s (threshold: %d).",
+				src, uniqueCount, formatWindowShort(queryWindow(cfg)), threshold,
 			),
 			Action: fmt.Sprintf(
 				"Investigate %s for potential reconnaissance activity. Consider blocking if unauthorized.",

@@ -49,7 +49,13 @@ func (DNSVolume) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) [
 		return nil
 	}
 
-	dnsRatePerMin := float64(dnsFlows) / 10.0 // flows per minute over 10-min window
+	// Compute flows-per-minute using the actual query window (which is
+	// configurable; not always 10 minutes). Guard against tiny windows.
+	windowMins := queryWindow(cfg).Minutes()
+	if windowMins <= 0 {
+		windowMins = 1
+	}
+	dnsRatePerMin := float64(dnsFlows) / windowMins
 	dnsRatio := float64(dnsFlows) / float64(totalFlows) * 100
 
 	now := time.Now()
@@ -76,10 +82,11 @@ func (DNSVolume) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) [
 			Timestamp: now,
 			Title:     "High DNS Query Rate",
 			Description: fmt.Sprintf(
-				"%.0f DNS flows/min detected (%d total DNS flows, %s bytes, %s packets in last 10 minutes). "+
+				"%.0f DNS flows/min detected (%d total DNS flows, %s bytes, %s packets in last %s). "+
 					"Threshold: %d flows/min.",
 				dnsRatePerMin, dnsFlows,
 				formatBytesShort(dnsBytes), formatCountShort(dnsPackets),
+				formatWindowShort(queryWindow(cfg)),
 				int(rateThresh),
 			),
 			Action: dnsRateAction(sev),

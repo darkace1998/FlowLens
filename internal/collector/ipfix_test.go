@@ -450,3 +450,182 @@ func TestDecodeIPFIX_L2Fields(t *testing.T) {
 		t.Errorf("VLAN = %d, want 100", f.VLAN)
 	}
 }
+
+func TestDecodeIPFIX_NATEventTemplateSkipped(t *testing.T) {
+cache := NewIPFIXTemplateCache()
+exporterIP := net.ParseIP("10.0.0.1")
+
+// NAT event template mirroring Sophos template ID 260 (RFC 8158): contains
+// natEvent IE 230, no byte/packet counters. Records must be skipped so
+// they don't pollute flow stats with zero-counter entries.
+fields := []ipfixTemplateField{
+{ID: ipfixFieldProtocolID, Length: 1},
+{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+{ID: ipfixFieldDestIPv4Addr, Length: 4},
+{ID: ipfixFieldSourceTransPort, Length: 2},
+{ID: ipfixFieldDestTransPort, Length: 2},
+{ID: ipfixFieldNatEvent, Length: 1},
+}
+tmplSet := buildIPFIXTemplateSet(260, fields)
+
+rec := make([]byte, 14)
+rec[0] = 6
+copy(rec[1:5], net.ParseIP("10.0.0.5").To4())
+copy(rec[5:9], net.ParseIP("8.8.8.8").To4())
+binary.BigEndian.PutUint16(rec[9:11], 12345)
+binary.BigEndian.PutUint16(rec[11:13], 443)
+rec[13] = 1
+dataSet := buildIPFIXDataSet(260, rec)
+
+pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
+flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+if err != nil {
+t.Fatalf("DecodeIPFIX err: %v", err)
+}
+if len(flows) != 0 {
+t.Fatalf("expected 0 flows from NAT-event template, got %d", len(flows))
+}
+}
+
+func TestDecodeIPFIX_BiflowAndTotalCounters(t *testing.T) {
+cache := NewIPFIXTemplateCache()
+exporterIP := net.ParseIP("10.0.0.1")
+
+// Template using biflow counters (RFC 5103): initiator + responder octets/pkts
+// should be summed into Flow.Bytes / Flow.Packets.
+fields := []ipfixTemplateField{
+{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+{ID: ipfixFieldDestIPv4Addr, Length: 4},
+{ID: ipfixFieldProtocolID, Length: 1},
+{ID: ipfixFieldInitiatorOctets, Length: 8},
+{ID: ipfixFieldResponderOctets, Length: 8},
+{ID: ipfixFieldInitiatorPackets, Length: 4},
+{ID: ipfixFieldResponderPackets, Length: 4},
+}
+tmplSet := buildIPFIXTemplateSet(300, fields)
+
+rec := make([]byte, 33)
+copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
+copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
+rec[8] = 6
+binary.BigEndian.PutUint64(rec[9:17], 1000)  // initiator octets
+binary.BigEndian.PutUint64(rec[17:25], 2500) // responder octets
+binary.BigEndian.PutUint32(rec[25:29], 10)   // initiator pkts
+binary.BigEndian.PutUint32(rec[29:33], 15)   // responder pkts
+dataSet := buildIPFIXDataSet(300, rec)
+
+pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
+flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+if err != nil {
+t.Fatalf("DecodeIPFIX err: %v", err)
+}
+if len(flows) != 1 {
+t.Fatalf("expected 1 flow, got %d", len(flows))
+}
+if flows[0].Bytes != 3500 {
+t.Errorf("Bytes = %d, want 3500 (initiator+responder)", flows[0].Bytes)
+}
+if flows[0].Packets != 25 {
+t.Errorf("Packets = %d, want 25 (initiator+responder)", flows[0].Packets)
+}
+}
+
+func TestDecodeIPFIX_DeltaCountersPreferredOverBiflow(t *testing.T) {
+	cache := NewIPFIXTemplateCache()
+	exporterIP := net.ParseIP("10.0.0.1")
+
+	// Some exporters include both delta counters and biflow counters in one
+	// template. FlowLens must not double-count by adding both representations.
+	fields := []ipfixTemplateField{
+		{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+		{ID: ipfixFieldDestIPv4Addr, Length: 4},
+		{ID: ipfixFieldProtocolID, Length: 1},
+		{ID: ipfixFieldOctetDeltaCount, Length: 4},
+		{ID: ipfixFieldPacketDeltaCount, Length: 4},
+		{ID: ipfixFieldInitiatorOctets, Length: 8},
+		{ID: ipfixFieldResponderOctets, Length: 8},
+		{ID: ipfixFieldInitiatorPackets, Length: 4},
+		{ID: ipfixFieldResponderPackets, Length: 4},
+	}
+	tmplSet := buildIPFIXTemplateSet(302, fields)
+
+	rec := make([]byte, 41)
+	copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
+	copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
+	rec[8] = 6 // TCP
+	binary.BigEndian.PutUint32(rec[9:13], 4000)  // octetDeltaCount
+	binary.BigEndian.PutUint32(rec[13:17], 40)   // packetDeltaCount
+	binary.BigEndian.PutUint64(rec[17:25], 1000) // initiator octets
+	binary.BigEndian.PutUint64(rec[25:33], 2500) // responder octets
+	binary.BigEndian.PutUint32(rec[33:37], 10)   // initiator packets
+	binary.BigEndian.PutUint32(rec[37:41], 15)   // responder packets
+	dataSet := buildIPFIXDataSet(302, rec)
+
+	pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
+	flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+	if err != nil {
+		t.Fatalf("DecodeIPFIX err: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+	if flows[0].Bytes != 4000 {
+		t.Errorf("Bytes = %d, want 4000 (delta counters must win)", flows[0].Bytes)
+	}
+	if flows[0].Packets != 40 {
+		t.Errorf("Packets = %d, want 40 (delta counters must win)", flows[0].Packets)
+	}
+}
+
+func TestDecodeIPFIX_FlowSecondsFieldsDurationAndTimestamp(t *testing.T) {
+	cache := NewIPFIXTemplateCache()
+	exporterIP := net.ParseIP("10.0.0.1")
+
+	fields := []ipfixTemplateField{
+		{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+		{ID: ipfixFieldDestIPv4Addr, Length: 4},
+		{ID: ipfixFieldProtocolID, Length: 1},
+		{ID: ipfixFieldOctetDeltaCount, Length: 4},
+		{ID: ipfixFieldPacketDeltaCount, Length: 4},
+		{ID: ipfixFieldFlowStartSec, Length: 4},
+		{ID: ipfixFieldFlowEndSec, Length: 4},
+	}
+	tmplSet := buildIPFIXTemplateSet(301, fields)
+
+	const (
+		startSec = 1700000000
+		endSec   = 1700000060 // 60s duration
+	)
+	rec := make([]byte, 25)
+	copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
+	copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
+	rec[8] = 6 // TCP
+	binary.BigEndian.PutUint32(rec[9:13], 6000)
+	binary.BigEndian.PutUint32(rec[13:17], 60)
+	binary.BigEndian.PutUint32(rec[17:21], startSec)
+	binary.BigEndian.PutUint32(rec[21:25], endSec)
+	dataSet := buildIPFIXDataSet(301, rec)
+
+	// Export time intentionally differs from endSec to verify timestamp uses
+	// flowEndSeconds when present.
+	pkt := buildIPFIXPacket(0, startSec+120, tmplSet, dataSet)
+	flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+	if err != nil {
+		t.Fatalf("DecodeIPFIX err: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+
+	f := flows[0]
+	if f.Duration != 60*time.Second {
+		t.Errorf("Duration = %v, want 1m0s", f.Duration)
+	}
+	wantTS := time.Unix(endSec, 0)
+	if !f.Timestamp.Equal(wantTS) {
+		t.Errorf("Timestamp = %v, want %v", f.Timestamp, wantTS)
+	}
+	if f.ThroughputBPS < 799.9 || f.ThroughputBPS > 800.1 {
+		t.Errorf("ThroughputBPS = %.2f, want about 800.00", f.ThroughputBPS)
+	}
+}

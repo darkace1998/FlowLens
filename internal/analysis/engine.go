@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -17,6 +18,30 @@ func queryWindow(cfg config.AnalysisConfig) time.Duration {
 		return cfg.QueryWindow
 	}
 	return 10 * time.Minute
+}
+
+// formatWindowShort returns a compact human-friendly window string
+// (e.g. "10m", "5m 30s", "1h 30m") for use in advisory descriptions.
+func formatWindowShort(d time.Duration) string {
+	if d < time.Second {
+		return d.String()
+	}
+	totalSecs := int(d.Seconds())
+	h := totalSecs / 3600
+	m := (totalSecs % 3600) / 60
+	s := totalSecs % 60
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case h > 0:
+		return fmt.Sprintf("%dh", h)
+	case m > 0 && s > 0:
+		return fmt.Sprintf("%dm %ds", m, s)
+	case m > 0:
+		return fmt.Sprintf("%dm", m)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
 
 // Analyzer is the interface that all analysis modules must implement.

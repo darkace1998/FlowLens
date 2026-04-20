@@ -140,8 +140,14 @@ func formatPPS(pktsTotal uint64, duration time.Duration) string {
 		return fmt.Sprintf("%.2f Mpps", pps/1e6)
 	case pps >= 1e3:
 		return fmt.Sprintf("%.2f Kpps", pps/1e3)
-	default:
+	case pps >= 1:
 		return fmt.Sprintf("%.0f pps", pps)
+	case pps > 0:
+		// Small positive rates (e.g. 152 pkts / 10 min = 0.25 pps).
+		// Avoid rounding to "0 pps" which is misleading when there is clearly traffic.
+		return fmt.Sprintf("%.2f pps", pps)
+	default:
+		return "0 pps"
 	}
 }
 

@@ -3,6 +3,7 @@ package capture
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/darkace1998/FlowLens/internal/config"
@@ -101,5 +102,43 @@ func TestManager_StopNonExistent(t *testing.T) {
 	err := m.Stop("nonexistent")
 	if err == nil {
 		t.Error("Stop should error for non-existent session")
+	}
+}
+
+func TestManager_StopConcurrentNoPanic(t *testing.T) {
+	cfg := config.CaptureConfig{Dir: t.TempDir()}
+	m := NewManager(cfg)
+
+	pw, err := NewPcapWriter(cfg.Dir, "cap-1", 65535, 0, 0)
+	if err != nil {
+		t.Fatalf("NewPcapWriter: %v", err)
+	}
+	defer pw.Close()
+
+	m.sessions["cap-1"] = &activeSession{
+		session: Session{ID: "cap-1", State: StateRunning},
+		writer:  pw,
+		stopCh:  make(chan struct{}),
+	}
+
+	const callers = 16
+	var wg sync.WaitGroup
+	errCh := make(chan error, callers)
+
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := m.Stop("cap-1"); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Fatalf("Stop returned error under concurrency: %v", err)
 	}
 }
