@@ -99,10 +99,10 @@ func TestPcapWriter_WriteAfterClose(t *testing.T) {
 		t.Fatalf("NewPcapWriter: %v", err)
 	}
 
-	if err := pw.WritePacket([]byte{0x01, 0x02}, time.Now()); err != nil {
+	if err = pw.WritePacket([]byte{0x01, 0x02}, time.Now()); err != nil {
 		t.Fatalf("WritePacket before close: %v", err)
 	}
-	if err := pw.Close(); err != nil {
+	if err = pw.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
