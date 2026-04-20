@@ -156,11 +156,11 @@ func DecodeIPFIX(data []byte, exporterIP net.IP, cache *IPFIXTemplateCache) ([]m
 
 		setData := data[offset+4 : offset+setLen]
 
-		switch {
-		case setID == 2:
+		switch setID {
+		case 2:
 			// Template Set
 			parseIPFIXTemplates(setData, obsDomainID, cache)
-		case setID == 3:
+		case 3:
 			// Options Template Set — skip
 		default:
 			// Data Set (setID >= 256)

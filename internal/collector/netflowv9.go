@@ -124,11 +124,11 @@ func DecodeNetFlowV9(data []byte, exporterIP net.IP, cache *NFV9TemplateCache) (
 
 		setData := data[offset+4 : offset+flowSetLen]
 
-		switch {
-		case flowSetID == 0:
+		switch flowSetID {
+		case 0:
 			// Template FlowSet
 			parseNFV9Templates(setData, sourceID, cache)
-		case flowSetID == 1:
+		case 1:
 			// Options Template FlowSet — skip for now
 		default:
 			// Data FlowSet (flowSetID >= 256)
