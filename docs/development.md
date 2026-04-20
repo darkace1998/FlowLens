@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - `golangci-lint` v2 (optional but recommended for local lint parity)
 
 ## Build

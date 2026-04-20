@@ -1,6 +1,6 @@
 # --- Build stage ---
 # Pin base images by digest for reproducible builds.
-FROM golang:1.24-alpine@sha256:8bee1901f1e530bfb4a7850aa7a479d17ae3a18beb6e09064ed54cfd245b7191 AS builder
+FROM golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS builder
 
 RUN apk add --no-cache git
 

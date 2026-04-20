@@ -1,6 +1,6 @@
 module github.com/darkace1998/FlowLens
 
-go 1.24.13
+go 1.25.9
 
 require (
 	gopkg.in/yaml.v3 v3.0.1

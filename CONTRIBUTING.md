@@ -31,7 +31,7 @@ Thank you for considering contributing to FlowLens! This document covers the con
 
 ### Prerequisites
 
-- Go 1.24 or later
+- Go 1.25 or later
 - golangci-lint (optional, for linting — [install](https://golangci-lint.run/welcome/install/))
 
 ### Build & Run
