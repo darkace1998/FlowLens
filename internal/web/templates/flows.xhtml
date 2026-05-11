@@ -93,23 +93,23 @@
 </table>
 </div>
 
-<div class="pagination">
+<nav aria-label="Pagination" class="pagination">
   {{if .HasPrev}}
-  <a href="/flows?page={{sub .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">&#171; Prev</a>
+  <a href="/flows?page={{sub .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}" aria-label="Previous page">&#171; Prev</a>
   {{end}}
 
   {{range pageWindow $.Page $.TotalPages}}
     {{if eq . $.Page}}
-      <span class="page-current">{{.}}</span>
+      <span class="page-current" aria-current="page">{{.}}</span>
     {{else}}
-      <a href="/flows?page={{.}}{{if $.FilterIP}}&amp;ip={{urlquery $.FilterIP}}{{end}}{{if $.FilterSrcIP}}&amp;src_ip={{urlquery $.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{urlquery $.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{urlquery $.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{urlquery $.FilterProtocol}}{{end}}">{{.}}</a>
+      <a href="/flows?page={{.}}{{if $.FilterIP}}&amp;ip={{urlquery $.FilterIP}}{{end}}{{if $.FilterSrcIP}}&amp;src_ip={{urlquery $.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{urlquery $.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{urlquery $.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{urlquery $.FilterProtocol}}{{end}}" aria-label="Page {{.}}">{{.}}</a>
     {{end}}
   {{end}}
 
   {{if .HasNext}}
-  <a href="/flows?page={{add .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">Next &#187;</a>
+  <a href="/flows?page={{add .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}" aria-label="Next page">Next &#187;</a>
   {{end}}
-</div>
+</nav>
 {{else}}
 <p class="empty">No flows match the current filters.</p>
 {{end}}
