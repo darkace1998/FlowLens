@@ -23,35 +23,35 @@ const (
 	ProtoUDP  = 17
 
 	// IP header sizes.
-	IPv4MinHeaderSize       = 20 // Minimum IPv4 header (no options)
-	IPv6HeaderSize          = 40 // Fixed IPv6 header size
-	TCPMinHeaderSize        = 20 // Minimum TCP header (no options)
+	IPv4MinHeaderSize       = 20                                   // Minimum IPv4 header (no options)
+	IPv6HeaderSize          = 40                                   // Fixed IPv6 header size
+	TCPMinHeaderSize        = 20                                   // Minimum TCP header (no options)
 	MinIPv4AndTCPHeaderSize = IPv4MinHeaderSize + TCPMinHeaderSize // 40 bytes
 	MinIPv6AndTCPHeaderSize = IPv6HeaderSize + TCPMinHeaderSize    // 60 bytes
 )
 
 // Flow represents a unified flow record decoded from any NetFlow/IPFIX version.
 type Flow struct {
-	Timestamp    time.Time
-	SrcAddr      net.IP
-	DstAddr      net.IP
-	SrcPort      uint16
-	DstPort      uint16
-	Protocol     uint8 // TCP=6, UDP=17, ICMP=1, etc.
-	Bytes        uint64
-	Packets      uint64
-	TCPFlags     uint8
-	ToS          uint8
-	InputIface   uint32
-	OutputIface  uint32
-	SrcAS        uint32
-	DstAS        uint32
-	Duration     time.Duration
-	ExporterIP   net.IP // which device sent this flow
-	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
-	AppCat       string // traffic category (e.g. "Web", "Email")
-	RTTMicros      int64   // round-trip time in microseconds (0 = unknown)
-	ThroughputBPS  float64 // throughput in bits per second (0 = unknown)
+	Timestamp       time.Time
+	SrcAddr         net.IP
+	DstAddr         net.IP
+	SrcPort         uint16
+	DstPort         uint16
+	Protocol        uint8 // TCP=6, UDP=17, ICMP=1, etc.
+	Bytes           uint64
+	Packets         uint64
+	TCPFlags        uint8
+	ToS             uint8
+	InputIface      uint32
+	OutputIface     uint32
+	SrcAS           uint32
+	DstAS           uint32
+	Duration        time.Duration
+	ExporterIP      net.IP  // which device sent this flow
+	AppProto        string  // L7 application protocol (e.g. "HTTP", "DNS")
+	AppCat          string  // traffic category (e.g. "Web", "Email")
+	RTTMicros       int64   // round-trip time in microseconds (0 = unknown)
+	ThroughputBPS   float64 // throughput in bits per second (0 = unknown)
 	Retransmissions uint32  // TCP retransmission count (from IPFIX IE 321 or heuristic)
 	OutOfOrder      uint32  // TCP out-of-order segment count
 	PacketLoss      uint32  // estimated packet loss count
@@ -179,6 +179,19 @@ func FlowKey(srcIP, dstIP net.IP, srcPort, dstPort uint16, proto uint8) string {
 	return fmt.Sprintf("%s:%d-%s:%d/%d", s, srcPort, d, dstPort, proto)
 }
 
+// stitchKey is a canonical 5-tuple key for flow stitching without string allocation.
+type stitchKey struct {
+	ip1, ip2     [16]byte
+	port1, port2 uint16
+	proto        uint8
+}
+
+// stitchSrcKey uniquely identifies the source side of a connection.
+type stitchSrcKey struct {
+	ip   [16]byte
+	port uint16
+}
+
 // StitchFlows performs bidirectional flow correlation on a slice of flows.
 // For each pair sharing a 5-tuple reversal it estimates RTT from the timestamp
 // difference and computes throughput. Flows are modified in place.
@@ -186,17 +199,39 @@ func StitchFlows(flows []Flow) {
 	type stitchEntry struct {
 		idx       int
 		timestamp time.Time
-		srcKey    string // original (non-canonical) src:srcPort for direction check
+		srcKey    stitchSrcKey // original (non-canonical) src:srcPort for direction check
 	}
-	seen := make(map[string]*stitchEntry, len(flows))
+	seen := make(map[stitchKey]*stitchEntry, len(flows))
 
 	for i := range flows {
 		f := &flows[i]
 		// Always compute throughput.
 		f.CalcThroughput()
 
-		key := FlowKey(f.SrcAddr, f.DstAddr, f.SrcPort, f.DstPort, f.Protocol)
-		srcKey := fmt.Sprintf("%s:%d", SafeIPString(f.SrcAddr), f.SrcPort)
+		s := ipTo16(f.SrcAddr)
+		d := ipTo16(f.DstAddr)
+
+		// Determine canonical direction without relying on string comparison.
+		// Compare byte by byte, then break ties with ports.
+		swap := false
+		for j := 0; j < 16; j++ {
+			if s[j] != d[j] {
+				swap = s[j] > d[j]
+				break
+			}
+		}
+		if !swap && s == d {
+			swap = f.SrcPort > f.DstPort
+		}
+
+		var key stitchKey
+		if swap {
+			key = stitchKey{ip1: d, ip2: s, port1: f.DstPort, port2: f.SrcPort, proto: f.Protocol}
+		} else {
+			key = stitchKey{ip1: s, ip2: d, port1: f.SrcPort, port2: f.DstPort, proto: f.Protocol}
+		}
+
+		srcKey := stitchSrcKey{ip: s, port: f.SrcPort}
 		if prev, ok := seen[key]; ok {
 			// Only estimate RTT between flows in opposite directions.
 			if srcKey != prev.srcKey {
@@ -234,7 +269,7 @@ func DetectRetransmissions(flows []Flow) {
 	)
 
 	type connKey struct {
-		src, dst         string
+		src, dst         [16]byte
 		srcPort, dstPort uint16
 	}
 	// Track the maximum sequence number + payload seen per directed connection.
@@ -249,7 +284,7 @@ func DetectRetransmissions(flows []Flow) {
 			continue
 		}
 		ck := connKey{
-			src: SafeIPString(f.SrcAddr), dst: SafeIPString(f.DstAddr),
+			src: ipTo16(f.SrcAddr), dst: ipTo16(f.DstAddr),
 			srcPort: f.SrcPort, dstPort: f.DstPort,
 		}
 
@@ -336,6 +371,20 @@ func (f Flow) String() string {
 		ProtocolName(f.Protocol),
 		f.Bytes, f.Packets,
 	)
+}
+
+// ipTo16 safely converts a net.IP to a [16]byte, returning zeroes for nil IPs.
+func ipTo16(ip net.IP) [16]byte {
+	var b [16]byte
+	if len(ip) == 16 {
+		copy(b[:], ip)
+	} else if len(ip) == 4 {
+		// IPv4-mapped IPv6
+		b[10] = 0xff
+		b[11] = 0xff
+		copy(b[12:], ip)
+	}
+	return b
 }
 
 // SafeIPString converts a net.IP to string, returning "0.0.0.0" for nil IPs.
@@ -459,65 +508,65 @@ func AppCategory(appProto string) string {
 
 // wellKnownAS maps common AS numbers to their organization names.
 var wellKnownAS = map[uint32]string{
-	0:     "Private/Unknown",
-	13335: "Cloudflare",
-	15169: "Google",
-	16509: "Amazon (AWS)",
-	8075:  "Microsoft",
-	32934: "Facebook (Meta)",
-	20940: "Akamai",
-	14618: "Amazon",
-	16591: "Google Cloud",
-	36459: "GitHub",
-	54113: "Fastly",
-	13414: "Twitter (X)",
-	2906:  "Netflix",
-	714:   "Apple",
-	46489: "Twitch",
-	36183: "Akamai",
-	19551: "Incapsula",
-	14061: "DigitalOcean",
-	63949: "Linode (Akamai)",
-	24940: "Hetzner",
-	16276: "OVH",
+	0:      "Private/Unknown",
+	13335:  "Cloudflare",
+	15169:  "Google",
+	16509:  "Amazon (AWS)",
+	8075:   "Microsoft",
+	32934:  "Facebook (Meta)",
+	20940:  "Akamai",
+	14618:  "Amazon",
+	16591:  "Google Cloud",
+	36459:  "GitHub",
+	54113:  "Fastly",
+	13414:  "Twitter (X)",
+	2906:   "Netflix",
+	714:    "Apple",
+	46489:  "Twitch",
+	36183:  "Akamai",
+	19551:  "Incapsula",
+	14061:  "DigitalOcean",
+	63949:  "Linode (Akamai)",
+	24940:  "Hetzner",
+	16276:  "OVH",
 	396982: "Google Cloud",
-	8068:  "Microsoft (Azure)",
-	8069:  "Microsoft (Azure)",
-	3320:  "Deutsche Telekom",
-	3356:  "Lumen/CenturyLink",
-	6939:  "Hurricane Electric",
-	174:   "Cogent",
-	1299:  "Arelion (Telia)",
-	2914:  "NTT",
-	6461:  "Zayo",
-	7018:  "AT&T",
-	701:   "Verizon",
-	7922:  "Comcast",
-	22773: "Cox",
-	20115: "Charter",
-	6167:  "Verizon Business",
-	209:   "CenturyLink",
-	3257:  "GTT",
-	4134:  "ChinaNet",
-	4837:  "China Unicom",
-	4808:  "China Unicom",
-	9808:  "China Mobile",
-	17676: "SoftBank",
-	2516:  "KDDI",
-	4766:  "Korea Telecom",
-	9318:  "SK Broadband",
-	4755:  "Tata Communications",
-	9498:  "Bharti Airtel",
-	18881: "Telefônica Brasil",
-	28573: "Claro Brasil",
-	12322: "Free (France)",
-	5410:  "Bouygues Telecom",
-	15557: "SFR (France)",
-	6805:  "Telefónica Germany",
-	12876: "Scaleway",
+	8068:   "Microsoft (Azure)",
+	8069:   "Microsoft (Azure)",
+	3320:   "Deutsche Telekom",
+	3356:   "Lumen/CenturyLink",
+	6939:   "Hurricane Electric",
+	174:    "Cogent",
+	1299:   "Arelion (Telia)",
+	2914:   "NTT",
+	6461:   "Zayo",
+	7018:   "AT&T",
+	701:    "Verizon",
+	7922:   "Comcast",
+	22773:  "Cox",
+	20115:  "Charter",
+	6167:   "Verizon Business",
+	209:    "CenturyLink",
+	3257:   "GTT",
+	4134:   "ChinaNet",
+	4837:   "China Unicom",
+	4808:   "China Unicom",
+	9808:   "China Mobile",
+	17676:  "SoftBank",
+	2516:   "KDDI",
+	4766:   "Korea Telecom",
+	9318:   "SK Broadband",
+	4755:   "Tata Communications",
+	9498:   "Bharti Airtel",
+	18881:  "Telefônica Brasil",
+	28573:  "Claro Brasil",
+	12322:  "Free (France)",
+	5410:   "Bouygues Telecom",
+	15557:  "SFR (France)",
+	6805:   "Telefónica Germany",
+	12876:  "Scaleway",
 	197540: "Netcup",
-	47541: "Vkontakte",
-	13238: "Yandex",
+	47541:  "Vkontakte",
+	13238:  "Yandex",
 }
 
 // ASName returns a human-readable organization name for common AS numbers.
