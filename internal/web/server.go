@@ -136,13 +136,13 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(staticFileSystem(staticDir))))
 
-	// Build the handler chain: Recovery → Request Logging → Request Timeout → CSP → Basic Auth → Mux.
+	// Build the handler chain: Recovery → Request Logging → Request Timeout → Security Headers → Basic Auth → Mux.
 	// /healthz is exempt from Basic Auth so that Docker HEALTHCHECK and Kubernetes
 	// liveness/readiness probes work when authentication is enabled.
 	var handler http.Handler = s.mux
 	handler = basicAuth(handler, cfg.Username, cfg.Password)
 	handler = exemptHealthz(handler, s.mux)
-	handler = cspMiddleware(handler)
+	handler = securityHeadersMiddleware(handler)
 	handler = requestTimeout(handler, 30*time.Second)
 	handler = requestLogging(handler)
 	handler = recoverMiddleware(handler)
@@ -198,14 +198,14 @@ func (s *Server) Mux() *http.ServeMux {
 // for development so edits take effect without rebuilding). Otherwise the
 // embedded static files are used, making the binary self-contained.
 func staticFileSystem(staticDir string) http.FileSystem {
-if staticDir != "" {
-if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
-return http.Dir(staticDir)
-}
-}
-sub, err := fs.Sub(staticFS, "static")
-if err != nil {
-return http.FS(staticFS)
-}
-return http.FS(sub)
+	if staticDir != "" {
+		if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
+			return http.Dir(staticDir)
+		}
+	}
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return http.FS(staticFS)
+	}
+	return http.FS(sub)
 }

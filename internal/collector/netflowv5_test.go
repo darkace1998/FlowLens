@@ -13,7 +13,7 @@ func buildNFV5Packet(count int) []byte {
 	pkt := make([]byte, nfv5HeaderSize+count*nfv5RecordSize)
 
 	// Header
-	binary.BigEndian.PutUint16(pkt[0:2], 5)            // version
+	binary.BigEndian.PutUint16(pkt[0:2], 5)             // version
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(count)) // count
 	binary.BigEndian.PutUint32(pkt[4:8], 600000)        // sysUptime (600s = 10 min)
 	binary.BigEndian.PutUint32(pkt[8:12], 1700000000)   // unixSecs
@@ -53,11 +53,11 @@ func buildNFV5Packet(count int) []byte {
 		binary.BigEndian.PutUint32(rec[24:28], 594000) // first (594s)
 		binary.BigEndian.PutUint32(rec[28:32], 599000) // last (599s)
 
-		binary.BigEndian.PutUint16(rec[32:34], 12345)  // srcPort
-		binary.BigEndian.PutUint16(rec[34:36], 443)    // dstPort
-		rec[37] = 0x12                                 // tcpFlags (SYN+ACK)
-		rec[38] = 6                                    // protocol (TCP)
-		rec[39] = 0                                    // tos
+		binary.BigEndian.PutUint16(rec[32:34], 12345) // srcPort
+		binary.BigEndian.PutUint16(rec[34:36], 443)   // dstPort
+		rec[37] = 0x12                                // tcpFlags (SYN+ACK)
+		rec[38] = 6                                   // protocol (TCP)
+		rec[39] = 0                                   // tos
 
 		binary.BigEndian.PutUint16(rec[40:42], 65000) // srcAS
 		binary.BigEndian.PutUint16(rec[42:44], 65001) // dstAS

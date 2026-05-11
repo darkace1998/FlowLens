@@ -33,7 +33,7 @@ var funcMap = template.FuncMap{
 	"formatAS":       formatAS,
 	"formatJitter":   formatJitter,
 	"formatMOS":      formatMOS,
-	"int":           func(v interface{}) int {
+	"int": func(v interface{}) int {
 		switch n := v.(type) {
 		case int:
 			return n
@@ -296,7 +296,7 @@ func pctOf(part, total uint64) float64 {
 	if total == 0 {
 		return 0
 	}
-	v := math.Round(float64(part) / float64(total) * 1000) / 10
+	v := math.Round(float64(part)/float64(total)*1000) / 10
 	if v > 100 {
 		v = 100
 	}

@@ -12,36 +12,36 @@ import (
 
 // NetFlow v9 field type IDs (RFC 3954).
 const (
-	nfv9FieldInBytes        = 1
-	nfv9FieldInPkts         = 2
-	nfv9FieldProtocol       = 4
-	nfv9FieldSrcTos         = 5
-	nfv9FieldTCPFlags       = 6
-	nfv9FieldL4SrcPort      = 7
-	nfv9FieldIPv4SrcAddr    = 8
-	nfv9FieldSrcMask        = 9
-	nfv9FieldInputSNMP      = 10
-	nfv9FieldL4DstPort      = 11
-	nfv9FieldIPv4DstAddr    = 12
-	nfv9FieldDstMask        = 13
-	nfv9FieldOutputSNMP     = 14
-	nfv9FieldIPv4NextHop    = 15
-	nfv9FieldSrcAS          = 16
-	nfv9FieldDstAS          = 17
-	nfv9FieldLastSwitched   = 21
-	nfv9FieldFirstSwitched  = 22
-	nfv9FieldIPv6SrcAddr    = 27
-	nfv9FieldIPv6DstAddr    = 28
-	nfv9FieldIPv6FlowLabel  = 31
-	nfv9FieldDirection      = 61
-	nfv9FieldIPv6NextHop    = 62
+	nfv9FieldInBytes       = 1
+	nfv9FieldInPkts        = 2
+	nfv9FieldProtocol      = 4
+	nfv9FieldSrcTos        = 5
+	nfv9FieldTCPFlags      = 6
+	nfv9FieldL4SrcPort     = 7
+	nfv9FieldIPv4SrcAddr   = 8
+	nfv9FieldSrcMask       = 9
+	nfv9FieldInputSNMP     = 10
+	nfv9FieldL4DstPort     = 11
+	nfv9FieldIPv4DstAddr   = 12
+	nfv9FieldDstMask       = 13
+	nfv9FieldOutputSNMP    = 14
+	nfv9FieldIPv4NextHop   = 15
+	nfv9FieldSrcAS         = 16
+	nfv9FieldDstAS         = 17
+	nfv9FieldLastSwitched  = 21
+	nfv9FieldFirstSwitched = 22
+	nfv9FieldIPv6SrcAddr   = 27
+	nfv9FieldIPv6DstAddr   = 28
+	nfv9FieldIPv6FlowLabel = 31
+	nfv9FieldDirection     = 61
+	nfv9FieldIPv6NextHop   = 62
 	// TCP quality fields
 	nfv9FieldTCPRetransmissionCount = 321
 	// NOTE: NetFlow v9 field 227 is not a standard TCP out-of-order counter;
 	// in IPFIX (IE 227) it is postMCastOctetDeltaCount. Similarly, field 233
 	// is firewallEvent, not packet loss. These were removed to prevent false
 	// OOO/loss reports. OOO and loss are now detected via the heuristic analyzer.
-	nfv9FieldRTPJitter              = 387
+	nfv9FieldRTPJitter = 387
 )
 
 // nfv9HeaderSize is the size of the NetFlow v9 packet header in bytes.
@@ -176,8 +176,8 @@ func parseNFV9Templates(data []byte, sourceID uint32, cache *NFV9TemplateCache) 
 
 // nfv9RecordContext holds per-record state for FirstSwitched/LastSwitched calculation.
 type nfv9RecordContext struct {
-	firstSwitched    uint32
-	lastSwitched     uint32
+	firstSwitched     uint32
+	lastSwitched      uint32
 	hasFirst, hasLast bool
 }
 

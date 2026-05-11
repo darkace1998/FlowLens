@@ -213,9 +213,9 @@ func TestTopTalkers_Empty(t *testing.T) {
 func TestProtocolDistribution_Normal(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 7000, 70),   // TCP
-		makeFlow("10.0.1.2", "192.168.1.1", 1235, 53, 17, 2000, 20),  // UDP
-		makeFlow("10.0.1.3", "192.168.1.1", 0, 0, 1, 1000, 10),       // ICMP
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 7000, 70),  // TCP
+		makeFlow("10.0.1.2", "192.168.1.1", 1235, 53, 17, 2000, 20), // UDP
+		makeFlow("10.0.1.3", "192.168.1.1", 0, 0, 1, 1000, 10),      // ICMP
 	})
 
 	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
@@ -228,7 +228,7 @@ func TestProtocolDistribution_Normal(t *testing.T) {
 func TestProtocolDistribution_ICMPFlood(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 8000, 80),    // ICMP dominant
+		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 8000, 80),     // ICMP dominant
 		makeFlow("10.0.1.2", "192.168.1.1", 1234, 80, 6, 2000, 20), // TCP minor
 	})
 

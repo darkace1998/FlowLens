@@ -12,17 +12,17 @@ import (
 
 func makeBenchFlow(i int) model.Flow {
 	return model.Flow{
-		Timestamp:   time.Now(),
-		SrcAddr:     net.IPv4(10, 0, byte(i>>8), byte(i)),
-		DstAddr:     net.IPv4(192, 168, 1, byte(i)),
-		SrcPort:     uint16(1000 + i%60000),
-		DstPort:     80,
-		Protocol:    6,
-		Bytes:       1500,
-		Packets:     10,
-		TCPFlags:    0x12,
-		Duration:    5 * time.Second,
-		ExporterIP:  net.ParseIP("10.0.0.1"),
+		Timestamp:  time.Now(),
+		SrcAddr:    net.IPv4(10, 0, byte(i>>8), byte(i)),
+		DstAddr:    net.IPv4(192, 168, 1, byte(i)),
+		SrcPort:    uint16(1000 + i%60000),
+		DstPort:    80,
+		Protocol:   6,
+		Bytes:      1500,
+		Packets:    10,
+		TCPFlags:   0x12,
+		Duration:   5 * time.Second,
+		ExporterIP: net.ParseIP("10.0.0.1"),
 	}
 }
 

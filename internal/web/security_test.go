@@ -206,16 +206,17 @@ func TestCSRF_GETNotBlocked(t *testing.T) {
 	}
 }
 
-// --- CSP tests ---
+// --- Security Headers tests ---
 
-func TestCSP_HeaderPresent(t *testing.T) {
+func TestSecurityHeaders_HeaderPresent(t *testing.T) {
 	s, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	// Use the full handler chain (srv.Handler includes CSP middleware).
+	// Use the full handler chain (srv.Handler includes security headers middleware).
 	s.srv.Handler.ServeHTTP(w, req)
 
+	// CSP
 	csp := w.Header().Get("Content-Security-Policy")
 	if csp == "" {
 		t.Error("expected Content-Security-Policy header")
@@ -226,9 +227,27 @@ func TestCSP_HeaderPresent(t *testing.T) {
 	if !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("CSP should prevent framing, got: %s", csp)
 	}
+
+	// X-Frame-Options
+	xfo := w.Header().Get("X-Frame-Options")
+	if xfo != "DENY" {
+		t.Errorf("expected X-Frame-Options: DENY, got: %s", xfo)
+	}
+
+	// X-Content-Type-Options
+	xcto := w.Header().Get("X-Content-Type-Options")
+	if xcto != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options: nosniff, got: %s", xcto)
+	}
+
+	// Strict-Transport-Security
+	sts := w.Header().Get("Strict-Transport-Security")
+	if !strings.Contains(sts, "max-age=") || !strings.Contains(sts, "includeSubDomains") {
+		t.Errorf("expected Strict-Transport-Security with max-age and includeSubDomains, got: %s", sts)
+	}
 }
 
-func TestCSP_OnEveryPage(t *testing.T) {
+func TestSecurityHeaders_OnEveryPage(t *testing.T) {
 	s, _ := newTestServer(t)
 
 	pages := []string{"/", "/flows", "/hosts", "/advisories", "/about"}
@@ -239,6 +258,15 @@ func TestCSP_OnEveryPage(t *testing.T) {
 
 		if w.Header().Get("Content-Security-Policy") == "" {
 			t.Errorf("CSP header missing on %s", path)
+		}
+		if w.Header().Get("X-Frame-Options") == "" {
+			t.Errorf("X-Frame-Options header missing on %s", path)
+		}
+		if w.Header().Get("X-Content-Type-Options") == "" {
+			t.Errorf("X-Content-Type-Options header missing on %s", path)
+		}
+		if w.Header().Get("Strict-Transport-Security") == "" {
+			t.Errorf("Strict-Transport-Security header missing on %s", path)
 		}
 	}
 }

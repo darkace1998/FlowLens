@@ -35,12 +35,12 @@ type pairKey struct {
 }
 
 type pairStats struct {
-	LowToHighBytes  uint64 // bytes from low IP → high IP
-	HighToLowBytes  uint64 // bytes from high IP → low IP
-	LowToHighPkts   uint64
-	HighToLowPkts   uint64
-	LowToHighFlows  int
-	HighToLowFlows  int
+	LowToHighBytes uint64 // bytes from low IP → high IP
+	HighToLowBytes uint64 // bytes from high IP → low IP
+	LowToHighPkts  uint64
+	HighToLowPkts  uint64
+	LowToHighFlows int
+	HighToLowFlows int
 }
 
 func makePairKey(a, b string) pairKey {

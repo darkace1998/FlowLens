@@ -21,11 +21,11 @@ type Config struct {
 type CollectorConfig struct {
 	NetFlowPort    int               `yaml:"netflow_port"`
 	IPFIXPort      int               `yaml:"ipfix_port"`
-	SFlowPort      int               `yaml:"sflow_port"`      // UDP port for sFlow v5 (default: 6343)
+	SFlowPort      int               `yaml:"sflow_port"` // UDP port for sFlow v5 (default: 6343)
 	BufferSize     int               `yaml:"buffer_size"`
-	RateLimit      int               `yaml:"rate_limit"`       // max packets per second per source IP (0 = unlimited)
-	InterfaceNames map[string]string `yaml:"interface_names"`  // ifIndex → human-readable name (e.g. "1": "eth0")
-	Interfaces     []InterfaceConfig `yaml:"interfaces"`       // multiple collector instances bound to different addresses
+	RateLimit      int               `yaml:"rate_limit"`      // max packets per second per source IP (0 = unlimited)
+	InterfaceNames map[string]string `yaml:"interface_names"` // ifIndex → human-readable name (e.g. "1": "eth0")
+	Interfaces     []InterfaceConfig `yaml:"interfaces"`      // multiple collector instances bound to different addresses
 }
 
 // InterfaceConfig defines a single collector listener bound to a specific address/port.
@@ -56,32 +56,32 @@ type AnalysisConfig struct {
 	ScanThreshold         int           `yaml:"scan_threshold"`
 	QueryWindow           time.Duration `yaml:"query_window"` // analysis query window (defaults to ring_buffer_duration)
 
-	DNSRateThreshold         float64 `yaml:"dns_rate_threshold"`          // DNS flows/min to trigger advisory (default: 100)
-	DNSRatioThreshold        float64 `yaml:"dns_ratio_threshold"`         // DNS flow percentage to trigger advisory (default: 30)
-	RetransRateThreshold     float64 `yaml:"retrans_rate_threshold"`      // retransmission % to trigger advisory (default: 1.0)
-	RetransCriticalThreshold float64 `yaml:"retrans_critical_threshold"`  // critical retransmission % (default: 5.0)
-	AsymmetryThreshold       float64 `yaml:"asymmetry_threshold"`         // traffic ratio imbalance to trigger advisory (default: 10.0)
-	MOSWarningThreshold      float64 `yaml:"mos_warning_threshold"`       // MOS below this triggers warning (default: 3.5)
-	MOSCriticalThreshold     float64 `yaml:"mos_critical_threshold"`      // MOS below this triggers critical (default: 3.0)
-	TopTalkerPercent         float64 `yaml:"top_talker_percent"`          // bandwidth % above which top talker triggers advisory (default: 25)
-	WebhookURL               string  `yaml:"webhook_url"`                 // URL to POST advisories as JSON (optional, disabled when empty)
+	DNSRateThreshold         float64 `yaml:"dns_rate_threshold"`         // DNS flows/min to trigger advisory (default: 100)
+	DNSRatioThreshold        float64 `yaml:"dns_ratio_threshold"`        // DNS flow percentage to trigger advisory (default: 30)
+	RetransRateThreshold     float64 `yaml:"retrans_rate_threshold"`     // retransmission % to trigger advisory (default: 1.0)
+	RetransCriticalThreshold float64 `yaml:"retrans_critical_threshold"` // critical retransmission % (default: 5.0)
+	AsymmetryThreshold       float64 `yaml:"asymmetry_threshold"`        // traffic ratio imbalance to trigger advisory (default: 10.0)
+	MOSWarningThreshold      float64 `yaml:"mos_warning_threshold"`      // MOS below this triggers warning (default: 3.5)
+	MOSCriticalThreshold     float64 `yaml:"mos_critical_threshold"`     // MOS below this triggers critical (default: 3.0)
+	TopTalkerPercent         float64 `yaml:"top_talker_percent"`         // bandwidth % above which top talker triggers advisory (default: 25)
+	WebhookURL               string  `yaml:"webhook_url"`                // URL to POST advisories as JSON (optional, disabled when empty)
 }
 
 // WebConfig holds settings for the web server.
 type WebConfig struct {
 	Listen   string `yaml:"listen"`
 	PageSize int    `yaml:"page_size"`
-	TLSCert  string `yaml:"tls_cert"`  // path to TLS certificate file (enables HTTPS when set with tls_key)
-	TLSKey   string `yaml:"tls_key"`   // path to TLS private key file
-	Username string `yaml:"username"`  // HTTP Basic Auth username (authentication disabled when empty)
-	Password string `yaml:"password"`  // HTTP Basic Auth password
+	TLSCert  string `yaml:"tls_cert"` // path to TLS certificate file (enables HTTPS when set with tls_key)
+	TLSKey   string `yaml:"tls_key"`  // path to TLS private key file
+	Username string `yaml:"username"` // HTTP Basic Auth username (authentication disabled when empty)
+	Password string `yaml:"password"` // HTTP Basic Auth password
 }
 
 // CaptureConfig holds settings for packet capture and PCAP storage.
 type CaptureConfig struct {
-	Interfaces []string `yaml:"interfaces"` // network interfaces available for capture (e.g. ["eth0", "eth1"])
-	SnapLen    int      `yaml:"snaplen"`    // packet snapshot length (default: 65535)
-	Dir        string   `yaml:"dir"`        // directory to store PCAP files (default: "./captures")
+	Interfaces []string `yaml:"interfaces"`  // network interfaces available for capture (e.g. ["eth0", "eth1"])
+	SnapLen    int      `yaml:"snaplen"`     // packet snapshot length (default: 65535)
+	Dir        string   `yaml:"dir"`         // directory to store PCAP files (default: "./captures")
 	MaxSizeMB  int      `yaml:"max_size_mb"` // max PCAP file size in MB before rotation (default: 100)
 	MaxFiles   int      `yaml:"max_files"`   // max number of PCAP files to keep (default: 10)
 }
