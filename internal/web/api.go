@@ -143,25 +143,9 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 // --- API Handlers ---
 
 func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	pageSize := s.cfg.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-
-	filterSrcIP := strings.TrimSpace(r.URL.Query().Get("src_ip"))
-	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
-	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
-	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
-	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
-
-	recentWindow := s.fullCfg.Storage.RingBufferDuration
-	if recentWindow <= 0 {
-		recentWindow = 10 * time.Minute
-	}
+	page, pageSize := s.getPageParams(r)
+	filterSrcIP, filterDstIP, filterPort, filterProto, filterIP := s.getFlowFilters(r)
+	recentWindow := s.getRingBufferWindow(10 * time.Minute)
 	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
@@ -219,10 +203,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPIHosts(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
@@ -254,10 +235,7 @@ func (s *Server) handleAPIHosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPISessions(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = time.Hour
-	}
+	window := s.getRingBufferWindow(time.Hour)
 
 	all, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
@@ -396,10 +374,7 @@ func (s *Server) handleAPIAdvisories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})

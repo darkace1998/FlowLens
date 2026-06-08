@@ -215,10 +215,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 
 	// Parse optional time-range selector.
 	selectedRange := r.URL.Query().Get("range")
@@ -943,26 +940,11 @@ type FlowsPageData struct {
 // --- Flow Explorer handler ---
 
 func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	pageSize := s.cfg.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-
-	filterSrcIP := strings.TrimSpace(r.URL.Query().Get("src_ip"))
-	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
-	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
-	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
-	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	page, pageSize := s.getPageParams(r)
+	filterSrcIP, filterDstIP, filterPort, filterProto, filterIP := s.getFlowFilters(r)
 
 	// Fetch all recent flows from the ring buffer using the configured window.
-	recentWindow := s.fullCfg.Storage.RingBufferDuration
-	if recentWindow <= 0 {
-		recentWindow = 10 * time.Minute
-	}
+	recentWindow := s.getRingBufferWindow(10 * time.Minute)
 	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -1068,16 +1050,9 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 		format = "csv"
 	}
 
-	filterSrcIP := strings.TrimSpace(r.URL.Query().Get("src_ip"))
-	filterDstIP := strings.TrimSpace(r.URL.Query().Get("dst_ip"))
-	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
-	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
-	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterSrcIP, filterDstIP, filterPort, filterProto, filterIP := s.getFlowFilters(r)
 
-	recentWindow := s.fullCfg.Storage.RingBufferDuration
-	if recentWindow <= 0 {
-		recentWindow = 10 * time.Minute
-	}
+	recentWindow := s.getRingBufferWindow(10 * time.Minute)
 	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -1234,10 +1209,7 @@ func matchIP(ip net.IP, filter string) bool {
 // --- Active Hosts handler ---
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -1355,10 +1327,7 @@ type MapPageData struct {
 }
 
 func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -1873,10 +1842,7 @@ type VLANPageData struct {
 }
 
 func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
-	recentWindow := s.fullCfg.Storage.RingBufferDuration
-	if recentWindow <= 0 {
-		recentWindow = 10 * time.Minute
-	}
+	recentWindow := s.getRingBufferWindow(10 * time.Minute)
 	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -1962,10 +1928,7 @@ type MACPageData struct {
 }
 
 func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
-	recentWindow := s.fullCfg.Storage.RingBufferDuration
-	if recentWindow <= 0 {
-		recentWindow = 10 * time.Minute
-	}
+	recentWindow := s.getRingBufferWindow(10 * time.Minute)
 	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -2063,10 +2026,7 @@ type ExportersPageData struct {
 }
 
 func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
+	window := s.getRingBufferWindow(10 * time.Minute)
 	flows, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
 		httpError(w, r, "Failed to query flows", http.StatusInternalServerError, err)
@@ -2187,10 +2147,7 @@ type SessionsPageData struct {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	window := s.fullCfg.Storage.RingBufferDuration
-	if window <= 0 {
-		window = time.Hour
-	}
+	window := s.getRingBufferWindow(time.Hour)
 
 	all, err := s.flowSvc.RecentFlows(window, 0)
 	if err != nil {
@@ -2435,10 +2392,7 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 	data := CountersPageData{}
 
 	if s.counterStore != nil {
-		window := s.fullCfg.Storage.RingBufferDuration
-		if window <= 0 {
-			window = 10 * time.Minute
-		}
+		window := s.getRingBufferWindow(10 * time.Minute)
 		samples := s.counterStore.Recent(window)
 
 		// Aggregate by agent+ifIndex: keep the two most recent samples to compute
