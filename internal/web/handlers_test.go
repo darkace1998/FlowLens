@@ -1741,6 +1741,27 @@ func TestCaptureStart_NoDevice(t *testing.T) {
 	}
 }
 
+func TestCaptureDownload_PathTraversal(t *testing.T) {
+	capCfg := config.CaptureConfig{Dir: t.TempDir(), SnapLen: 65535}
+	mgr := capture.NewManager(capCfg)
+	ringBuf := storage.NewRingBuffer(1000)
+	cfg := config.WebConfig{Listen: ":0", PageSize: 10}
+	s := NewServer(cfg, ringBuf, nil, t.TempDir(), nil, nil, mgr, nil)
+
+	req := httptest.NewRequest("GET", "/capture/download?file=../../../etc/passwd", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	// In the original code, the capture manager applies filepath.Base() which converts "../../../etc/passwd" to "passwd".
+	// Since "passwd" doesn't exist in the temp dir, it returns StatusNotFound (404).
+	// With the new check, if an attacker managed to bypass filepath.Base, the status would be Forbidden (403),
+	// but because of filepath.Base, we expect 404 here due to missing file, which also confirms traversal wasn't reached.
+	// Either 404 or 403 are acceptable security outcomes here.
+	if w.Code != http.StatusNotFound && w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d or %d", w.Code, http.StatusNotFound, http.StatusForbidden)
+	}
+}
+
 func TestCaptureStart_MethodNotAllowed(t *testing.T) {
 	s, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/capture/start", nil)
