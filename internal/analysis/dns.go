@@ -23,7 +23,7 @@ const dnsRateThreshold = 100
 const dnsRatioThreshold = 30.0
 
 // Analyze returns advisories about excessive DNS traffic.
-func (DNSVolume) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (DNSVolume) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("DNSVolume: failed to query recent flows: %v", err)

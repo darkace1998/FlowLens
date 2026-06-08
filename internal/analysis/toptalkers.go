@@ -25,7 +25,7 @@ type talkerEntry struct {
 }
 
 // Analyze returns advisories about hosts consuming disproportionate bandwidth.
-func (TopTalkers) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (TopTalkers) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("TopTalkers: failed to query recent flows: %v", err)

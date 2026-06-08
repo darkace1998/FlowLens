@@ -23,7 +23,7 @@ func (PortConcentrationDetector) Name() string { return "Port Concentration Dete
 const portConcentrationMinSources = 20
 
 // Analyze returns advisories about ports receiving connections from many sources.
-func (PortConcentrationDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (PortConcentrationDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("PortConcentrationDetector: failed to query recent flows: %v", err)

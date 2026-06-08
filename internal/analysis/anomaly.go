@@ -19,7 +19,7 @@ func (AnomalyDetector) Name() string { return "Anomaly Detection" }
 // Analyze compares the most recent analysis interval's traffic against
 // the average and standard deviation computed over the baseline window.
 // It generates advisories when current traffic deviates significantly.
-func (AnomalyDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (AnomalyDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	// Use the analysis interval as the "current" sample window.
 	sampleWindow := cfg.Interval
 	if sampleWindow <= 0 {

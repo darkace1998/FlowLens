@@ -26,7 +26,7 @@ const unreachableMinFlows = 20
 const unreachableMaxBytes = 200
 
 // Analyze returns advisories about destinations that appear unreachable.
-func (UnreachableDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (UnreachableDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("UnreachableDetector: failed to query recent flows: %v", err)

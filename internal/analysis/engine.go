@@ -49,14 +49,14 @@ type Analyzer interface {
 	// Name returns the analyzer's human-readable name.
 	Name() string
 	// Analyze inspects recent flow data and returns any advisories.
-	Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory
+	Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory
 }
 
 // Engine runs registered analyzers on a configurable schedule and maintains
 // a thread-safe rolling history of advisories.
 type Engine struct {
 	cfg       config.AnalysisConfig
-	store     *storage.RingBuffer
+	store     storage.Storage
 	analyzers []Analyzer
 
 	mu         sync.RWMutex
@@ -70,7 +70,7 @@ type Engine struct {
 const maxAdvisoryHistory = 100
 
 // NewEngine creates a new analysis engine with the given config, storage, and analyzers.
-func NewEngine(cfg config.AnalysisConfig, store *storage.RingBuffer, analyzers ...Analyzer) *Engine {
+func NewEngine(cfg config.AnalysisConfig, store storage.Storage, analyzers ...Analyzer) *Engine {
 	return &Engine{
 		cfg:       cfg,
 		store:     store,

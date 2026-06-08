@@ -1,7 +1,9 @@
 package analysis
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
@@ -125,5 +127,29 @@ func TestScanDetector_DefaultThreshold(t *testing.T) {
 	advisories = ScanDetector{}.Analyze(rb, cfg)
 	if len(advisories) != 1 {
 		t.Fatalf("expected 1 scan advisory with negative threshold, got %d", len(advisories))
+	}
+}
+
+
+
+// mockErrorStorage implements storage.Storage and always returns an error for Recent.
+type mockErrorStorage struct{}
+
+func (m mockErrorStorage) Insert(flows []model.Flow) error {
+	return nil
+}
+
+func (m mockErrorStorage) Recent(d time.Duration, limit int) ([]model.Flow, error) {
+	return nil, errors.New("mock storage error")
+}
+
+func (m mockErrorStorage) Close() error {
+	return nil
+}
+
+func TestScanDetector_StorageError(t *testing.T) {
+	advisories := ScanDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("expected 0 advisories on storage error, got %d", len(advisories))
 	}
 }
