@@ -62,8 +62,8 @@ type Engine struct {
 	mu         sync.RWMutex
 	advisories []Advisory
 
-	stop   chan struct{}
-	wg     sync.WaitGroup
+	stop chan struct{}
+	wg   sync.WaitGroup
 }
 
 // maxAdvisoryHistory is the maximum number of advisories to retain.

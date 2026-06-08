@@ -34,7 +34,7 @@ type Advisory struct {
 	Timestamp   time.Time
 	Title       string
 	Description string
-	Action      string // Suggested remediation action
+	Action      string    // Suggested remediation action
 	Resolved    bool      // True if this advisory has been resolved
 	ResolvedAt  time.Time // When it was resolved (zero if still active)
 }
