@@ -707,6 +707,18 @@ func TestFormatBPS(t *testing.T) {
 		t.Errorf("formatBPS(1MB, 10m) = %q, expected Kbps range", got)
 	}
 
+	// Test small BPS (bug #8-like)
+	got = formatBPS(1, 10*time.Second)
+	if got != "0.80 bps" {
+		t.Errorf("formatBPS(1, 10s) = %q, want '0.80 bps'", got)
+	}
+
+	// Test bps >= 1 but < 1000
+	got = formatBPS(100, 10*time.Second)
+	if got != "80.00 bps" {
+		t.Errorf("formatBPS(100, 10s) = %q, want '80.00 bps'", got)
+	}
+
 	// Large byte values that would overflow if computed as uint64(bytes*8).
 	// 3 EB * 8 = 24e18 which exceeds uint64 max (~18.4e18).
 	got = formatBPS(3_000_000_000_000_000_000, 10*time.Minute)
@@ -724,7 +736,9 @@ func TestFormatPPS(t *testing.T) {
 		{0, 10 * time.Minute, "0 pps"},
 		{1000, 0, "0 pps"},
 		{152, 10 * time.Minute, "0.25 pps"}, // bug #8: was "0 pps"
-		{6000, 10 * time.Second, "600 pps"},
+		{30, 1 * time.Minute, "0.50 pps"},
+		{1, 1 * time.Second, "1.00 pps"},
+		{6000, 10 * time.Second, "600.00 pps"},
 		{60000, 10 * time.Second, "6.00 Kpps"},
 		{60000000, 10 * time.Second, "6.00 Mpps"},
 		{60000000000, 10 * time.Second, "6.00 Gpps"},
@@ -1049,7 +1063,8 @@ func TestFormatThroughput(t *testing.T) {
 		want string
 	}{
 		{0, "—"},
-		{500, "500 bps"},
+		{0.25, "0.25 bps"},
+		{500, "500.00 bps"},
 		{5000, "5.00 Kbps"},
 		{5000000, "5.00 Mbps"},
 		{5000000000, "5.00 Gbps"},
