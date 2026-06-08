@@ -417,7 +417,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		topAS = append(topAS, *e)
 	}
-	sort.Slice(topAS, func(i, j int) bool { return topAS[i].Bytes > topAS[j].Bytes })
+	sortByBytes(topAS, func(e ASEntry) uint64 { return e.Bytes })
 	if len(topAS) > 10 {
 		topAS = topAS[:10]
 	}
@@ -428,7 +428,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		appProtocols = append(appProtocols, *e)
 	}
-	sort.Slice(appProtocols, func(i, j int) bool { return appProtocols[i].Bytes > appProtocols[j].Bytes })
+	sortByBytes(appProtocols, func(e AppProtoEntry) uint64 { return e.Bytes })
 
 	// Build category list (sorted by bytes).
 	categories := make([]CategoryEntry, 0, len(categoryMap))
@@ -436,7 +436,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		categories = append(categories, *e)
 	}
-	sort.Slice(categories, func(i, j int) bool { return categories[i].Bytes > categories[j].Bytes })
+	sortByBytes(categories, func(e CategoryEntry) uint64 { return e.Bytes })
 
 	// Build interface list (sorted by bytes).
 	interfaces := make([]InterfaceEntry, 0, len(ifaceMap))
@@ -444,7 +444,7 @@ func buildDashboardData(flows []model.Flow, window time.Duration, ifaceNames map
 		e.Pct = pctOf(e.Bytes, totalBytes)
 		interfaces = append(interfaces, *e)
 	}
-	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Bytes > interfaces[j].Bytes })
+	sortByBytes(interfaces, func(e InterfaceEntry) uint64 { return e.Bytes })
 
 	// Compute latency and throughput percentiles.
 	latencyStats := computeLatencyStats(flows)
@@ -872,9 +872,7 @@ func topN(m map[string]*TalkerEntry, totalBytes uint64, n int) []TalkerEntry {
 		entries = append(entries, *e)
 	}
 	// Sort descending by bytes.
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Bytes > entries[j].Bytes
-	})
+	sortByBytes(entries, func(e TalkerEntry) uint64 { return e.Bytes })
 	if len(entries) > n {
 		entries = entries[:n]
 	}
@@ -882,9 +880,7 @@ func topN(m map[string]*TalkerEntry, totalBytes uint64, n int) []TalkerEntry {
 }
 
 func sortProtocols(p []ProtocolEntry) {
-	sort.Slice(p, func(i, j int) bool {
-		return p[i].Bytes > p[j].Bytes
-	})
+	sortByBytes(p, func(e ProtocolEntry) uint64 { return e.Bytes })
 }
 
 // --- Flow Explorer data structures ---
@@ -1322,9 +1318,7 @@ func buildHostsData(flows []model.Flow, window time.Duration, geoLookup *geo.Loo
 	}
 
 	// Sort descending by bytes.
-	sort.Slice(hosts, func(i, j int) bool {
-		return hosts[i].Bytes > hosts[j].Bytes
-	})
+	sortByBytes(hosts, func(e HostEntry) uint64 { return e.Bytes })
 
 	return HostsPageData{
 		Hosts:      hosts,
@@ -1407,9 +1401,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 	}
 
 	// Sort by bytes descending.
-	sort.Slice(markers, func(i, j int) bool {
-		return markers[i].Bytes > markers[j].Bytes
-	})
+	sortByBytes(markers, func(e MapMarker) uint64 { return e.Bytes })
 
 	return MapPageData{
 		Markers:     markers,
@@ -1922,14 +1914,14 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 		for addr, b := range agg.hosts {
 			hosts = append(hosts, VLANHost{Addr: addr, Bytes: b, BytesStr: formatBytes(b)})
 		}
-		sort.Slice(hosts, func(i, j int) bool { return hosts[i].Bytes > hosts[j].Bytes })
+		sortByBytes(hosts, func(e VLANHost) uint64 { return e.Bytes })
 		if len(hosts) > 5 {
 			hosts = hosts[:5]
 		}
 		e.TopHosts = hosts
 		entries = append(entries, e)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+	sortByBytes(entries, func(e VLANEntry) uint64 { return e.Bytes })
 
 	data := VLANPageData{
 		VLANs:      entries,
@@ -2027,7 +2019,7 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 			PktsStr:  formatPkts(agg.packets),
 		})
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+	sortByBytes(entries, func(e MACEntry) uint64 { return e.Bytes })
 
 	data := MACPageData{
 		MACs:      entries,
@@ -2134,9 +2126,7 @@ func (s *Server) handleExporters(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Bytes > entries[j].Bytes
-	})
+	sortByBytes(entries, func(e ExporterEntry) uint64 { return e.Bytes })
 
 	data := ExportersPageData{
 		Exporters:      entries,
@@ -2299,7 +2289,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		totalPackets += a.packets
 	}
 
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Bytes > entries[j].Bytes })
+	sortByBytes(entries, func(e SessionEntry) uint64 { return e.Bytes })
 
 	data := SessionsPageData{
 		Sessions:      entries,
