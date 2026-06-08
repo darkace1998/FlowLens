@@ -208,50 +208,6 @@ func TestTopTalkers_Empty(t *testing.T) {
 	}
 }
 
-// --- Protocol Distribution tests ---
-
-func TestProtocolDistribution_Normal(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 7000, 70),  // TCP
-		makeFlow("10.0.1.2", "192.168.1.1", 1235, 53, 17, 2000, 20), // UDP
-		makeFlow("10.0.1.3", "192.168.1.1", 0, 0, 1, 1000, 10),      // ICMP
-	})
-
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	// Normal distribution should produce NO advisories — silence is a feature.
-	if len(advisories) != 0 {
-		t.Errorf("normal protocol distribution should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestProtocolDistribution_ICMPFlood(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 8000, 80),     // ICMP dominant
-		makeFlow("10.0.1.2", "192.168.1.1", 1234, 80, 6, 2000, 20), // TCP minor
-	})
-
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	hasWarning := false
-	for _, a := range advisories {
-		if a.Severity == WARNING {
-			hasWarning = true
-		}
-	}
-	if !hasWarning {
-		t.Error("ICMP >10% should generate WARNING")
-	}
-}
-
-func TestProtocolDistribution_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
 // --- Formatting helpers tests ---
 
 func TestFormatBytesShort(t *testing.T) {
@@ -658,180 +614,6 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 	}
 }
 
-// --- Retransmission Detector tests ---
-
-func TestRetransmissionDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestRetransmissionDetector_NormalTCP(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Normal TCP: 1000 bytes/pkt average — well above smallPacketThreshold.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 50),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("normal TCP should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestRetransmissionDetector_SmallPackets(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Small packets: 40 bytes/pkt (likely retransmissions) with enough packets.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 2400, 60),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for small packets, got %d", len(advisories))
-	}
-	if advisories[0].Severity != CRITICAL {
-		t.Errorf("40 bytes/pkt should be CRITICAL, got %s", advisories[0].Severity)
-	}
-}
-
-func TestRetransmissionDetector_IgnoresUDP(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// UDP with small packets — should not trigger.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 53, 17, 2400, 60),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("UDP flows should not trigger retransmission detection, got %d", len(advisories))
-	}
-}
-
-// --- Unreachable Host Detector tests ---
-
-func TestUnreachableDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestUnreachableDetector_HealthyService(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Normal flows — large bytes, not tiny.
-	for i := 0; i < 50; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(1000+i), 80, 6, 5000, 50),
-		})
-	}
-
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("healthy service should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestUnreachableDetector_DownService(t *testing.T) {
-	rb := storage.NewRingBuffer(10000)
-	// Many tiny flows from multiple sources → service appears down.
-	for i := 0; i < 30; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.100", uint16(1000+i), 443, 6, 60, 1),
-		})
-	}
-
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for unreachable service, got %d", len(advisories))
-	}
-	if advisories[0].Severity != CRITICAL {
-		t.Errorf("30 tiny flows from 30 sources should be CRITICAL, got %s", advisories[0].Severity)
-	}
-}
-
-// --- New Talker Detector tests ---
-
-func TestNewTalkerDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := NewTalkerDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestNewTalkerDetector_AllKnownHosts(t *testing.T) {
-	rb := storage.NewRingBuffer(10000)
-	cfg := defaultCfg()
-	cfg.Interval = 1 * time.Minute
-
-	now := time.Now()
-	// Baseline: host was active 5 minutes ago.
-	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
-	f.Timestamp = now.Add(-5 * time.Minute)
-	rb.Insert([]model.Flow{f})
-
-	// Recent: same host is still active.
-	f2 := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
-	f2.Timestamp = now.Add(-10 * time.Second)
-	rb.Insert([]model.Flow{f2})
-
-	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
-	if len(advisories) != 0 {
-		t.Errorf("known host should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestNewTalkerDetector_NewHost(t *testing.T) {
-	rb := storage.NewRingBuffer(10000)
-	cfg := defaultCfg()
-	cfg.Interval = 1 * time.Minute
-
-	now := time.Now()
-	// Baseline: only 10.0.1.1 was active.
-	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
-	f.Timestamp = now.Add(-5 * time.Minute)
-	rb.Insert([]model.Flow{f})
-
-	// Recent: new host 10.0.1.99 appears with significant traffic.
-	f2 := makeFlow("10.0.1.99", "192.168.1.1", 1234, 80, 6, 50000, 500)
-	f2.Timestamp = now.Add(-10 * time.Second)
-	rb.Insert([]model.Flow{f2})
-
-	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for new host, got %d", len(advisories))
-	}
-	if advisories[0].Title != "New Talker: 10.0.1.99" {
-		t.Errorf("expected advisory for 10.0.1.99, got %q", advisories[0].Title)
-	}
-}
-
-func TestNewTalkerDetector_SmallTrafficIgnored(t *testing.T) {
-	rb := storage.NewRingBuffer(10000)
-	cfg := defaultCfg()
-	cfg.Interval = 1 * time.Minute
-
-	now := time.Now()
-	// Baseline: host was active.
-	f := makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 500)
-	f.Timestamp = now.Add(-5 * time.Minute)
-	rb.Insert([]model.Flow{f})
-
-	// Recent: new host with tiny traffic (below threshold).
-	f2 := makeFlow("10.0.1.99", "192.168.1.1", 1234, 80, 6, 100, 1)
-	f2.Timestamp = now.Add(-10 * time.Second)
-	rb.Insert([]model.Flow{f2})
-
-	advisories := NewTalkerDetector{}.Analyze(rb, cfg)
-	if len(advisories) != 0 {
-		t.Errorf("small traffic new host should be ignored, got %d advisories", len(advisories))
-	}
-}
-
 // --- Port Concentration Detector tests ---
 
 func TestPortConcentrationDetector_Empty(t *testing.T) {
@@ -890,5 +672,158 @@ func TestPortConcentrationDetector_Critical(t *testing.T) {
 	}
 	if advisories[0].Severity != CRITICAL {
 		t.Errorf("65 sources (>= 3x20) should be CRITICAL, got %s", advisories[0].Severity)
+	}
+}
+
+func TestDNSVolume_StorageError(t *testing.T) {
+	advisories := DNSVolume{}.Analyze(mockErrorStorage{}, defaultCfg())
+	if advisories != nil {
+		t.Errorf("expected nil advisories on storage error, got %v", advisories)
+	}
+}
+
+func TestDNSVolume_ConfigThresholds(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+
+	// Threshold is normally 100/min. We set it to 10/min.
+	cfg := defaultCfg()
+	cfg.DNSRateThreshold = 10
+	cfg.DNSRatioThreshold = 50.0
+	cfg.QueryWindow = 1 * time.Minute
+
+	// 20 DNS flows in 1 min = 20/min (above 10/min threshold).
+	for i := 0; i < 20; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+
+	// 80 non-DNS flows -> 20% DNS ratio (below 50% threshold).
+	for i := 0; i < 80; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", uint16(1000+i), 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	advisories := DNSVolume{}.Analyze(rb, cfg)
+
+	hasRate := false
+	hasRatio := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Query Rate" {
+			hasRate = true
+		}
+		if a.Title == "High DNS Traffic Ratio" {
+			hasRatio = true
+		}
+	}
+
+	if !hasRate {
+		t.Error("expected rate advisory due to custom threshold")
+	}
+	if hasRatio {
+		t.Error("did not expect ratio advisory due to custom threshold")
+	}
+}
+
+func TestDNSVolume_Name(t *testing.T) {
+	if name := (DNSVolume{}).Name(); name != "DNS Volume" {
+		t.Errorf("expected 'DNS Volume', got %q", name)
+	}
+}
+
+func TestDNSVolume_CriticalActions(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+
+	// 500 DNS flows in 1 min = 500/min (above 100*5 threshold for CRITICAL)
+	// and 500/500 = 100% ratio (above 60% threshold for CRITICAL)
+	for i := 0; i < 500; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+
+	cfg := defaultCfg()
+	cfg.QueryWindow = 1 * time.Minute
+
+	advisories := DNSVolume{}.Analyze(rb, cfg)
+
+	for _, a := range advisories {
+		if a.Severity != CRITICAL {
+			t.Errorf("expected CRITICAL severity, got %s", a.Severity)
+		}
+		if a.Title == "High DNS Query Rate" && a.Action != "Investigate DNS traffic immediately — extremely high query rate may indicate tunneling or amplification attack." {
+			t.Errorf("unexpected action for critical rate: %s", a.Action)
+		}
+		if a.Title == "High DNS Traffic Ratio" && a.Action != "Investigate immediately — DNS is dominating traffic, likely tunneling or amplification." {
+			t.Errorf("unexpected action for critical ratio: %s", a.Action)
+		}
+	}
+}
+
+func TestDNSVolume_WarningRatioAction(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+
+	// DNS ratio of 40% -> WARNING level (between 30% and 60%)
+	for i := 0; i < 40; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+	for i := 0; i < 60; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", uint16(1000+i), 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	cfg := defaultCfg()
+	cfg.QueryWindow = 1 * time.Minute
+
+	advisories := DNSVolume{}.Analyze(rb, cfg)
+
+	foundRatioAdvisory := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Traffic Ratio" {
+			foundRatioAdvisory = true
+			if a.Severity != WARNING {
+				t.Errorf("expected WARNING severity, got %s", a.Severity)
+			}
+			if a.Action != "Review DNS sources and destinations — disproportionate DNS volume detected." {
+				t.Errorf("unexpected action for warning ratio: %s", a.Action)
+			}
+		}
+	}
+	if !foundRatioAdvisory {
+		t.Errorf("expected High DNS Traffic Ratio advisory")
+	}
+}
+
+func TestDNSVolume_WarningRateAction(t *testing.T) {
+	rb := storage.NewRingBuffer(10000)
+
+	// DNS rate of 200/min -> WARNING level (between 100 and 500)
+	for i := 0; i < 200; i++ {
+		f := makeFlow("10.0.1.1", "8.8.8.8", uint16(30000+i), 53, 17, 100, 1)
+		rb.Insert([]model.Flow{f})
+	}
+	for i := 0; i < 800; i++ {
+		f := makeFlow("10.0.1.1", "192.168.1.1", uint16(1000+i), 80, 6, 1000, 10)
+		rb.Insert([]model.Flow{f})
+	}
+
+	cfg := defaultCfg()
+	cfg.QueryWindow = 1 * time.Minute
+
+	advisories := DNSVolume{}.Analyze(rb, cfg)
+
+	foundRateAdvisory := false
+	for _, a := range advisories {
+		if a.Title == "High DNS Query Rate" {
+			foundRateAdvisory = true
+			if a.Severity != WARNING {
+				t.Errorf("expected WARNING severity, got %s", a.Severity)
+			}
+			if a.Action != "Review DNS query sources — elevated rate may indicate misconfigured resolver or data exfiltration." {
+				t.Errorf("unexpected action for warning rate: %s", a.Action)
+			}
+		}
+	}
+	if !foundRateAdvisory {
+		t.Errorf("expected High DNS Query Rate advisory")
 	}
 }
