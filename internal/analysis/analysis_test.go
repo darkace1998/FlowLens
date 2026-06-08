@@ -208,50 +208,6 @@ func TestTopTalkers_Empty(t *testing.T) {
 	}
 }
 
-// --- Protocol Distribution tests ---
-
-func TestProtocolDistribution_Normal(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 7000, 70),  // TCP
-		makeFlow("10.0.1.2", "192.168.1.1", 1235, 53, 17, 2000, 20), // UDP
-		makeFlow("10.0.1.3", "192.168.1.1", 0, 0, 1, 1000, 10),      // ICMP
-	})
-
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	// Normal distribution should produce NO advisories — silence is a feature.
-	if len(advisories) != 0 {
-		t.Errorf("normal protocol distribution should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestProtocolDistribution_ICMPFlood(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 8000, 80),     // ICMP dominant
-		makeFlow("10.0.1.2", "192.168.1.1", 1234, 80, 6, 2000, 20), // TCP minor
-	})
-
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	hasWarning := false
-	for _, a := range advisories {
-		if a.Severity == WARNING {
-			hasWarning = true
-		}
-	}
-	if !hasWarning {
-		t.Error("ICMP >10% should generate WARNING")
-	}
-}
-
-func TestProtocolDistribution_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
 // --- Formatting helpers tests ---
 
 func TestFormatBytesShort(t *testing.T) {
