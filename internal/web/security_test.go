@@ -206,14 +206,14 @@ func TestCSRF_GETNotBlocked(t *testing.T) {
 	}
 }
 
-// --- CSP tests ---
+// --- Security Headers tests ---
 
-func TestCSP_HeaderPresent(t *testing.T) {
+func TestSecurityHeaders_Present(t *testing.T) {
 	s, _ := newTestServer(t)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	// Use the full handler chain (srv.Handler includes CSP middleware).
+	// Use the full handler chain (srv.Handler includes securityHeaders middleware).
 	s.srv.Handler.ServeHTTP(w, req)
 
 	csp := w.Header().Get("Content-Security-Policy")
@@ -226,9 +226,27 @@ func TestCSP_HeaderPresent(t *testing.T) {
 	if !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Errorf("CSP should prevent framing, got: %s", csp)
 	}
+
+	hsts := w.Header().Get("Strict-Transport-Security")
+	if hsts == "" {
+		t.Error("expected Strict-Transport-Security header")
+	}
+	if !strings.Contains(hsts, "max-age=31536000") || !strings.Contains(hsts, "includeSubDomains") {
+		t.Errorf("HSTS header is incorrect, got: %s", hsts)
+	}
+
+	frameOpts := w.Header().Get("X-Frame-Options")
+	if frameOpts != "DENY" {
+		t.Errorf("expected X-Frame-Options: DENY, got: %s", frameOpts)
+	}
+
+	contentTypeOpts := w.Header().Get("X-Content-Type-Options")
+	if contentTypeOpts != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options: nosniff, got: %s", contentTypeOpts)
+	}
 }
 
-func TestCSP_OnEveryPage(t *testing.T) {
+func TestSecurityHeaders_OnEveryPage(t *testing.T) {
 	s, _ := newTestServer(t)
 
 	pages := []string{"/", "/flows", "/hosts", "/advisories", "/about"}
@@ -239,6 +257,15 @@ func TestCSP_OnEveryPage(t *testing.T) {
 
 		if w.Header().Get("Content-Security-Policy") == "" {
 			t.Errorf("CSP header missing on %s", path)
+		}
+		if w.Header().Get("Strict-Transport-Security") == "" {
+			t.Errorf("HSTS header missing on %s", path)
+		}
+		if w.Header().Get("X-Frame-Options") == "" {
+			t.Errorf("X-Frame-Options header missing on %s", path)
+		}
+		if w.Header().Get("X-Content-Type-Options") == "" {
+			t.Errorf("X-Content-Type-Options header missing on %s", path)
 		}
 	}
 }
