@@ -78,6 +78,12 @@ const (
 	sflowGenericIfCountersLen = 88
 )
 
+// sflowFormat extracts the enterprise (top 20 bits) and format (bottom 12 bits)
+// from an sFlow sample/record type field.
+func sflowFormat(rawType uint32) (enterprise uint32, format uint32) {
+	return rawType >> 12, rawType & sflowFormatMask
+}
+
 // SFlowCounterSample represents a decoded sFlow counter sample for interface utilization.
 type SFlowCounterSample struct {
 	IfIndex     uint32
@@ -169,8 +175,7 @@ func DecodeSFlow(data []byte, exporterIP net.IP) ([]model.Flow, []SFlowCounterSa
 		offset += int(sampleLen)
 
 		// Extract enterprise and format: enterprise = top 20 bits, format = bottom 12 bits
-		enterprise := sampleTypeRaw >> 12
-		format := sampleTypeRaw & sflowFormatMask
+		enterprise, format := sflowFormat(sampleTypeRaw)
 
 		if enterprise != 0 {
 			continue // skip vendor-specific samples
@@ -261,8 +266,7 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		recordData := data[off : off+int(recordLen)]
 		off += int(recordLen)
 
-		recEnterprise := recordTypeRaw >> 12
-		recFormat := recordTypeRaw & sflowFormatMask
+		recEnterprise, recFormat := sflowFormat(recordTypeRaw)
 
 		if recEnterprise != 0 || recFormat != sflowRawPacketHeader {
 			continue
@@ -493,8 +497,7 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		recordData := data[off : off+int(recordLen)]
 		off += int(recordLen)
 
-		recEnterprise := recordTypeRaw >> 12
-		recFormat := recordTypeRaw & sflowFormatMask
+		recEnterprise, recFormat := sflowFormat(recordTypeRaw)
 
 		if recEnterprise != 0 || recFormat != sflowGenericIfCounters {
 			continue
