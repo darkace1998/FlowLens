@@ -18,7 +18,7 @@ type ScanDetector struct{}
 func (ScanDetector) Name() string { return "Port Scan Detector" }
 
 // Analyze returns advisories about potential port scans or sweeps.
-func (ScanDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("ScanDetector: failed to query recent flows: %v", err)

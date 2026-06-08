@@ -51,7 +51,7 @@ func makePairKey(a, b string) pairKey {
 }
 
 // Analyze returns advisories about asymmetric traffic patterns.
-func (FlowAsymmetry) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (FlowAsymmetry) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("FlowAsymmetry: failed to query recent flows: %v", err)

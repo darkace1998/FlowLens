@@ -35,7 +35,7 @@ const retransmissionRateThreshold = 1.0
 const criticalRetransmissionRateThreshold = 5.0
 
 // Analyze returns advisories about flows with retransmissions, OOO, or loss.
-func (RetransmissionDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (RetransmissionDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
 		logging.Default().Error("RetransmissionDetector: failed to query recent flows: %v", err)

@@ -23,7 +23,7 @@ func (NewTalkerDetector) Name() string { return "New Talker Detector" }
 const newTalkerMinBytes = 10000 // 10 KB
 
 // Analyze returns advisories about hosts that appear for the first time.
-func (NewTalkerDetector) Analyze(store *storage.RingBuffer, cfg config.AnalysisConfig) []Advisory {
+func (NewTalkerDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	// Use the analysis interval as the "recent" window.
 	recentWindow := cfg.Interval
 	if recentWindow <= 0 {
