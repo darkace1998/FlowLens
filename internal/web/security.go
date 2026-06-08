@@ -102,16 +102,19 @@ func (m *csrfManager) csrfProtect(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// --- Content-Security-Policy middleware ---
+// --- Security Headers middleware ---
 
-// cspMiddleware adds a Content-Security-Policy header to every response.
+// securityHeadersMiddleware adds a Content-Security-Policy header and other security headers to every response.
 // Note: 'unsafe-inline' is required for existing inline scripts (dark mode toggle,
 // Chart.js init) and inline styles in templates. A future improvement would be to
 // refactor these to external files or use nonce-based CSP.
-func cspMiddleware(next http.Handler) http.Handler {
+func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
 	})
 }
