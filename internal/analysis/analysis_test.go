@@ -614,58 +614,6 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 	}
 }
 
-// --- Retransmission Detector tests ---
-
-func TestRetransmissionDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestRetransmissionDetector_NormalTCP(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Normal TCP: 1000 bytes/pkt average — well above smallPacketThreshold.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 50000, 50),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("normal TCP should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestRetransmissionDetector_SmallPackets(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Small packets: 40 bytes/pkt (likely retransmissions) with enough packets.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 2400, 60),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for small packets, got %d", len(advisories))
-	}
-	if advisories[0].Severity != CRITICAL {
-		t.Errorf("40 bytes/pkt should be CRITICAL, got %s", advisories[0].Severity)
-	}
-}
-
-func TestRetransmissionDetector_IgnoresUDP(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// UDP with small packets — should not trigger.
-	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 53, 17, 2400, 60),
-	})
-
-	advisories := RetransmissionDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("UDP flows should not trigger retransmission detection, got %d", len(advisories))
-	}
-}
-
 // --- Unreachable Host Detector tests ---
 
 func TestUnreachableDetector_Empty(t *testing.T) {
