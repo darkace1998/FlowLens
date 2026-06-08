@@ -60,8 +60,8 @@ func generateTestCerts(t *testing.T) (certPath, keyPath string) {
 		t.Fatalf("Failed to create temp file for cert: %v", err)
 	}
 	defer certOut.Close()
-	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		t.Fatalf("Failed to write data to cert.pem: %v", err)
+	if encodeErr := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); encodeErr != nil {
+		t.Fatalf("Failed to write data to cert.pem: %v", encodeErr)
 	}
 
 	keyOut, err := os.CreateTemp("", "key-*.pem")
@@ -184,6 +184,7 @@ func TestServer_StartStopTLS(t *testing.T) {
 	// Test that HTTP fails
 	resp, err = http.Get("http://" + testListen + "/ping")
 	if err == nil {
+		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
 			t.Errorf("Expected HTTP request to TLS server to fail or return non-OK status, got OK")
 		}
