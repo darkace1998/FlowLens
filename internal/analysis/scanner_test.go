@@ -130,8 +130,6 @@ func TestScanDetector_DefaultThreshold(t *testing.T) {
 	}
 }
 
-
-
 // mockErrorStorage implements storage.Storage and always returns an error for Recent.
 type mockErrorStorage struct{}
 
