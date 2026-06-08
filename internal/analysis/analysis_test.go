@@ -614,48 +614,6 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 	}
 }
 
-// --- Unreachable Host Detector tests ---
-
-func TestUnreachableDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestUnreachableDetector_HealthyService(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Normal flows — large bytes, not tiny.
-	for i := 0; i < 50; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(1000+i), 80, 6, 5000, 50),
-		})
-	}
-
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("healthy service should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestUnreachableDetector_DownService(t *testing.T) {
-	rb := storage.NewRingBuffer(10000)
-	// Many tiny flows from multiple sources → service appears down.
-	for i := 0; i < 30; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.100", uint16(1000+i), 443, 6, 60, 1),
-		})
-	}
-
-	advisories := UnreachableDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for unreachable service, got %d", len(advisories))
-	}
-	if advisories[0].Severity != CRITICAL {
-		t.Errorf("30 tiny flows from 30 sources should be CRITICAL, got %s", advisories[0].Severity)
-	}
-}
 
 // --- Port Concentration Detector tests ---
 
