@@ -1312,14 +1312,18 @@ func TestFormatMOS(t *testing.T) {
 		want string
 	}{
 		{0, "—"},
+		{-1.0, "—"},
 		{4.41, "4.41"},
 		{3.50, "3.50"},
 		{2.10, "2.10"},
+		{4.414, "4.41"},
+		{4.415, "4.41"}, // float32 rounding behavior with fmt.Sprintf("%.2f")
+		{5.0, "5.00"},
 	}
 	for _, tt := range tests {
 		got := formatMOS(tt.mos)
 		if got != tt.want {
-			t.Errorf("formatMOS(%.2f) = %q, want %q", tt.mos, got, tt.want)
+			t.Errorf("formatMOS(%.3f) = %q, want %q", tt.mos, got, tt.want)
 		}
 	}
 }
@@ -1330,14 +1334,21 @@ func TestMOSQuality(t *testing.T) {
 		want string
 	}{
 		{4.2, "good"},
+		{4.0, "good"},
+		{3.99, "fair"},
 		{3.7, "fair"},
+		{3.5, "fair"},
+		{3.49, "poor"},
 		{3.2, "poor"},
+		{3.0, "poor"},
+		{2.99, "bad"},
 		{2.5, "bad"},
+		{0, "bad"},
 	}
 	for _, tt := range tests {
 		got := mosQuality(tt.mos)
 		if got != tt.want {
-			t.Errorf("mosQuality(%.1f) = %q, want %q", tt.mos, got, tt.want)
+			t.Errorf("mosQuality(%.2f) = %q, want %q", tt.mos, got, tt.want)
 		}
 	}
 }
