@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
@@ -33,7 +34,7 @@ var funcMap = template.FuncMap{
 	"formatAS":       formatAS,
 	"formatJitter":   formatJitter,
 	"formatMOS":      formatMOS,
-	"int":           func(v interface{}) int {
+	"int": func(v interface{}) int {
 		switch n := v.(type) {
 		case int:
 			return n
@@ -299,7 +300,7 @@ func pctOf(part, total uint64) float64 {
 	if total == 0 {
 		return 0
 	}
-	v := math.Round(float64(part) / float64(total) * 1000) / 10
+	v := math.Round(float64(part)/float64(total)*1000) / 10
 	if v > 100 {
 		v = 100
 	}
@@ -312,4 +313,11 @@ func formatAS(asn uint32) string {
 		return name
 	}
 	return fmt.Sprintf("AS%d (%s)", asn, name)
+}
+
+// sortByBytes sorts a slice of any type in descending order based on the bytes retrieved by getBytes.
+func sortByBytes[T any](slice []T, getBytes func(T) uint64) {
+	sort.Slice(slice, func(i, j int) bool {
+		return getBytes(slice[i]) > getBytes(slice[j])
+	})
 }
