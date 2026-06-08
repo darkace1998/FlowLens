@@ -105,7 +105,7 @@ func formatPkts(p uint64) string {
 
 func formatBPS(bytesTotal uint64, duration time.Duration) string {
 	if duration == 0 {
-		return "0 bps"
+		return "0.00 bps"
 	}
 	bps := float64(bytesTotal) * 8 / duration.Seconds()
 	switch {
@@ -125,13 +125,13 @@ func formatBPS(bytesTotal uint64, duration time.Duration) string {
 		// Positive rates below 1 Kbps.
 		return fmt.Sprintf("%.2f bps", bps)
 	default:
-		return "0 bps"
+		return "0.00 bps"
 	}
 }
 
 func formatPPS(pktsTotal uint64, duration time.Duration) string {
 	if duration == 0 {
-		return "0 pps"
+		return "0.00 pps"
 	}
 	pps := float64(pktsTotal) / duration.Seconds()
 	switch {
@@ -147,7 +147,7 @@ func formatPPS(pktsTotal uint64, duration time.Duration) string {
 		// Positive rates below 1 Kpps.
 		return fmt.Sprintf("%.2f pps", pps)
 	default:
-		return "0 pps"
+		return "0.00 pps"
 	}
 }
 
@@ -172,7 +172,7 @@ func formatThroughput(bps float64) string {
 		// Positive rates below 1 Kbps.
 		return fmt.Sprintf("%.2f bps", bps)
 	default:
-		return "0 bps"
+		return "0.00 bps"
 	}
 }
 

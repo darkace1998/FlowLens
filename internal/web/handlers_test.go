@@ -733,8 +733,8 @@ func TestFormatPPS(t *testing.T) {
 		duration time.Duration
 		want     string
 	}{
-		{0, 10 * time.Minute, "0 pps"},
-		{1000, 0, "0 pps"},
+		{0, 10 * time.Minute, "0.00 pps"},
+		{1000, 0, "0.00 pps"},
 		{152, 10 * time.Minute, "0.25 pps"}, // bug #8: was "0 pps"
 		{30, 1 * time.Minute, "0.50 pps"},
 		{1, 1 * time.Second, "1.00 pps"},
