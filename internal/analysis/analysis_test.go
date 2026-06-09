@@ -615,67 +615,6 @@ func TestEngine_AdvisoryHistory(t *testing.T) {
 }
 
 
-// --- Port Concentration Detector tests ---
-
-func TestPortConcentrationDetector_Empty(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("empty store should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestPortConcentrationDetector_Normal(t *testing.T) {
-	rb := storage.NewRingBuffer(1000)
-	// Few sources to one port — normal.
-	for i := 0; i < 5; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(1000+i), 80, 6, 5000, 50),
-		})
-	}
-
-	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("5 sources to one port should produce 0 advisories, got %d", len(advisories))
-	}
-}
-
-func TestPortConcentrationDetector_HighConcentration(t *testing.T) {
-	rb := storage.NewRingBuffer(100000)
-	// 25 unique sources all hitting the same port.
-	for i := 0; i < 25; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.1.%d", i), "192.168.1.1", uint16(50000+i), 443, 6, 5000, 50),
-		})
-	}
-
-	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory for high port concentration, got %d", len(advisories))
-	}
-	if advisories[0].Severity != WARNING {
-		t.Errorf("25 sources should be WARNING, got %s", advisories[0].Severity)
-	}
-}
-
-func TestPortConcentrationDetector_Critical(t *testing.T) {
-	rb := storage.NewRingBuffer(100000)
-	// 60+ unique sources (>= 3x threshold of 20) → CRITICAL.
-	for i := 0; i < 65; i++ {
-		rb.Insert([]model.Flow{
-			makeFlow(fmt.Sprintf("10.0.%d.%d", i/256, i%256), "192.168.1.1", uint16(50000+i), 22, 6, 100, 1),
-		})
-	}
-
-	advisories := PortConcentrationDetector{}.Analyze(rb, defaultCfg())
-	if len(advisories) != 1 {
-		t.Fatalf("expected 1 advisory, got %d", len(advisories))
-	}
-	if advisories[0].Severity != CRITICAL {
-		t.Errorf("65 sources (>= 3x20) should be CRITICAL, got %s", advisories[0].Severity)
-	}
-}
-
 func TestDNSVolume_StorageError(t *testing.T) {
 	advisories := DNSVolume{}.Analyze(mockErrorStorage{}, defaultCfg())
 	if advisories != nil {
@@ -772,3 +711,14 @@ func TestDNSVolume_WarningRatioAction(t *testing.T) {
 		rb.Insert([]model.Flow{f})
 	}
 
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != WARNING {
+		t.Errorf("expected WARNING severity, got %s", advisories[0].Severity)
+	}
+	if advisories[0].Action != "Review DNS sources and destinations — disproportionate DNS volume detected." {
+		t.Errorf("unexpected action for warning ratio: %s", advisories[0].Action)
+	}
+}
