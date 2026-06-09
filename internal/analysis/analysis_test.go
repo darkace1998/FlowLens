@@ -772,3 +772,13 @@ func TestDNSVolume_WarningRatioAction(t *testing.T) {
 		rb.Insert([]model.Flow{f})
 	}
 
+	advisories := DNSVolume{}.Analyze(rb, defaultCfg())
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory, got %d", len(advisories))
+	}
+	if advisories[0].Severity != WARNING {
+		t.Errorf("expected WARNING severity, got %s", advisories[0].Severity)
+	}
+	if advisories[0].Action != "Review DNS sources and destinations — disproportionate DNS volume detected." {
+		t.Errorf("unexpected action for warning ratio: %s", advisories[0].Action)
+	}
