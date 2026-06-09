@@ -782,3 +782,4 @@ func TestDNSVolume_WarningRatioAction(t *testing.T) {
 	if advisories[0].Action != "Review DNS sources and destinations — disproportionate DNS volume detected." {
 		t.Errorf("unexpected action for warning ratio: %s", advisories[0].Action)
 	}
+}
