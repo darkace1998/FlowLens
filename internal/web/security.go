@@ -52,12 +52,12 @@ func newCSRFManager() *csrfManager {
 }
 
 // generate creates a new random CSRF token and stores it.
-// If crypto/rand fails, it returns an empty string — callers
-// treat empty tokens as invalid, so CSRF protection fails closed.
+// If crypto/rand fails, it panics to ensure the application
+// does not continue executing in an insecure state.
 func (m *csrfManager) generate() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return ""
+		panic("crypto/rand failed: " + err.Error())
 	}
 	token := hex.EncodeToString(b)
 	m.mu.Lock()
