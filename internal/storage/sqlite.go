@@ -352,12 +352,19 @@ type TimeSeriesPoint struct {
 // Results are sorted by total bytes descending, limited to 100 rows.
 func (s *SQLiteStore) QueryReport(start, end time.Time, groupBy string) ([]ReportRow, error) {
 	// Whitelist allowed group-by columns to prevent SQL injection.
-	allowed := map[string]bool{
-		"src_addr": true, "dst_addr": true, "protocol": true,
-		"app_proto": true, "app_category": true, "dst_port": true,
-		"src_as": true, "dst_as": true,
+	allowed := map[string]string{
+		"src_addr":     "src_addr",
+		"dst_addr":     "dst_addr",
+		"protocol":     "protocol",
+		"app_proto":    "app_proto",
+		"app_category": "app_category",
+		"dst_port":     "dst_port",
+		"src_as":       "src_as",
+		"dst_as":       "dst_as",
 	}
-	if !allowed[groupBy] {
+
+	safeColumn, ok := allowed[groupBy]
+	if !ok {
 		return nil, fmt.Errorf("invalid group-by column: %q", groupBy)
 	}
 
@@ -365,7 +372,7 @@ func (s *SQLiteStore) QueryReport(start, end time.Time, groupBy string) ([]Repor
 		`SELECT %s, SUM(bytes), SUM(packets), COUNT(*), AVG(bytes)
 		 FROM flows WHERE timestamp >= ? AND timestamp <= ?
 		 GROUP BY %s ORDER BY SUM(bytes) DESC LIMIT 100`,
-		groupBy, groupBy,
+		safeColumn, safeColumn,
 	)
 
 	rows, err := s.db.Query(query, start.UTC(), end.UTC())
