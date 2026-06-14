@@ -1381,12 +1381,19 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 		}
 	}
 
+	// Cache geo lookups to avoid redundant calls
+	geoCache := make(map[string]geo.Info)
+
 	markers := make([]MapMarker, 0, len(hostBytes))
 	for ip, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
 		}
-		info := s.geoLookup.Find(ip)
+		info, ok := geoCache[ip]
+		if !ok {
+			info = s.geoLookup.Find(ip)
+			geoCache[ip] = info
+		}
 		if info.Country == "" || info.Country == "LAN" || (info.Latitude == 0 && info.Longitude == 0) {
 			continue
 		}
