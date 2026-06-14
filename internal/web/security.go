@@ -1,9 +1,11 @@
 package web
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
 	"encoding/hex"
 	"net/http"
 	"sync"
@@ -42,49 +44,98 @@ func basicAuth(next http.Handler, username, password string) http.Handler {
 // --- CSRF token middleware ---
 
 // csrfManager generates and validates per-session CSRF tokens.
+// Tokens are stateless, consisting of a timestamp, a random nonce,
+// and an HMAC-SHA256 signature to prevent tampering.
 type csrfManager struct {
-	mu     sync.RWMutex
-	tokens map[string]bool // active token set
+	secret []byte
+	mu     sync.Mutex
+	used   map[string]int64 // track used tokens to enforce single-use (token -> expiration)
 }
 
 func newCSRFManager() *csrfManager {
-	return &csrfManager{tokens: make(map[string]bool)}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		panic("crypto/rand failed: " + err.Error())
+	}
+	return &csrfManager{
+		secret: secret,
+		used:   make(map[string]int64),
+	}
 }
 
-// generate creates a new random CSRF token and stores it.
+// generate creates a new random CSRF token.
 // If crypto/rand fails, it panics to ensure the application
 // does not continue executing in an insecure state.
 func (m *csrfManager) generate() string {
 	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+
+	// 8 bytes expiration timestamp (12 hours from now)
+	exp := time.Now().Add(12 * time.Hour).Unix()
+	binary.BigEndian.PutUint64(b[0:8], uint64(exp))
+
+	// 8 bytes random nonce
+	if _, err := rand.Read(b[8:16]); err != nil {
 		panic("crypto/rand failed: " + err.Error())
 	}
-	token := hex.EncodeToString(b)
-	m.mu.Lock()
-	m.tokens[token] = true
-	// Keep at most 1000 tokens to bound memory.
-	if len(m.tokens) > 1000 {
-		for k := range m.tokens {
-			delete(m.tokens, k)
-			break
-		}
-	}
-	m.mu.Unlock()
-	return token
+
+	// 16 bytes HMAC-SHA256 signature
+	mac := hmac.New(sha256.New, m.secret)
+	mac.Write(b[0:16])
+	sum := mac.Sum(nil)
+	copy(b[16:32], sum[:16])
+
+	return hex.EncodeToString(b)
 }
 
-// valid checks whether a token is present and removes it (single-use).
+// valid checks whether a token is valid, not expired, and not already used (single-use).
 func (m *csrfManager) valid(token string) bool {
-	if token == "" {
+	if len(token) != 64 {
 		return false
 	}
+
+	b, err := hex.DecodeString(token)
+	if err != nil || len(b) != 32 {
+		return false
+	}
+
+	// Verify HMAC signature
+	mac := hmac.New(sha256.New, m.secret)
+	mac.Write(b[0:16])
+	sum := mac.Sum(nil)
+	if subtle.ConstantTimeCompare(b[16:32], sum[:16]) != 1 {
+		return false
+	}
+
+	// Verify expiration
+	exp := int64(binary.BigEndian.Uint64(b[0:8]))
+	now := time.Now().Unix()
+	if now > exp {
+		return false
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.tokens[token] {
-		delete(m.tokens, token)
-		return true
+
+	// Cleanup expired tokens lazily
+	for k, v := range m.used {
+		if now > v {
+			delete(m.used, k)
+		}
 	}
-	return false
+
+	// Enforce single-use
+	if _, exists := m.used[token]; exists {
+		return false
+	}
+
+	m.used[token] = exp
+
+	// Bounding the used map to prevent memory exhaustion by extreme valid-token flooding.
+	if len(m.used) > 100000 {
+		m.used = make(map[string]int64)
+	}
+
+	return true
 }
 
 // csrfProtect wraps a POST handler with CSRF token validation.
