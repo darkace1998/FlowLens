@@ -1,11 +1,14 @@
 package analysis
 
 import (
+	"bytes"
 	"fmt"
-	"testing"
-
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+	"os"
+	"strings"
+	"testing"
 )
 
 // --- Port Concentration Detector tests ---
@@ -78,9 +81,20 @@ func TestPortConcentrationDetector_Name(t *testing.T) {
 }
 
 func TestPortConcentrationDetector_StorageError(t *testing.T) {
+	var buf bytes.Buffer
+	logging.Default().SetOutput(&buf)
+	defer logging.Default().SetOutput(os.Stderr)
+
 	advisories := PortConcentrationDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
+
+	logOutput := buf.String()
+
 	if len(advisories) != 0 {
 		t.Errorf("expected 0 advisories on storage error, got %d", len(advisories))
+	}
+
+	if !strings.Contains(logOutput, "failed to query") {
+		t.Errorf("expected log message not found, got: %q", logOutput)
 	}
 }
 
