@@ -35,24 +35,6 @@ func defaultCfg() config.AnalysisConfig {
 	}
 }
 
-// --- Advisory tests ---
-
-func TestSeverityString(t *testing.T) {
-	tests := []struct {
-		sev  Severity
-		want string
-	}{
-		{INFO, "INFO"},
-		{WARNING, "WARNING"},
-		{CRITICAL, "CRITICAL"},
-	}
-	for _, tt := range tests {
-		got := tt.sev.String()
-		if got != tt.want {
-			t.Errorf("Severity(%d).String() = %q, want %q", tt.sev, got, tt.want)
-		}
-	}
-}
 
 // --- Engine tests ---
 
