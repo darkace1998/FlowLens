@@ -1371,21 +1371,43 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 	// Collect unique hosts with byte counts.
 	// Attribute bytes to the source IP only to avoid double-counting.
-	hostBytes := make(map[string]uint64)
+	hostBytes := make(map[[16]byte]uint64)
 	for _, f := range flows {
-		src := model.SafeIPString(f.SrcAddr)
-		dst := model.SafeIPString(f.DstAddr)
-		hostBytes[src] += f.Bytes
-		if _, ok := hostBytes[dst]; !ok {
-			hostBytes[dst] = 0
+		var srcKey, dstKey [16]byte
+		if ip := f.SrcAddr.To16(); ip != nil {
+			copy(srcKey[:], ip)
+		}
+		if ip := f.DstAddr.To16(); ip != nil {
+			copy(dstKey[:], ip)
+		}
+
+		hostBytes[srcKey] += f.Bytes
+		if _, ok := hostBytes[dstKey]; !ok {
+			hostBytes[dstKey] = 0
 		}
 	}
 
 	markers := make([]MapMarker, 0, len(hostBytes))
-	for ip, bytes := range hostBytes {
+	for ipKey, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
 		}
+
+		var ip string
+		empty := true
+		for _, b := range ipKey {
+			if b != 0 {
+				empty = false
+				break
+			}
+		}
+
+		if empty {
+			ip = "0.0.0.0"
+		} else {
+			ip = net.IP(ipKey[:]).String()
+		}
+
 		info := s.geoLookup.Find(ip)
 		if info.Country == "" || info.Country == "LAN" || (info.Latitude == 0 && info.Longitude == 0) {
 			continue
