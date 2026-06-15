@@ -1,25 +1,16 @@
 package analysis
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/darkace1998/FlowLens/internal/config"
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
-
-type mockUnreachableStorage struct {
-	err error
-}
-
-func (m *mockUnreachableStorage) Insert(flows []model.Flow) error { return nil }
-func (m *mockUnreachableStorage) Recent(d time.Duration, limit int) ([]model.Flow, error) {
-	return nil, m.err
-}
-func (m *mockUnreachableStorage) Close() error { return nil }
 
 func TestUnreachableDetector_Name(t *testing.T) {
 	d := UnreachableDetector{}
@@ -29,11 +20,19 @@ func TestUnreachableDetector_Name(t *testing.T) {
 }
 
 func TestUnreachableDetector_StoreError(t *testing.T) {
+	var buf bytes.Buffer
+	logging.Default().SetOutput(&buf)
+	defer logging.Default().SetOutput(os.Stderr)
+
 	d := UnreachableDetector{}
-	store := &mockUnreachableStorage{err: errors.New("mock error")}
-	adv := d.Analyze(store, config.AnalysisConfig{})
+	adv := d.Analyze(mockErrorStorage{}, defaultCfg())
 	if adv != nil {
 		t.Errorf("expected nil advisories on error, got %v", adv)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "UnreachableDetector: failed to query recent flows") {
+		t.Errorf("expected error log, got: %s", logOutput)
 	}
 }
 

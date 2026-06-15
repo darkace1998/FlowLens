@@ -1410,6 +1410,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 
 	markers := make([]MapMarker, 0, len(hostBytes))
 	for ipKey, bytes := range hostBytes {
+		ip := net.IP(ipKey[:]).String()
 		if s.geoLookup == nil {
 			continue
 		}
