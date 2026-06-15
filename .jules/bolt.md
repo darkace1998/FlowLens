@@ -1,5 +1,4 @@
-## 2026-06-14 - Map Lookup Cache
 
-**Learning:** When attempting to cache expensive lookups inside a loop, ensure that the iteration actually contains duplicate keys. In `internal/web/handlers.go`, iterating over the `hostBytes` map means every IP is strictly unique. Caching locally per-request for unique elements only adds map initialization and map lookup overhead, ultimately hurting performance rather than improving it.
-
-**Action:** Before optimizing a loop with a local cache, verify the distribution of elements inside that loop allows for cache hits. If iterating over a map, a local cache mapping the exact same keys is inherently redundant.
+## 2024-05-18 - Optimize buildMapData IP Processing
+**Learning:** Using `net.IP.String()` inside a tight loop parsing network flows causes substantial string allocation overhead and performance degradation (GC pressure, CPU usage). Converting the `net.IP` representation to a `[16]byte` fixed array avoids allocation, allows using the array as a map key directly, and defers string formatting until necessary.
+**Action:** When grouping or caching flows by IP, consider casting IP byte slices to fixed-sized byte arrays (`[16]byte` via `To16()`) for map keys instead of using standard string conversion.
