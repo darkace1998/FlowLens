@@ -1,4 +1,4 @@
-## 2026-06-14 - Cache GeoIP lookups during flow iteration
 
-**Learning:** `geoLookup.Find(ip)` involves a binary search on IP ranges. When displaying flows in the UI (`handleFlows`), resolving the same source/destination IPs repeatedly adds unnecessary computational overhead.
-**Action:** When iterating through lists of flows, always initialize a `map[string]string` cache locally to store previously resolved geo information (like `.Country`) to reduce `O(log N)` lookups to `O(1)`.
+## 2024-05-18 - Optimize buildMapData IP Processing
+**Learning:** Using `net.IP.String()` inside a tight loop parsing network flows causes substantial string allocation overhead and performance degradation (GC pressure, CPU usage). Converting the `net.IP` representation to a `[16]byte` fixed array avoids allocation, allows using the array as a map key directly, and defers string formatting until necessary.
+**Action:** When grouping or caching flows by IP, consider casting IP byte slices to fixed-sized byte arrays (`[16]byte` via `To16()`) for map keys instead of using standard string conversion.
