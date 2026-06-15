@@ -149,16 +149,25 @@ func (m mockErrorStorage) Close() error {
 	return nil
 }
 
-func TestScanDetector_StorageError(t *testing.T) {
-	var buf bytes.Buffer
-	logging.Default().SetOutput(&buf)
-	defer logging.Default().SetOutput(os.Stderr)
+func TestScanDetector_Analyze_ErrorCases(t *testing.T) {
+	t.Run("storage error", func(t *testing.T) {
+		var buf bytes.Buffer
+		logging.Default().SetOutput(&buf)
+		defer logging.Default().SetOutput(os.Stderr)
 
-	advisories := ScanDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
-	if advisories != nil {
-		t.Errorf("expected nil advisories on storage error, got %v", advisories)
-	}
-	if !strings.Contains(buf.String(), "ScanDetector: failed to query flows: mock storage error") {
-		t.Errorf("expected error log to contain 'ScanDetector: failed to query flows: mock storage error', got %q", buf.String())
-	}
+		advisories := ScanDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
+		if advisories != nil {
+			t.Errorf("expected nil advisories on storage error, got %v", advisories)
+		}
+		if !strings.Contains(buf.String(), "ScanDetector: failed to query flows: mock storage error") {
+			t.Errorf("expected error log to contain 'ScanDetector: failed to query flows: mock storage error', got %q", buf.String())
+		}
+	})
+
+	t.Run("empty flows", func(t *testing.T) {
+		advisories := ScanDetector{}.Analyze(storage.NewRingBuffer(10), defaultCfg())
+		if advisories != nil {
+			t.Errorf("expected nil advisories on empty flows, got %v", advisories)
+		}
+	})
 }
