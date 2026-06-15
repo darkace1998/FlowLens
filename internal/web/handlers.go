@@ -987,6 +987,11 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		end = totalFlows
 	}
 
+	var geoCache map[string]string
+	if s.geoLookup != nil {
+		geoCache = make(map[string]string)
+	}
+
 	pageFlows := make([]FlowRow, 0, end-start)
 	for _, f := range filtered[start:end] {
 		appProto := f.AppProto
@@ -1000,8 +1005,21 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		dstAddr := model.SafeIPString(f.DstAddr)
 		var srcCountry, dstCountry string
 		if s.geoLookup != nil {
-			srcCountry = s.geoLookup.Find(srcAddr).Country
-			dstCountry = s.geoLookup.Find(dstAddr).Country
+			if c, ok := geoCache[srcAddr]; ok {
+				srcCountry = c
+			} else {
+				c = s.geoLookup.Find(srcAddr).Country
+				geoCache[srcAddr] = c
+				srcCountry = c
+			}
+
+			if c, ok := geoCache[dstAddr]; ok {
+				dstCountry = c
+			} else {
+				c = s.geoLookup.Find(dstAddr).Country
+				geoCache[dstAddr] = c
+				dstCountry = c
+			}
 		}
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp:   f.Timestamp.Format("15:04:05"),
@@ -1371,22 +1389,35 @@ func (s *Server) handleMap(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 	// Collect unique hosts with byte counts.
 	// Attribute bytes to the source IP only to avoid double-counting.
-	hostBytes := make(map[string]uint64)
+	hostBytes := make(map[[16]byte]uint64)
 	for _, f := range flows {
-		src := model.SafeIPString(f.SrcAddr)
-		dst := model.SafeIPString(f.DstAddr)
-		hostBytes[src] += f.Bytes
-		if _, ok := hostBytes[dst]; !ok {
-			hostBytes[dst] = 0
+		var srcKey, dstKey [16]byte
+		if ip := f.SrcAddr.To16(); ip != nil {
+			copy(srcKey[:], ip)
+		}
+		if ip := f.DstAddr.To16(); ip != nil {
+			copy(dstKey[:], ip)
+		}
+
+		hostBytes[srcKey] += f.Bytes
+		if _, ok := hostBytes[dstKey]; !ok {
+			hostBytes[dstKey] = 0
 		}
 	}
 
+	// Cache geo lookups to avoid redundant calls
+	geoCache := make(map[string]geo.Info)
+
 	markers := make([]MapMarker, 0, len(hostBytes))
-	for ip, bytes := range hostBytes {
+	for ipKey, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
 		}
-		info := s.geoLookup.Find(ip)
+		info, ok := geoCache[ip]
+		if !ok {
+			info = s.geoLookup.Find(ip)
+			geoCache[ip] = info
+		}
 		if info.Country == "" || info.Country == "LAN" || (info.Latitude == 0 && info.Longitude == 0) {
 			continue
 		}
@@ -1828,32 +1859,29 @@ func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path, err := s.captureMgr.PcapFilePath(filename)
+	_, err := s.captureMgr.PcapFilePath(filename)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	absPath, err := filepath.Abs(path)
+	dir := http.Dir(s.captureMgr.PcapDir())
+	f, err := dir.Open(filename)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
+	defer f.Close()
 
-	absDir, err := filepath.Abs(s.captureMgr.PcapDir())
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
-		http.Error(w, "Access denied", http.StatusForbidden)
+	stat, err := f.Stat()
+	if err != nil || stat.IsDir() {
+		http.Error(w, "Invalid file", http.StatusForbidden)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(absPath)))
-	http.ServeFile(w, r, absPath)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(filename)))
+	http.ServeContent(w, r, stat.Name(), stat.ModTime(), f)
 }
 
 // --- VLAN Statistics ---
