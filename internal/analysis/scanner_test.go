@@ -162,3 +162,10 @@ func TestScanDetector_StorageError(t *testing.T) {
 		t.Errorf("expected error log to contain 'ScanDetector: failed to query flows: mock storage error', got %q", buf.String())
 	}
 }
+
+func TestScanDetector_StorageError_ExplicitNil(t *testing.T) {
+	advisories := ScanDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("expected 0 advisories on storage error, got %d", len(advisories))
+	}
+}
