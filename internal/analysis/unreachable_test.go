@@ -20,20 +20,22 @@ func TestUnreachableDetector_Name(t *testing.T) {
 }
 
 func TestUnreachableDetector_StoreError(t *testing.T) {
-	var buf bytes.Buffer
-	logging.Default().SetOutput(&buf)
-	defer logging.Default().SetOutput(os.Stderr)
+	t.Run("StorageError", func(t *testing.T) {
+		var buf bytes.Buffer
+		logging.Default().SetOutput(&buf)
+		defer logging.Default().SetOutput(os.Stderr)
 
-	d := UnreachableDetector{}
-	adv := d.Analyze(mockErrorStorage{}, defaultCfg())
-	if adv != nil {
-		t.Errorf("expected nil advisories on error, got %v", adv)
-	}
+		d := UnreachableDetector{}
+		adv := d.Analyze(mockErrorStorage{}, defaultCfg())
+		if adv != nil {
+			t.Errorf("expected nil advisories on error, got %v", adv)
+		}
 
-	logOutput := buf.String()
-	if !strings.Contains(logOutput, "UnreachableDetector: failed to query recent flows") {
-		t.Errorf("expected error log, got: %s", logOutput)
-	}
+		logOutput := buf.String()
+		if !strings.Contains(logOutput, "UnreachableDetector: failed to query flows") {
+			t.Errorf("expected error log, got: %s", logOutput)
+		}
+	})
 }
 
 func TestUnreachableDetector_Empty(t *testing.T) {

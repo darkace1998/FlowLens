@@ -29,7 +29,7 @@ const unreachableMaxBytes = 200
 func (UnreachableDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
-		logging.Default().Error("UnreachableDetector: failed to query recent flows: %v", err)
+		logging.Default().Error("UnreachableDetector: failed to query flows: %v", err)
 		return nil
 	}
 	if len(flows) == 0 {
