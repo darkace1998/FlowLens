@@ -1,5 +1,0 @@
-🎯 **What:** The existing test `TestScanDetector_StorageError` in `internal/analysis/scanner_test.go` has been improved to ensure comprehensive coverage for the error handling branch inside `ScanDetector.Analyze`. The test now properly asserts that the returned advisory slice is strictly `nil` (per memory guidelines) instead of just checking its length, and actively captures and verifies the expected error log output via `logging.Default().SetOutput`.
-
-📊 **Coverage:** Specifically covers the failure path in `ScanDetector.Analyze` when the storage engine (e.g. `mockErrorStorage`) returns an error during the `Recent` call. Coverage for `scanner.go` remains at a resilient 100%.
-
-✨ **Result:** The test suite for `ScanDetector` is now fully deterministic and robustly asserts against side effects (logging) and strict type requirements (`nil` slices), significantly improving the safety net for this analyzer.
