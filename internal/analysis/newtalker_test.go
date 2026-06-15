@@ -1,10 +1,14 @@
 package analysis
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
@@ -97,9 +101,18 @@ func TestNewTalkerDetector_Name(t *testing.T) {
 }
 
 func TestNewTalkerDetector_StorageError(t *testing.T) {
+	var buf bytes.Buffer
+	logging.Default().SetOutput(&buf)
+	defer logging.Default().SetOutput(os.Stderr)
+
 	advisories := NewTalkerDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
-	if len(advisories) != 0 {
-		t.Errorf("expected 0 advisories on storage error, got %d", len(advisories))
+	if advisories != nil {
+		t.Errorf("expected nil advisories on storage error, got %v", advisories)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "NewTalkerDetector: failed to query flows:") {
+		t.Errorf("expected log to contain \"NewTalkerDetector: failed to query flows:\", got %q", logOutput)
 	}
 }
 
