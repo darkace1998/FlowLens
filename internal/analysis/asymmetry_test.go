@@ -85,3 +85,13 @@ func TestFlowAsymmetry_HighToLow(t *testing.T) {
 		t.Errorf("50:1 ratio should be WARNING, got %s", advisories[0].Severity)
 	}
 }
+
+func TestFlowAsymmetry_EmptyFlows(t *testing.T) {
+	rb := storage.NewRingBuffer(100)
+
+	// No flows inserted, so len(flows) will be 0
+	advisories := FlowAsymmetry{}.Analyze(rb, defaultCfg())
+	if advisories != nil {
+		t.Errorf("expected nil advisories for empty flows, got %v", advisories)
+	}
+}

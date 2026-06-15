@@ -1414,7 +1414,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 		if s.geoLookup == nil {
 			continue
 		}
-		ip := model.SafeIPString(ipKey[:])
+		ip = model.SafeIPString(ipKey[:])
 		info, ok := geoCache[ip]
 		if !ok {
 			info = s.geoLookup.Find(ip)
