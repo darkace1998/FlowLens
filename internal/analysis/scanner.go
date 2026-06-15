@@ -21,7 +21,7 @@ func (ScanDetector) Name() string { return "Port Scan Detector" }
 func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Advisory {
 	flows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
-		logging.Default().Error("ScanDetector: failed to query recent flows: %v", err)
+		logging.Default().Error("ScanDetector: failed to query flows: %v", err)
 		return nil
 	}
 	if len(flows) == 0 {
