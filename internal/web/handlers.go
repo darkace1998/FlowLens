@@ -987,6 +987,11 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		end = totalFlows
 	}
 
+	var geoCache map[string]string
+	if s.geoLookup != nil {
+		geoCache = make(map[string]string)
+	}
+
 	pageFlows := make([]FlowRow, 0, end-start)
 	for _, f := range filtered[start:end] {
 		appProto := f.AppProto
@@ -1000,8 +1005,21 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		dstAddr := model.SafeIPString(f.DstAddr)
 		var srcCountry, dstCountry string
 		if s.geoLookup != nil {
-			srcCountry = s.geoLookup.Find(srcAddr).Country
-			dstCountry = s.geoLookup.Find(dstAddr).Country
+			if c, ok := geoCache[srcAddr]; ok {
+				srcCountry = c
+			} else {
+				c = s.geoLookup.Find(srcAddr).Country
+				geoCache[srcAddr] = c
+				srcCountry = c
+			}
+
+			if c, ok := geoCache[dstAddr]; ok {
+				dstCountry = c
+			} else {
+				c = s.geoLookup.Find(dstAddr).Country
+				geoCache[dstAddr] = c
+				dstCountry = c
+			}
 		}
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp:   f.Timestamp.Format("15:04:05"),
@@ -1850,32 +1868,29 @@ func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path, err := s.captureMgr.PcapFilePath(filename)
+	_, err := s.captureMgr.PcapFilePath(filename)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	absPath, err := filepath.Abs(path)
+	dir := http.Dir(s.captureMgr.PcapDir())
+	f, err := dir.Open(filename)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
+	defer f.Close()
 
-	absDir, err := filepath.Abs(s.captureMgr.PcapDir())
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
-		http.Error(w, "Access denied", http.StatusForbidden)
+	stat, err := f.Stat()
+	if err != nil || stat.IsDir() {
+		http.Error(w, "Invalid file", http.StatusForbidden)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.tcpdump.pcap")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(absPath)))
-	http.ServeFile(w, r, absPath)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(filename)))
+	http.ServeContent(w, r, stat.Name(), stat.ModTime(), f)
 }
 
 // --- VLAN Statistics ---
