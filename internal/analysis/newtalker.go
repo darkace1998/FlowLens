@@ -32,7 +32,7 @@ func (NewTalkerDetector) Analyze(store storage.Storage, cfg config.AnalysisConfi
 
 	allFlows, err := store.Recent(queryWindow(cfg), 0)
 	if err != nil {
-		logging.Default().Error("NewTalkerDetector: failed to query recent flows: %v", err)
+		logging.Default().Error("NewTalkerDetector: failed to query flows: %v", err)
 		return nil
 	}
 	if len(allFlows) == 0 {
