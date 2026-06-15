@@ -7,7 +7,6 @@ import (
 	"github.com/darkace1998/FlowLens/internal/storage"
 )
 
-
 // --- Protocol Distribution Analyzer tests ---
 
 func TestProtocolDistribution_Name(t *testing.T) {
@@ -51,9 +50,9 @@ func TestProtocolDistribution_NormalTraffic(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	// Normal traffic: Mostly TCP (6) and UDP (17), maybe small ICMP (1) < 10%
 	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 8000, 50),   // 80%
-		makeFlow("10.0.1.1", "192.168.1.1", 1235, 53, 17, 1500, 30),  // 15%
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 500, 10),        // 5%
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 8000, 50),  // 80%
+		makeFlow("10.0.1.1", "192.168.1.1", 1235, 53, 17, 1500, 30), // 15%
+		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 500, 10),       // 5%
 	})
 
 	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
@@ -66,8 +65,8 @@ func TestProtocolDistribution_ICMPFlood(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	// ICMP > 10%
 	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 8000, 50),   // 80%
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 2000, 40),       // 20%
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 8000, 50), // 80%
+		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 1, 2000, 40),     // 20%
 	})
 
 	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
@@ -86,8 +85,8 @@ func TestProtocolDistribution_NonStandardProtocol(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	// Non-standard protocol (e.g., 47 GRE) > 5%
 	rb.Insert([]model.Flow{
-		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 9000, 50),   // 90%
-		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 47, 1000, 20),      // 10%
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 9000, 50), // 90%
+		makeFlow("10.0.1.1", "192.168.1.1", 0, 0, 47, 1000, 20),    // 10%
 	})
 
 	advisories := ProtocolDistribution{}.Analyze(rb, defaultCfg())
@@ -99,5 +98,29 @@ func TestProtocolDistribution_NonStandardProtocol(t *testing.T) {
 	}
 	if advisories[0].Title != "Protocol: GRE (10.0%)" {
 		t.Errorf("expected Title 'Protocol: GRE (10.0%%)', got '%s'", advisories[0].Title)
+	}
+}
+
+func TestProtocolDistribution_ActionForProtocol(t *testing.T) {
+	// Test default branch for coverage
+	action := actionForProtocol(INFO, "TCP", 10.0)
+	if action != "No action required — informational." {
+		t.Errorf("expected info action, got %q", action)
+	}
+}
+
+func TestProtocolDistribution_BuildProtocolReportCoverage(t *testing.T) {
+	// This provides coverage for multiple packets to the same protocol
+	// which hits the "if e, ok := m[f.Protocol]; ok {" branch in buildProtocolReport.
+	flows := []model.Flow{
+		makeFlow("10.0.1.1", "192.168.1.1", 1234, 80, 6, 1000, 10),
+		makeFlow("10.0.1.1", "192.168.1.1", 1235, 80, 6, 2000, 20),
+	}
+	report := buildProtocolReport(flows)
+	if len(report) != 1 {
+		t.Fatalf("expected 1 protocol entry, got %d", len(report))
+	}
+	if report[0].Bytes != 3000 || report[0].Packets != 30 {
+		t.Errorf("expected 3000 bytes and 30 packets, got %d and %d", report[0].Bytes, report[0].Packets)
 	}
 }
