@@ -19,6 +19,7 @@ FlowLens is configured through YAML. Start from `configs/flowlens.yaml`.
 | `analysis` | `top_talkers_count` | `10` | Top talkers tracked |
 | `analysis` | `anomaly_baseline_window` | `168h` | Baseline window for anomaly detection |
 | `analysis` | `scan_threshold` | `500` | Unique ports in window to flag scan behavior |
+| `analysis` | `long_connection_threshold` | `1h` | Threshold duration to flag long connections |
 | `analysis` | `webhook_url` | _(empty)_ | Advisory webhook endpoint |
 | `web` | `listen` | `:8080` | HTTP listen address |
 | `web` | `page_size` | `50` | Rows per page in flow explorer |
@@ -47,6 +48,7 @@ analysis:
   top_talkers_count: 10
   anomaly_baseline_window: 168h
   scan_threshold: 500
+  long_connection_threshold: 1h
   webhook_url: ""
 
 web:

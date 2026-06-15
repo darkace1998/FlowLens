@@ -60,11 +60,12 @@ type AnalysisConfig struct {
 	DNSRatioThreshold        float64 `yaml:"dns_ratio_threshold"`         // DNS flow percentage to trigger advisory (default: 30)
 	RetransRateThreshold     float64 `yaml:"retrans_rate_threshold"`      // retransmission % to trigger advisory (default: 1.0)
 	RetransCriticalThreshold float64 `yaml:"retrans_critical_threshold"`  // critical retransmission % (default: 5.0)
-	AsymmetryThreshold       float64 `yaml:"asymmetry_threshold"`         // traffic ratio imbalance to trigger advisory (default: 10.0)
-	MOSWarningThreshold      float64 `yaml:"mos_warning_threshold"`       // MOS below this triggers warning (default: 3.5)
-	MOSCriticalThreshold     float64 `yaml:"mos_critical_threshold"`      // MOS below this triggers critical (default: 3.0)
-	TopTalkerPercent         float64 `yaml:"top_talker_percent"`          // bandwidth % above which top talker triggers advisory (default: 25)
-	WebhookURL               string  `yaml:"webhook_url"`                 // URL to POST advisories as JSON (optional, disabled when empty)
+	AsymmetryThreshold       float64       `yaml:"asymmetry_threshold"`         // traffic ratio imbalance to trigger advisory (default: 10.0)
+	MOSWarningThreshold      float64       `yaml:"mos_warning_threshold"`       // MOS below this triggers warning (default: 3.5)
+	MOSCriticalThreshold     float64       `yaml:"mos_critical_threshold"`      // MOS below this triggers critical (default: 3.0)
+	TopTalkerPercent         float64       `yaml:"top_talker_percent"`          // bandwidth % above which top talker triggers advisory (default: 25)
+	LongConnectionThreshold  time.Duration `yaml:"long_connection_threshold"`   // flow duration above this triggers advisory (default: 1h)
+	WebhookURL               string        `yaml:"webhook_url"`                 // URL to POST advisories as JSON (optional, disabled when empty)
 }
 
 // WebConfig holds settings for the web server.
@@ -115,6 +116,7 @@ func Defaults() Config {
 			MOSWarningThreshold:      3.5,
 			MOSCriticalThreshold:     3.0,
 			TopTalkerPercent:         25,
+			LongConnectionThreshold:  1 * time.Hour,
 		},
 		Web: WebConfig{
 			Listen:   ":8080",

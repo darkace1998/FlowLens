@@ -15,5 +15,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | New Talker Detector | Identifies newly active hosts |
 | Port Concentration | Flags many sources converging on one destination port |
 | VoIP Quality | Estimates MOS-like quality for voice/video sessions |
+| Long Connection Detector | Flags TCP/UDP connections exceeding a configured duration |
 
 Use `analysis.webhook_url` to forward advisories to external systems.

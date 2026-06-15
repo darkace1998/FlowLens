@@ -145,6 +145,7 @@ func main() {
 		analysis.UnreachableDetector{},
 		analysis.NewTalkerDetector{},
 		analysis.VoIPQualityDetector{},
+		analysis.LongConnectionDetector{},
 	)
 	engine.Start()
 
