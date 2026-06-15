@@ -1405,28 +1405,19 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 		}
 	}
 
+	// Cache geo lookups to avoid redundant calls
+	geoCache := make(map[string]geo.Info)
+
 	markers := make([]MapMarker, 0, len(hostBytes))
 	for ipKey, bytes := range hostBytes {
 		if s.geoLookup == nil {
 			continue
 		}
-
-		var ip string
-		empty := true
-		for _, b := range ipKey {
-			if b != 0 {
-				empty = false
-				break
-			}
+		info, ok := geoCache[ip]
+		if !ok {
+			info = s.geoLookup.Find(ip)
+			geoCache[ip] = info
 		}
-
-		if empty {
-			ip = "0.0.0.0"
-		} else {
-			ip = net.IP(ipKey[:]).String()
-		}
-
-		info := s.geoLookup.Find(ip)
 		if info.Country == "" || info.Country == "LAN" || (info.Latitude == 0 && info.Longitude == 0) {
 			continue
 		}
