@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -104,4 +105,11 @@ func ParseLevel(s string) Level {
 	default:
 		return INFO
 	}
+}
+
+// SetOutput allows changing the destination of log output.
+func (l *Logger) SetOutput(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.inner.SetOutput(w)
 }
