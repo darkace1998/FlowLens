@@ -41,9 +41,9 @@ func (LongConnectionDetector) Analyze(store storage.Storage, cfg config.Analysis
 	}
 
 	type flowStats struct {
-		duration    time.Duration
-		bytes       uint64
-		packets     uint64
+		duration time.Duration
+		bytes    uint64
+		packets  uint64
 	}
 
 	longest := make(map[flowKey]*flowStats)
