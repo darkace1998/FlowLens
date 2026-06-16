@@ -171,3 +171,10 @@ func TestScanDetector_Analyze_ErrorCases(t *testing.T) {
 		}
 	})
 }
+
+func TestScanDetector_StorageError_ExplicitNil(t *testing.T) {
+	advisories := ScanDetector{}.Analyze(mockErrorStorage{}, defaultCfg())
+	if len(advisories) != 0 {
+		t.Errorf("expected 0 advisories on storage error, got %d", len(advisories))
+	}
+}
