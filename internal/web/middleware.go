@@ -75,3 +75,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		logging.Default().Error("healthz JSON encode error: %v", err)
 	}
 }
+
+// handlePing returns a 200 OK with a "pong" body.
+func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("pong"))
+}

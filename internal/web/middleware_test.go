@@ -91,3 +91,44 @@ func TestStatusRecorder(t *testing.T) {
 		t.Errorf("underlying ResponseWriter code = %d, want %d", w.Code, http.StatusNotFound)
 	}
 }
+
+// TestPing verifies the /ping endpoint returns a 200 OK with "pong" body.
+func TestPing(t *testing.T) {
+	s, _ := newTestServer(t)
+
+	req := httptest.NewRequest("GET", "/ping", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	body := strings.TrimSpace(w.Body.String())
+	if body != "pong" {
+		t.Errorf("body = %q, want 'pong'", body)
+	}
+}
+
+// TestPingAuthExempt verifies the /ping endpoint is exempt from basic auth.
+func TestPingAuthExempt(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
+
+	// Wrap the mux with authentication that requires credentials.
+	authed := basicAuth(mux, "admin", "secret")
+
+	// Wrap the authed handler with the exemption.
+	handler := exemptHealthz(authed, mux)
+
+	req := httptest.NewRequest("GET", "/ping", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("/ping was blocked by auth, status = %d, want %d", w.Code, http.StatusOK)
+	}
+}

@@ -172,13 +172,13 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 
 // --- Health-check bypass middleware ---
 
-// exemptHealthz routes /healthz requests directly to the mux, bypassing
+// exemptHealthz routes /healthz and /ping requests directly to the mux, bypassing
 // the wrapped handler chain (which includes Basic Auth). This ensures
 // Docker HEALTHCHECK and Kubernetes probes remain functional when
 // authentication is enabled.
 func exemptHealthz(authed http.Handler, mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
+		if r.URL.Path == "/healthz" || r.URL.Path == "/ping" {
 			mux.ServeHTTP(w, r)
 			return
 		}
