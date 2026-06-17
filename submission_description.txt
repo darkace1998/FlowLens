@@ -1,4 +1,0 @@
-What: Updated `docs/configuration.md` and `docs/api.md` with missing fields and endpoints.
-Why: Ensure documentation accurately aligns with internal implementations. The configuration documentation missed parameters from `internal/config/config.go` (like capture metrics and interfaces arrays) and API documentation missed the `GET /ping` route from `internal/web/server_test.go`.
-How: Used a python script to regenerate and format the markdown files appropriately based on internal data structures.
-Testing/Verification: Viewed generated content with `cat` to ensure correctness, ran `go test ./...` to guarantee no breakage in behavior, and verified there were no format errors via `go vet ./...`.
