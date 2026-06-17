@@ -1,5 +1,0 @@
-🔒 Fix CSRF Token Map Denial of Service
-
-🎯 What: Refactored the CSRF token mechanism to use stateless, HMAC-signed tokens instead of a stateful map of generated tokens.
-⚠️ Risk: The previous implementation used a map bounded to 1000 items to store generated CSRF tokens. An attacker could flood the server with page requests (which generated tokens), overflowing the map and causing valid tokens of legitimate users to be evicted. This resulted in a denial of service (DoS) for form submissions.
-🛡️ Solution: Implemented stateless CSRF tokens containing an expiration timestamp and a random nonce, signed with HMAC-SHA256. The server now only tracks *used* tokens to enforce the single-use property. The used map is bounded naturally by periodic removal of expired tokens, and an arbitrary 100,000 item limit is maintained in case of an extreme valid-token flooding scenario. Since adding to the 'used' map requires a valid form submission (not just a page load), this eliminates the cheap DoS vector while retaining CSRF protection.

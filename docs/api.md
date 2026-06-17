@@ -55,3 +55,7 @@ Example response:
   "uptime": "2h15m30s"
 }
 ```
+
+### `GET /ping`
+
+Simple ping endpoint to check if the server is running. Returns `pong`.
