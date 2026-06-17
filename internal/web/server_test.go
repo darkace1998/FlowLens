@@ -87,11 +87,6 @@ func TestServer_StartStop(t *testing.T) {
 	ringBuf := storage.NewRingBuffer(100)
 	s := NewServer(cfg, ringBuf, nil, "", nil, nil, nil, nil)
 
-	s.Mux().HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
-
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- s.Start()
@@ -149,11 +144,6 @@ func TestServer_StartStopTLS(t *testing.T) {
 	}
 	ringBuf := storage.NewRingBuffer(100)
 	s := NewServer(cfg, ringBuf, nil, "", nil, nil, nil, nil)
-
-	s.Mux().HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
 
 	errCh := make(chan error, 1)
 	go func() {

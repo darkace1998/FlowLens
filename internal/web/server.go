@@ -126,6 +126,7 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/exporters", s.handleExporters)
 	s.mux.HandleFunc("/pcap/import", s.handlePcapImport)
 	s.mux.HandleFunc("/healthz", s.handleHealthz)
+	s.mux.HandleFunc("/ping", s.handlePing)
 
 	// JSON API endpoints.
 	s.mux.HandleFunc("/api/flows", s.handleAPIFlows)
