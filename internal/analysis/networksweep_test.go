@@ -19,7 +19,7 @@ func TestNetworkSweepDetector_Empty(t *testing.T) {
 func TestNetworkSweepDetector_NormalTraffic(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 	// Same source, connecting to 10 unique targets (below threshold of 250)
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 10)
 	for i := 0; i < 10; i++ {
 		dstIP := fmt.Sprintf("192.168.1.%d", i+1)
 		flows = append(flows, makeTestFlow("10.0.0.1", dstIP, 12345, 80, 6, 100, 1))
@@ -38,7 +38,7 @@ func TestNetworkSweepDetector_WarningThreshold(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.SweepThreshold = 100 // Set lower for easier testing
 
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 120)
 	// Source connects to 120 unique IPs (>= 100 but < 500)
 	for i := 0; i < 120; i++ {
 		dstIP := fmt.Sprintf("192.168.1.%d", i+1) // Simplified, actual IP generation would wrap > 255 but string works
@@ -64,7 +64,7 @@ func TestNetworkSweepDetector_CriticalThreshold(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.SweepThreshold = 20
 
-	var flows []model.Flow
+	flows := make([]model.Flow, 0, 110)
 	// Source connects to 110 unique IPs (>= 5 * 20 = 100)
 	for i := 0; i < 110; i++ {
 		dstIP := fmt.Sprintf("10.0.0.%d", i+1)
