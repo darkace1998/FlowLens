@@ -151,6 +151,7 @@ func main() {
 		analysis.VoIPQualityDetector{},
 		analysis.LongConnectionDetector{},
 		analysis.AmplificationDetector{},
+		analysis.NetworkSweepDetector{},
 	)
 	engine.Start()
 
