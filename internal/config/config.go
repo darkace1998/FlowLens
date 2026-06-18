@@ -54,6 +54,7 @@ type AnalysisConfig struct {
 	TopTalkersCount       int           `yaml:"top_talkers_count"`
 	AnomalyBaselineWindow time.Duration `yaml:"anomaly_baseline_window"`
 	ScanThreshold         int           `yaml:"scan_threshold"`
+	SweepThreshold        int           `yaml:"sweep_threshold"` // threshold for distinct target IPs in a network sweep
 	QueryWindow           time.Duration `yaml:"query_window"` // analysis query window (defaults to ring_buffer_duration)
 
 	DNSRateThreshold         float64 `yaml:"dns_rate_threshold"`          // DNS flows/min to trigger advisory (default: 100)
@@ -108,6 +109,7 @@ func Defaults() Config {
 			TopTalkersCount:          10,
 			AnomalyBaselineWindow:    7 * 24 * time.Hour,
 			ScanThreshold:            500,
+			SweepThreshold:           250,
 			DNSRateThreshold:         100,
 			DNSRatioThreshold:        30,
 			RetransRateThreshold:     1.0,

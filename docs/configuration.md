@@ -23,6 +23,7 @@ FlowLens is configured through YAML. Start from `configs/flowlens.yaml`.
 | `analysis` | `top_talkers_count` | `10` | Top talkers tracked |
 | `analysis` | `anomaly_baseline_window` | `168h` | Baseline window for anomaly detection |
 | `analysis` | `scan_threshold` | `500` | Unique ports in window to flag scan behavior |
+| `analysis` | `sweep_threshold` | `250` | Unique target IPs in window to flag network sweep behavior |
 | `analysis` | `query_window` | _(varies)_ | Analysis query window (defaults to `ring_buffer_duration`) |
 | `analysis` | `dns_rate_threshold` | `100` | DNS flows/min to trigger advisory |
 | `analysis` | `dns_ratio_threshold` | `30` | DNS flow percentage to trigger advisory |
@@ -87,6 +88,7 @@ analysis:
   top_talkers_count: 10
   anomaly_baseline_window: 168h
   scan_threshold: 500
+  sweep_threshold: 250
   dns_rate_threshold: 100
   dns_ratio_threshold: 30
   retrans_rate_threshold: 1.0
