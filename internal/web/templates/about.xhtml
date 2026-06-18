@@ -44,22 +44,61 @@
 
 <h2>Configuration</h2>
 <div class="panel">
+  <h3>Collector Settings</h3>
   <table>
     <tbody>
       <tr><th>Setting</th><th>Value</th></tr>
       <tr><td>NetFlow Port</td><td>{{.NetFlowPort}}</td></tr>
       <tr><td>IPFIX Port</td><td>{{.IPFIXPort}}</td></tr>
+      <tr><td>sFlow Port</td><td>{{.SFlowPort}}</td></tr>
       <tr><td>UDP Buffer Size</td><td>{{.BufferSize}} bytes</td></tr>
+      <tr><td>Rate Limit</td><td>{{if .RateLimit}}{{.RateLimit}} packets/sec{{else}}unlimited{{end}}</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Storage Settings</h3>
+  <table>
+    <tbody>
+      <tr><th>Setting</th><th>Value</th></tr>
       <tr><td>Ring Buffer Duration</td><td>{{.RingBufferDur}}</td></tr>
+      <tr><td>Ring Buffer Capacity</td><td>{{.RingBufferCapacity}} flows</td></tr>
       <tr><td>SQLite Path</td><td>{{.SQLitePath}}</td></tr>
       <tr><td>SQLite Retention</td><td>{{.SQLiteRetention}}</td></tr>
       <tr><td>Prune Interval</td><td>{{.PruneInterval}}</td></tr>
+      <tr><td>GeoIP Path</td><td>{{if .GeoIPPath}}{{.GeoIPPath}}{{else}}not configured{{end}}</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Analysis Settings</h3>
+  <table>
+    <tbody>
+      <tr><th>Setting</th><th>Value</th></tr>
       <tr><td>Analysis Interval</td><td>{{.AnalysisInterval}}</td></tr>
+      <tr><td>Query Window</td><td>{{.QueryWindow}}</td></tr>
       <tr><td>Top Talkers Count</td><td>{{.TopTalkersCount}}</td></tr>
       <tr><td>Anomaly Baseline Window</td><td>{{.BaselineWindow}}</td></tr>
       <tr><td>Scan Threshold</td><td>{{.ScanThreshold}} unique ports</td></tr>
-      <tr><td>Web Listen</td><td>{{.WebListen}}</td></tr>
-      <tr><td>Page Size</td><td>{{.PageSize}}</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Web Settings</h3>
+  <table>
+    <tbody>
+      <tr><th>Setting</th><th>Value</th></tr>
+      <tr><td>Listen Address</td><td>{{.WebListen}}</td></tr>
+      <tr><td>Page Size</td><td>{{.PageSize}} rows</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Capture Settings</h3>
+  <table>
+    <tbody>
+      <tr><th>Setting</th><th>Value</th></tr>
+      <tr><td>Interfaces</td><td>{{if .CaptureInterfaces}}{{range $i, $iface := .CaptureInterfaces}}{{if $i}}, {{end}}{{$iface}}{{end}}{{else}}none{{end}}</td></tr>
+      <tr><td>Snap Length</td><td>{{.CaptureSnapLen}} bytes</td></tr>
+      <tr><td>PCAP Directory</td><td>{{.CaptureDir}}</td></tr>
+      <tr><td>Max File Size</td><td>{{.CaptureMaxSizeMB}} MB</td></tr>
+      <tr><td>Max Files</td><td>{{.CaptureMaxFiles}}</td></tr>
     </tbody>
   </table>
 </div>

@@ -1682,18 +1682,29 @@ type AboutPageData struct {
 	// Config values
 	NetFlowPort      int
 	IPFIXPort        int
+	SFlowPort        int
 	BufferSize       int
+	RateLimit        int
 	RingBufferDur    string
+	RingBufferCapacity int
 	SQLitePath       string
 	SQLiteRetention  string
 	PruneInterval    string
+	GeoIPPath        string
 	AnalysisInterval string
 	TopTalkersCount  int
 	BaselineWindow   string
 	ScanThreshold    int
+	QueryWindow     string
 	WebListen        string
 	PageSize         int
 	FlowCount        int
+	// Capture config
+	CaptureInterfaces []string
+	CaptureSnapLen    int
+	CaptureDir        string
+	CaptureMaxSizeMB  int
+	CaptureMaxFiles   int
 }
 
 func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
@@ -1712,20 +1723,30 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		MemSysMB:      float64(memStats.Sys) / 1024 / 1024,
 		NumCPU:        runtime.NumCPU(),
 
-		NetFlowPort:      s.fullCfg.Collector.NetFlowPort,
-		IPFIXPort:        s.fullCfg.Collector.IPFIXPort,
-		BufferSize:       s.fullCfg.Collector.BufferSize,
-		RingBufferDur:    s.fullCfg.Storage.RingBufferDuration.String(),
-		SQLitePath:       s.fullCfg.Storage.SQLitePath,
-		SQLiteRetention:  s.fullCfg.Storage.SQLiteRetention.String(),
-		PruneInterval:    s.fullCfg.Storage.PruneInterval.String(),
-		AnalysisInterval: s.fullCfg.Analysis.Interval.String(),
-		TopTalkersCount:  s.fullCfg.Analysis.TopTalkersCount,
-		BaselineWindow:   s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
-		ScanThreshold:    s.fullCfg.Analysis.ScanThreshold,
-		WebListen:        s.fullCfg.Web.Listen,
-		PageSize:         s.fullCfg.Web.PageSize,
-		FlowCount:        s.flowSvc.FlowCount(),
+		NetFlowPort:        s.fullCfg.Collector.NetFlowPort,
+		IPFIXPort:          s.fullCfg.Collector.IPFIXPort,
+		SFlowPort:          s.fullCfg.Collector.SFlowPort,
+		BufferSize:         s.fullCfg.Collector.BufferSize,
+		RateLimit:          s.fullCfg.Collector.RateLimit,
+		RingBufferDur:      s.fullCfg.Storage.RingBufferDuration.String(),
+		RingBufferCapacity: s.fullCfg.Storage.RingBufferCapacity,
+		SQLitePath:         s.fullCfg.Storage.SQLitePath,
+		SQLiteRetention:    s.fullCfg.Storage.SQLiteRetention.String(),
+		PruneInterval:      s.fullCfg.Storage.PruneInterval.String(),
+		GeoIPPath:          s.fullCfg.Storage.GeoIPPath,
+		AnalysisInterval:   s.fullCfg.Analysis.Interval.String(),
+		TopTalkersCount:    s.fullCfg.Analysis.TopTalkersCount,
+		BaselineWindow:     s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
+		ScanThreshold:      s.fullCfg.Analysis.ScanThreshold,
+		QueryWindow:       s.fullCfg.Analysis.QueryWindow.String(),
+		WebListen:          s.fullCfg.Web.Listen,
+		PageSize:           s.fullCfg.Web.PageSize,
+		FlowCount:          s.flowSvc.FlowCount(),
+		CaptureInterfaces:  s.fullCfg.Capture.Interfaces,
+		CaptureSnapLen:      s.fullCfg.Capture.SnapLen,
+		CaptureDir:          s.fullCfg.Capture.Dir,
+		CaptureMaxSizeMB:    s.fullCfg.Capture.MaxSizeMB,
+		CaptureMaxFiles:     s.fullCfg.Capture.MaxFiles,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
