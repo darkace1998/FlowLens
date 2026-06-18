@@ -1614,15 +1614,15 @@ func (s *Server) handleReportsExport(w http.ResponseWriter, r *http.Request) {
 	case "json":
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.json")
-		fmt.Fprint(w, "[")
+		_, _ = fmt.Fprint(w, "[") // nolint:errcheck // error ignored when writing to HTTP response
 		for i, row := range rows {
 			if i > 0 {
-				fmt.Fprint(w, ",")
+				_, _ = fmt.Fprint(w, ",") // nolint:errcheck // error ignored when writing to HTTP response
 			}
-			fmt.Fprintf(w, `{"group":%q,"bytes":%d,"packets":%d,"flows":%d,"avg_bytes":%.1f}`,
+			_, _ = fmt.Fprintf(w, `{"group":%q,"bytes":%d,"packets":%d,"flows":%d,"avg_bytes":%.1f}`, // nolint:errcheck // error ignored when writing to HTTP response
 				row.GroupKey, row.TotalBytes, row.TotalPackets, row.FlowCount, row.AvgBytes)
 		}
-		fmt.Fprint(w, "]")
+		_, _ = fmt.Fprint(w, "]") // nolint:errcheck // error ignored when writing to HTTP response
 	default: // CSV
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", "attachment; filename=flowlens-report.csv")
@@ -1872,7 +1872,7 @@ func (s *Server) handleCaptureDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
-	defer f.Close()
+	defer f.Close() // nolint:errcheck // error ignored on cleanup
 
 	stat, err := f.Stat()
 	if err != nil || stat.IsDir() {
@@ -2390,19 +2390,19 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		if part.FormName() == "csrf_token" {
 			tokenBytes, _ := io.ReadAll(io.LimitReader(part, 256))
 			csrfValid = s.csrf.valid(string(tokenBytes))
-			part.Close()
+			_ = part.Close() // nolint:errcheck // error ignored on multipart cleanup
 			continue
 		}
 		if part.FormName() == "pcap" {
 			pcapReader = part
 			break
 		}
-		part.Close()
+		_ = part.Close() // nolint:errcheck // error ignored on multipart cleanup
 	}
 
 	if !csrfValid {
 		if pcapReader != nil {
-			pcapReader.Close()
+			_ = pcapReader.Close() // nolint:errcheck // error ignored on cleanup
 		}
 		http.Error(w, "Forbidden — invalid or missing CSRF token", http.StatusForbidden)
 		return
@@ -2412,7 +2412,7 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing pcap file", http.StatusBadRequest)
 		return
 	}
-	defer pcapReader.Close()
+	defer pcapReader.Close() // nolint:errcheck // error ignored on cleanup
 
 	flows, err := capture.ReadPcapFlows(pcapReader)
 	if err != nil {

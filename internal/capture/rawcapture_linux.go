@@ -27,13 +27,13 @@ func runRawCapture(device string, snapLen int, handler func(data []byte, ts time
 		Ifindex:  iface.Index,
 	}
 	if err := syscall.Bind(fd, &addr); err != nil {
-		syscall.Close(fd)
+		_ = syscall.Close(fd) // nolint:errcheck // error ignored in cleanup path
 		return fmt.Errorf("capture: bind to %s: %w", device, err)
 	}
 
 	tv := syscall.Timeval{Sec: 1, Usec: 0}
 	if err := syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv); err != nil {
-		syscall.Close(fd)
+		_ = syscall.Close(fd) // nolint:errcheck // error ignored in cleanup path
 		return fmt.Errorf("capture: set timeout: %w", err)
 	}
 
@@ -43,7 +43,7 @@ func runRawCapture(device string, snapLen int, handler func(data []byte, ts time
 	for {
 		select {
 		case <-stopCh:
-			syscall.Close(fd)
+			_ = syscall.Close(fd) // nolint:errcheck // error ignored on cleanup
 			logger().Info("Raw capture stopped on %s", device)
 			return nil
 		default:

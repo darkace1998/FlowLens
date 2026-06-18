@@ -73,7 +73,7 @@ func (c *Collector) Start() error {
 			// Close any already-opened connections on failure.
 			c.mu.Lock()
 			for _, prev := range c.conns {
-				prev.Close()
+				_ = prev.Close() // nolint:errcheck // error ignored in cleanup path
 			}
 			c.conns = nil
 			c.mu.Unlock()
@@ -261,10 +261,10 @@ func (c *Collector) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, conn := range c.conns {
-		conn.Close()
+		_ = conn.Close() // nolint:errcheck // error ignored on shutdown
 	}
 	for _, conn := range c.sflowConns {
-		conn.Close()
+		_ = conn.Close() // nolint:errcheck // error ignored on shutdown
 	}
 }
 

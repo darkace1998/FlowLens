@@ -46,7 +46,7 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 
 	// Enable WAL mode for concurrent reads during writes.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
+		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
 		return nil, fmt.Errorf("setting WAL mode: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		ether_type      INTEGER NOT NULL DEFAULT 0
 	)`
 	if _, err := db.Exec(createSQL); err != nil {
-		db.Close()
+		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
 		return nil, fmt.Errorf("creating flows table: %w", err)
 	}
 
@@ -144,7 +144,7 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {
-		db.Close()
+		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
 		return nil, fmt.Errorf("creating timestamp index: %w", err)
 	}
 
@@ -184,7 +184,7 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 		_ = tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
 	}
-	defer stmt.Close()
+	defer stmt.Close() // nolint:errcheck // error ignored, statement will be closed when context is done
 
 	for _, f := range flows {
 		_, err := stmt.Exec(
@@ -250,7 +250,7 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query recent: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() // nolint:errcheck // error ignored, rows will be closed when done
 
 	var flows []model.Flow //nolint:prealloc // row count unknown until iteration
 	for rows.Next() {
@@ -379,7 +379,7 @@ func (s *SQLiteStore) QueryReport(start, end time.Time, groupBy string) ([]Repor
 	if err != nil {
 		return nil, fmt.Errorf("report query: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() // nolint:errcheck // error ignored, rows will be closed when done
 
 	var results []ReportRow //nolint:prealloc // row count unknown before iteration
 	for rows.Next() {
@@ -414,7 +414,7 @@ func (s *SQLiteStore) QueryTimeSeries(start, end time.Time, bucketSec int) ([]Ti
 	if err != nil {
 		return nil, fmt.Errorf("timeseries query: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() // nolint:errcheck // error ignored, rows will be closed when done
 
 	var points []TimeSeriesPoint //nolint:prealloc // row count unknown before iteration
 	for rows.Next() {

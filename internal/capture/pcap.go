@@ -69,7 +69,7 @@ func (pw *PcapWriter) openNewFile() error {
 		return ErrPcapWriterClosed
 	}
 	if pw.file != nil {
-		pw.file.Close()
+		_ = pw.file.Close() // nolint:errcheck // error ignored on rotation
 	}
 
 	ts := time.Now().Format("20060102-150405")
@@ -83,8 +83,8 @@ func (pw *PcapWriter) openNewFile() error {
 
 	// Write PCAP global header (24 bytes).
 	if err := pw.writeGlobalHeader(f); err != nil {
-		f.Close()
-		os.Remove(path)
+		_ = f.Close()          // nolint:errcheck // error ignored in cleanup path
+		_ = os.Remove(path)    // nolint:errcheck // error ignored in cleanup path
 		return err
 	}
 
@@ -198,7 +198,7 @@ func (pw *PcapWriter) pruneOldFiles() {
 	// Remove excess files (oldest).
 	toRemove := len(files) - pw.maxFiles
 	for i := 0; i < toRemove; i++ {
-		os.Remove(files[i])
+		_ = os.Remove(files[i]) // nolint:errcheck // error ignored, best effort cleanup
 	}
 }
 

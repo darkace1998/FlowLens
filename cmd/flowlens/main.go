@@ -54,7 +54,11 @@ func main() {
 		log.Error("Failed to open SQLite store: %v", err)
 		os.Exit(1)
 	}
-	defer sqlStore.Close()
+	defer func() {
+		if err := sqlStore.Close(); err != nil {
+			log.Error("Failed to close SQLite store: %v", err)
+		}
+	}()
 
 	// Flow handler: fan-out to both storage backends.
 	// Use a WaitGroup to track in-flight handler calls for clean shutdown.

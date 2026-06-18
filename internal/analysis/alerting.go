@@ -58,7 +58,11 @@ func sendWebhook(url string, advisories []Advisory) {
 		logging.Default().Warn("Webhook: POST to %s failed: %v", url, err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logging.Default().Warn("Webhook: failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
 		logging.Default().Warn("Webhook: POST to %s returned status %d", url, resp.StatusCode)

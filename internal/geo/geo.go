@@ -57,7 +57,7 @@ func (l *Lookup) LoadCSV(path string) error {
 	if err != nil {
 		return fmt.Errorf("open geoip csv: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() // nolint:errcheck // error ignored, file was just opened
 
 	r := csv.NewReader(f)
 	r.FieldsPerRecord = -1 // variable fields
