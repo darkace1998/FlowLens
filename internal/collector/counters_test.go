@@ -125,7 +125,7 @@ func TestNewCounterStore(t *testing.T) {
 		t.Errorf("maxAge = %v, want %v", cs.maxAge, expectedMaxAge)
 	}
 
-	if cs.counters != nil && len(cs.counters) > 0 {
+	if len(cs.counters) > 0 {
 		t.Errorf("counters initialized with length %d, want 0 or nil", len(cs.counters))
 	}
 }
