@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/darkace1998/FlowLens/internal/analysis"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 func TestFormatBytes(t *testing.T) {
@@ -20,9 +22,9 @@ func TestFormatBytes(t *testing.T) {
 		{1073741824, "1.0 GB"},
 	}
 	for _, tt := range tests {
-		got := formatBytes(tt.input)
+		got := util.FormatBytes(tt.input)
 		if got != tt.want {
-			t.Errorf("formatBytes(%d) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("util.FormatBytes(%d) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -44,9 +46,9 @@ func TestFormatPkts(t *testing.T) {
 		{86805636224700000, "86805.6T"},
 	}
 	for _, tt := range tests {
-		got := formatPkts(tt.input)
+		got := util.FormatCount(tt.input)
 		if got != tt.want {
-			t.Errorf("formatPkts(%d) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("util.FormatCount(%d) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

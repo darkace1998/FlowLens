@@ -8,6 +8,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // AnomalyDetector compares recent traffic volume against a baseline window
@@ -128,10 +130,10 @@ func (AnomalyDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig)
 				Description: fmt.Sprintf(
 					"Current interval: %s bytes (%.1fσ above baseline mean of %s). "+
 						"Baseline stddev: %s over %d samples.",
-					formatBytesShort(currentBytes),
+					util.FormatBytes(currentBytes),
 					deviations,
-					formatBytesShort(uint64(meanBytes)),
-					formatBytesShort(uint64(stddevBytes)),
+					util.FormatBytes(uint64(meanBytes)),
+					util.FormatBytes(uint64(stddevBytes)),
 					nonEmptyBuckets,
 				),
 				Action: spikeAction(sev),
@@ -153,9 +155,9 @@ func (AnomalyDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig)
 				Description: fmt.Sprintf(
 					"Current interval: %s bytes (%.0f%% below baseline mean of %s). "+
 						"Possible link failure or upstream issue.",
-					formatBytesShort(currentBytes),
+					util.FormatBytes(currentBytes),
 					pctDrop,
-					formatBytesShort(uint64(meanBytes)),
+					util.FormatBytes(uint64(meanBytes)),
 				),
 				Action: dropAction(sev),
 			})

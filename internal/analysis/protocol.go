@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // ProtocolDistribution analyzes flow data to identify the distribution of
@@ -74,7 +76,7 @@ func (ProtocolDistribution) Analyze(store storage.Storage, cfg config.AnalysisCo
 				Title:     fmt.Sprintf("Protocol: %s (%.1f%%)", e.Name, pct),
 				Description: fmt.Sprintf(
 					"%s accounts for %.1f%% of traffic (%s bytes, %s packets).",
-					e.Name, pct, formatBytesShort(e.Bytes), formatCountShort(e.Packets),
+					e.Name, pct, util.FormatBytes(e.Bytes), util.FormatCount(e.Packets),
 				),
 				Action: actionForProtocol(sev, e.Name, pct),
 			})

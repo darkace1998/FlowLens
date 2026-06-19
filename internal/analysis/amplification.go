@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // AmplificationDetector identifies potential DDoS reflection/amplification
@@ -129,7 +131,7 @@ func (AmplificationDetector) Analyze(store storage.Storage, cfg config.AnalysisC
 			Description: fmt.Sprintf(
 				"%s received %s (%s packets) of %s UDP traffic (port %d) from %d unique sources. "+
 					"This strongly indicates a reflection/amplification DDoS attack.",
-				r.tk.dstIP, formatBytesShort(r.stats.bytes), formatCountShort(r.stats.packets),
+				r.tk.dstIP, util.FormatBytes(r.stats.bytes), util.FormatCount(r.stats.packets),
 				r.service, r.tk.srcPort, len(r.stats.sources),
 			),
 			Action: amplificationAction(sev),

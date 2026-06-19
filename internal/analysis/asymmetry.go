@@ -10,6 +10,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // FlowAsymmetry analyzes flow data to detect asymmetric routing patterns.
@@ -170,8 +172,8 @@ func (FlowAsymmetry) Analyze(store storage.Storage, cfg config.AnalysisConfig) [
 				"Traffic ratio %s. %s: %s, %s: %s. "+
 					"May indicate asymmetric routing, data exfiltration, or backup traffic.",
 				ratioStr,
-				r.largeDir, formatBytesShort(r.larger),
-				r.smallDir, formatBytesShort(r.smaller),
+				r.largeDir, util.FormatBytes(r.larger),
+				r.smallDir, util.FormatBytes(r.smaller),
 			),
 			Action: asymmetryAction(sev),
 		})

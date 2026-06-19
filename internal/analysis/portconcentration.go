@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // PortConcentrationDetector identifies destination ports being hit by many
@@ -103,7 +105,7 @@ func (PortConcentrationDetector) Analyze(store storage.Storage, cfg config.Analy
 				"%d unique sources connecting to %s:%d (%s bytes, %s packets). "+
 					"May indicate service overload, brute-force, or DDoS.",
 				r.sources, r.pk.dstIP, r.pk.dstPort,
-				formatBytesShort(r.bytes), formatCountShort(r.packets),
+				util.FormatBytes(r.bytes), util.FormatCount(r.packets),
 			),
 			Action: portConcentrationAction(sev),
 		})

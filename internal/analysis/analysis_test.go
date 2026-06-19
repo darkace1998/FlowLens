@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 func makeFlow(src, dst string, srcPort, dstPort uint16, proto uint8, bytes, pkts uint64) model.Flow {
@@ -202,9 +204,9 @@ func TestFormatBytesShort(t *testing.T) {
 		{1048576, "1.0 MB"},
 	}
 	for _, tt := range tests {
-		got := formatBytesShort(tt.input)
+		got := util.FormatBytes(tt.input)
 		if got != tt.want {
-			t.Errorf("formatBytesShort(%d) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("util.FormatBytes(%d) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -219,9 +221,9 @@ func TestFormatCountShort(t *testing.T) {
 		{1500000, "1.5M"},
 	}
 	for _, tt := range tests {
-		got := formatCountShort(tt.input)
+		got := util.FormatCount(tt.input)
 		if got != tt.want {
-			t.Errorf("formatCountShort(%d) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("util.FormatCount(%d) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
