@@ -112,3 +112,20 @@ func TestCounterStore_Empty(t *testing.T) {
 		t.Errorf("Recent() = %d, want 0", len(recent))
 	}
 }
+
+func TestNewCounterStore(t *testing.T) {
+	expectedMaxAge := 15 * time.Minute
+	cs := NewCounterStore(expectedMaxAge)
+
+	if cs == nil {
+		t.Fatal("NewCounterStore returned nil")
+	}
+
+	if cs.maxAge != expectedMaxAge {
+		t.Errorf("maxAge = %v, want %v", cs.maxAge, expectedMaxAge)
+	}
+
+	if cs.counters != nil && len(cs.counters) > 0 {
+		t.Errorf("counters initialized with length %d, want 0 or nil", len(cs.counters))
+	}
+}
