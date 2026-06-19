@@ -46,6 +46,58 @@ func TestDefaults(t *testing.T) {
 	if cfg.Web.PageSize != 50 {
 		t.Errorf("expected PageSize 50, got %d", cfg.Web.PageSize)
 	}
+
+	if cfg.Collector.SFlowPort != 6343 {
+		t.Errorf("expected SFlowPort 6343, got %d", cfg.Collector.SFlowPort)
+	}
+	if cfg.Storage.RingBufferCapacity != 10000 {
+		t.Errorf("expected RingBufferCapacity 10000, got %d", cfg.Storage.RingBufferCapacity)
+	}
+	if cfg.Analysis.AnomalyBaselineWindow != 7*24*time.Hour {
+		t.Errorf("expected AnomalyBaselineWindow 168h, got %s", cfg.Analysis.AnomalyBaselineWindow)
+	}
+	if cfg.Analysis.SweepThreshold != 250 {
+		t.Errorf("expected SweepThreshold 250, got %d", cfg.Analysis.SweepThreshold)
+	}
+	if cfg.Analysis.DNSRateThreshold != 100 {
+		t.Errorf("expected DNSRateThreshold 100, got %f", cfg.Analysis.DNSRateThreshold)
+	}
+	if cfg.Analysis.DNSRatioThreshold != 30 {
+		t.Errorf("expected DNSRatioThreshold 30, got %f", cfg.Analysis.DNSRatioThreshold)
+	}
+	if cfg.Analysis.RetransRateThreshold != 1.0 {
+		t.Errorf("expected RetransRateThreshold 1.0, got %f", cfg.Analysis.RetransRateThreshold)
+	}
+	if cfg.Analysis.RetransCriticalThreshold != 5.0 {
+		t.Errorf("expected RetransCriticalThreshold 5.0, got %f", cfg.Analysis.RetransCriticalThreshold)
+	}
+	if cfg.Analysis.AsymmetryThreshold != 10.0 {
+		t.Errorf("expected AsymmetryThreshold 10.0, got %f", cfg.Analysis.AsymmetryThreshold)
+	}
+	if cfg.Analysis.MOSWarningThreshold != 3.5 {
+		t.Errorf("expected MOSWarningThreshold 3.5, got %f", cfg.Analysis.MOSWarningThreshold)
+	}
+	if cfg.Analysis.MOSCriticalThreshold != 3.0 {
+		t.Errorf("expected MOSCriticalThreshold 3.0, got %f", cfg.Analysis.MOSCriticalThreshold)
+	}
+	if cfg.Analysis.TopTalkerPercent != 25 {
+		t.Errorf("expected TopTalkerPercent 25, got %f", cfg.Analysis.TopTalkerPercent)
+	}
+	if cfg.Analysis.LongConnectionThreshold != 1*time.Hour {
+		t.Errorf("expected LongConnectionThreshold 1h, got %s", cfg.Analysis.LongConnectionThreshold)
+	}
+	if cfg.Capture.SnapLen != 65535 {
+		t.Errorf("expected SnapLen 65535, got %d", cfg.Capture.SnapLen)
+	}
+	if cfg.Capture.Dir != "./captures" {
+		t.Errorf("expected Dir ./captures, got %s", cfg.Capture.Dir)
+	}
+	if cfg.Capture.MaxSizeMB != 100 {
+		t.Errorf("expected MaxSizeMB 100, got %d", cfg.Capture.MaxSizeMB)
+	}
+	if cfg.Capture.MaxFiles != 10 {
+		t.Errorf("expected MaxFiles 10, got %d", cfg.Capture.MaxFiles)
+	}
 }
 
 func TestLoad(t *testing.T) {
