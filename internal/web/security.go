@@ -15,14 +15,16 @@ import (
 // --- HTTP Basic Authentication middleware ---
 
 // basicAuth wraps a handler with HTTP Basic Authentication when
-// username and password are configured. If either is empty,
-// authentication is disabled and the handler is returned as-is.
+// username and password are configured. If either is empty, an
+// error is returned to prevent bypassing authentication due to misconfiguration.
 // Credentials are SHA-256 hashed before comparison so that
 // subtle.ConstantTimeCompare operates on fixed-length (32-byte)
 // digests, preventing length-based timing side-channels.
 func basicAuth(next http.Handler, username, password string) http.Handler {
 	if username == "" || password == "" {
-		return next
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Authentication not configured", http.StatusInternalServerError)
+		})
 	}
 	wantUser := sha256.Sum256([]byte(username))
 	wantPass := sha256.Sum256([]byte(password))
