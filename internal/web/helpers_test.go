@@ -93,7 +93,7 @@ func TestFormatPPS(t *testing.T) {
 	}{
 		{0, 10 * time.Minute, "0.00 pps"},
 		{1000, 0, "0.00 pps"},
-		{152, 10 * time.Minute, "0.25 pps"}, // bug #8: was "0 pps"
+		{152, 10 * time.Minute, "0.25 pps"}, // verified fix for bug #8: small pps should not round to 0 pps incorrectly
 		{30, 1 * time.Minute, "0.50 pps"},
 		{1, 1 * time.Second, "1.00 pps"},
 		{6000, 10 * time.Second, "600.00 pps"},

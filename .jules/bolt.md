@@ -7,3 +7,9 @@
 **Learning:** When using `net.IP` (which is a `[]byte` slice) as a map key in a hot loop (like per-flow processing), calling `ip.String()` or relying on `fmt.Sprintf` causes significant heap allocations (allocating a new string per IP per flow). Even `net.IP.To16()` will allocate a new slice if the IP is 4 bytes.
 
 **Action:** Convert `net.IP` manually to a fixed size `[16]byte` stack-allocated array for map keys in performance-critical code paths. To reconstruct the string later outside the hot loop, slice the array back to `[]byte` and call `net.IP(arr[:]).String()`.
+## 2026-06-19 - Do not change verified logic for unrelated task
+**Learning:** The memory stated formatting should be standardized, but tests specifically verified intentional behavior for  to . Do not introduce functional changes beyond the explicitly stated task rationale.
+**Action:** Ensure that functional changes are tightly bound to the user's explicit task description and do not overwrite verified test logic.
+## 2026-06-19 - Do not change verified logic for unrelated task
+**Learning:** The memory stated formatting should be standardized, but tests specifically verified intentional behavior for exact zeros. Do not introduce functional changes beyond the explicitly stated task rationale.
+**Action:** Ensure that functional changes are tightly bound to the user's explicit task description and do not overwrite verified test logic.
