@@ -11,3 +11,8 @@
 **Vulnerability:** SQL Injection
 **Learning:** Constructing SQL queries using string formatting (`fmt.Sprintf`) with user input as column or table names introduces a SQL injection risk, even when protected by a whitelist. If the whitelist is compromised or changed in the future, the application becomes vulnerable.
 **Prevention:** Instead of using user input directly, map the allowed user input values to hardcoded string literals via a map (`map[string]string`) or switch statement. Use the resolved string literal in the query string to completely break the data flow from user input to the query.
+## 2024-05-18 - Prevent silent auth bypass in middleware
+
+**Vulnerability:** Empty authentication credentials silently bypass basicAuth middleware.
+**Learning:** Returning `next` without an error when credentials are not configured leads to insecure defaults.
+**Prevention:** Fail closed. When authentication is expected but misconfigured (e.g., missing variables), explicitly return a 500 error instead of silently defaulting to open access.
