@@ -4,6 +4,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 
 | Analyzer | Description |
 |---|---|
+| Amplification Attack Detector | Detects potential DDoS reflection/amplification attacks by monitoring UDP traffic from common amplification ports |
 | Top Talkers | Flags hosts consuming disproportionate bandwidth |
 | Protocol Distribution | Detects unusual protocol ratios and insecure protocols |
 | Scan Detector | Detects reconnaissance patterns by unique-port fanout |
