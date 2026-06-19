@@ -594,9 +594,9 @@ func computeLatencyStats(flows []model.Flow) LatencyStats {
 			sum += v
 		}
 		stats.AvgRTT = formatRTT(sum / int64(len(rttValues)))
-		stats.P50RTT = formatRTT(percentileInt64(rttValues, 50))
-		stats.P95RTT = formatRTT(percentileInt64(rttValues, 95))
-		stats.P99RTT = formatRTT(percentileInt64(rttValues, 99))
+		stats.P50RTT = formatRTT(percentile(rttValues, 50))
+		stats.P95RTT = formatRTT(percentile(rttValues, 95))
+		stats.P99RTT = formatRTT(percentile(rttValues, 99))
 	}
 
 	if len(thruValues) > 0 {
@@ -606,29 +606,15 @@ func computeLatencyStats(flows []model.Flow) LatencyStats {
 			sum += v
 		}
 		stats.AvgThru = formatThroughput(sum / float64(len(thruValues)))
-		stats.P50Thru = formatThroughput(percentileFloat64(thruValues, 50))
-		stats.P95Thru = formatThroughput(percentileFloat64(thruValues, 95))
-		stats.P99Thru = formatThroughput(percentileFloat64(thruValues, 99))
+		stats.P50Thru = formatThroughput(percentile(thruValues, 50))
+		stats.P95Thru = formatThroughput(percentile(thruValues, 95))
+		stats.P99Thru = formatThroughput(percentile(thruValues, 99))
 	}
 
 	return stats
 }
 
-func percentileInt64(sorted []int64, pct int) int64 {
-	if len(sorted) == 0 {
-		return 0
-	}
-	idx := int(math.Ceil(float64(pct)/100*float64(len(sorted)))) - 1
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(sorted) {
-		idx = len(sorted) - 1
-	}
-	return sorted[idx]
-}
-
-func percentileFloat64(sorted []float64, pct int) float64 {
+func percentile[T ~int64 | ~float64](sorted []T, pct int) T {
 	if len(sorted) == 0 {
 		return 0
 	}
@@ -811,8 +797,8 @@ func computeVoIPStats(flows []model.Flow) VoIPStats {
 			sum += v
 		}
 		stats.AvgJitter = formatJitter(sum / int64(len(jitterValues)))
-		stats.P50Jitter = formatJitter(percentileInt64(jitterValues, 50))
-		stats.P95Jitter = formatJitter(percentileInt64(jitterValues, 95))
+		stats.P50Jitter = formatJitter(percentile(jitterValues, 50))
+		stats.P95Jitter = formatJitter(percentile(jitterValues, 95))
 	}
 
 	// Compute MOS summary.
@@ -1689,25 +1675,25 @@ type AboutPageData struct {
 	NumCPU        int
 
 	// Config values
-	NetFlowPort      int
-	IPFIXPort        int
-	SFlowPort        int
-	BufferSize       int
-	RateLimit        int
-	RingBufferDur    string
+	NetFlowPort        int
+	IPFIXPort          int
+	SFlowPort          int
+	BufferSize         int
+	RateLimit          int
+	RingBufferDur      string
 	RingBufferCapacity int
-	SQLitePath       string
-	SQLiteRetention  string
-	PruneInterval    string
-	GeoIPPath        string
-	AnalysisInterval string
-	TopTalkersCount  int
-	BaselineWindow   string
-	ScanThreshold    int
-	QueryWindow     string
-	WebListen        string
-	PageSize         int
-	FlowCount        int
+	SQLitePath         string
+	SQLiteRetention    string
+	PruneInterval      string
+	GeoIPPath          string
+	AnalysisInterval   string
+	TopTalkersCount    int
+	BaselineWindow     string
+	ScanThreshold      int
+	QueryWindow        string
+	WebListen          string
+	PageSize           int
+	FlowCount          int
 	// Capture config
 	CaptureInterfaces []string
 	CaptureSnapLen    int
@@ -1747,15 +1733,15 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		TopTalkersCount:    s.fullCfg.Analysis.TopTalkersCount,
 		BaselineWindow:     s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
 		ScanThreshold:      s.fullCfg.Analysis.ScanThreshold,
-		QueryWindow:       s.fullCfg.Analysis.QueryWindow.String(),
+		QueryWindow:        s.fullCfg.Analysis.QueryWindow.String(),
 		WebListen:          s.fullCfg.Web.Listen,
 		PageSize:           s.fullCfg.Web.PageSize,
 		FlowCount:          s.flowSvc.FlowCount(),
 		CaptureInterfaces:  s.fullCfg.Capture.Interfaces,
-		CaptureSnapLen:      s.fullCfg.Capture.SnapLen,
-		CaptureDir:          s.fullCfg.Capture.Dir,
-		CaptureMaxSizeMB:    s.fullCfg.Capture.MaxSizeMB,
-		CaptureMaxFiles:     s.fullCfg.Capture.MaxFiles,
+		CaptureSnapLen:     s.fullCfg.Capture.SnapLen,
+		CaptureDir:         s.fullCfg.Capture.Dir,
+		CaptureMaxSizeMB:   s.fullCfg.Capture.MaxSizeMB,
+		CaptureMaxFiles:    s.fullCfg.Capture.MaxFiles,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

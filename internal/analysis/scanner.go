@@ -30,10 +30,22 @@ func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []
 
 	// Track unique destination (IP:port) pairs per source IP.
 	type scanKey struct {
-		DstIP   string
+		DstIP   [16]byte
 		DstPort uint16
 	}
-	srcPorts := make(map[string]map[scanKey]struct{})
+	srcPorts := make(map[[16]byte]map[scanKey]struct{})
+
+	to16 := func(ip []byte) [16]byte {
+		var k [16]byte
+		if len(ip) == 16 {
+			copy(k[:], ip)
+		} else if len(ip) == 4 {
+			k[10] = 0xff
+			k[11] = 0xff
+			copy(k[12:], ip)
+		}
+		return k
+	}
 
 	for _, f := range flows {
 		// Only consider TCP and UDP flows for scan detection.
@@ -41,8 +53,8 @@ func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []
 			continue
 		}
 
-		src := model.SafeIPString(f.SrcAddr)
-		key := scanKey{DstIP: model.SafeIPString(f.DstAddr), DstPort: f.DstPort}
+		src := to16(f.SrcAddr)
+		key := scanKey{DstIP: to16(f.DstAddr), DstPort: f.DstPort}
 
 		if _, ok := srcPorts[src]; !ok {
 			srcPorts[src] = make(map[scanKey]struct{})
@@ -64,6 +76,15 @@ func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []
 			continue
 		}
 
+		srcStr := ""
+		if src == [16]byte{} {
+			srcStr = "0.0.0.0"
+		} else {
+			// Convert back using net.IP
+			// We can format it explicitly or rely on fmt %v but we need net package or we need to import it
+			srcStr = model.SafeIPString(src[:])
+		}
+
 		sev := WARNING
 		if uniqueCount >= threshold*3 {
 			sev = CRITICAL
@@ -72,14 +93,14 @@ func (ScanDetector) Analyze(store storage.Storage, cfg config.AnalysisConfig) []
 		advisories = append(advisories, Advisory{
 			Severity:  sev,
 			Timestamp: now,
-			Title:     fmt.Sprintf("Port Scan Detected: %s", src),
+			Title:     fmt.Sprintf("Port Scan Detected: %s", srcStr),
 			Description: fmt.Sprintf(
 				"%s contacted %d unique destination port/IP combinations in the last %s (threshold: %d).",
-				src, uniqueCount, formatWindowShort(queryWindow(cfg)), threshold,
+				srcStr, uniqueCount, formatWindowShort(queryWindow(cfg)), threshold,
 			),
 			Action: fmt.Sprintf(
 				"Investigate %s for potential reconnaissance activity. Consider blocking if unauthorized.",
-				src,
+				srcStr,
 			),
 		})
 	}

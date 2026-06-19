@@ -93,7 +93,7 @@ func TestFormatPPS(t *testing.T) {
 	}{
 		{0, 10 * time.Minute, "0.00 pps"},
 		{1000, 0, "0.00 pps"},
-		{152, 10 * time.Minute, "0.25 pps"}, // bug #8: was "0 pps"
+		{152, 10 * time.Minute, "0.25 pps"}, // verified fix for bug #8: small pps should not round to 0 pps incorrectly
 		{30, 1 * time.Minute, "0.50 pps"},
 		{1, 1 * time.Second, "1.00 pps"},
 		{6000, 10 * time.Second, "600.00 pps"},
@@ -257,20 +257,38 @@ func TestPctOf(t *testing.T) {
 	}
 }
 
-func TestPercentileInt64(t *testing.T) {
-	sorted := []int64{100, 200, 300, 400, 500}
-	p50 := percentileInt64(sorted, 50)
-	if p50 != 300 {
-		t.Errorf("p50 = %d, want 300", p50)
-	}
-	p99 := percentileInt64(sorted, 99)
-	if p99 != 500 {
-		t.Errorf("p99 = %d, want 500", p99)
-	}
-	empty := percentileInt64(nil, 50)
-	if empty != 0 {
-		t.Errorf("percentile of empty = %d, want 0", empty)
-	}
+func TestPercentile(t *testing.T) {
+	t.Run("int64", func(t *testing.T) {
+		sorted := []int64{100, 200, 300, 400, 500}
+		p50 := percentile(sorted, 50)
+		if p50 != 300 {
+			t.Errorf("p50 = %d, want 300", p50)
+		}
+		p99 := percentile(sorted, 99)
+		if p99 != 500 {
+			t.Errorf("p99 = %d, want 500", p99)
+		}
+		empty := percentile[int64](nil, 50)
+		if empty != 0 {
+			t.Errorf("percentile of empty = %d, want 0", empty)
+		}
+	})
+
+	t.Run("float64", func(t *testing.T) {
+		sorted := []float64{100.5, 200.5, 300.5, 400.5, 500.5}
+		p50 := percentile(sorted, 50)
+		if p50 != 300.5 {
+			t.Errorf("p50 = %f, want 300.5", p50)
+		}
+		p99 := percentile(sorted, 99)
+		if p99 != 500.5 {
+			t.Errorf("p99 = %f, want 500.5", p99)
+		}
+		empty := percentile[float64](nil, 50)
+		if empty != 0 {
+			t.Errorf("percentile of empty = %f, want 0", empty)
+		}
+	})
 }
 
 func TestFormatUptime(t *testing.T) {
