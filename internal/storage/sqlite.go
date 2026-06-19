@@ -186,39 +186,42 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 	}
 	defer stmt.Close() // nolint:errcheck // error ignored, statement will be closed when context is done
 
-	for _, f := range flows {
-		_, err := stmt.Exec(
-			f.Timestamp.UTC(),
-			model.SafeIPString(f.SrcAddr),
-			model.SafeIPString(f.DstAddr),
-			f.SrcPort,
-			f.DstPort,
-			f.Protocol,
-			f.Bytes,
-			f.Packets,
-			f.TCPFlags,
-			f.ToS,
-			f.InputIface,
-			f.OutputIface,
-			f.SrcAS,
-			f.DstAS,
-			f.Duration.Nanoseconds(),
-			model.SafeIPString(f.ExporterIP),
-			f.AppProto,
-			f.AppCat,
-			f.RTTMicros,
-			f.ThroughputBPS,
-			f.Retransmissions,
-			f.OutOfOrder,
-			f.PacketLoss,
-			f.JitterMicros,
-			f.MOS,
-			model.FormatMAC(f.SrcMAC),
-			model.FormatMAC(f.DstMAC),
-			f.VLAN,
-			f.EtherType,
-		)
-		if err != nil {
+	// Reusing an argument slice over dynamic bulk inserts is faster for modernc.org/sqlite
+	// and minimizes garbage collection overhead in the loop.
+	args := make([]interface{}, 29)
+	for i := range flows {
+		f := &flows[i]
+		args[0] = f.Timestamp.UTC()
+		args[1] = model.SafeIPString(f.SrcAddr)
+		args[2] = model.SafeIPString(f.DstAddr)
+		args[3] = f.SrcPort
+		args[4] = f.DstPort
+		args[5] = f.Protocol
+		args[6] = f.Bytes
+		args[7] = f.Packets
+		args[8] = f.TCPFlags
+		args[9] = f.ToS
+		args[10] = f.InputIface
+		args[11] = f.OutputIface
+		args[12] = f.SrcAS
+		args[13] = f.DstAS
+		args[14] = f.Duration.Nanoseconds()
+		args[15] = model.SafeIPString(f.ExporterIP)
+		args[16] = f.AppProto
+		args[17] = f.AppCat
+		args[18] = f.RTTMicros
+		args[19] = f.ThroughputBPS
+		args[20] = f.Retransmissions
+		args[21] = f.OutOfOrder
+		args[22] = f.PacketLoss
+		args[23] = f.JitterMicros
+		args[24] = f.MOS
+		args[25] = model.FormatMAC(f.SrcMAC)
+		args[26] = model.FormatMAC(f.DstMAC)
+		args[27] = f.VLAN
+		args[28] = f.EtherType
+
+		if _, err := stmt.Exec(args...); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("insert flow: %w", err)
 		}
