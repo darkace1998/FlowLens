@@ -18,7 +18,7 @@ var funcMap = template.FuncMap{
 	"formatPkts":     formatPkts,
 	"formatBPS":      formatBPS,
 	"formatPPS":      formatPPS,
-	"formatDuration": formatDuration,
+	"formatDuration": model.FormatDurationShort,
 	"protoName":      model.ProtocolName,
 	"appProto":       model.AppProtocol,
 	"appCategory":    model.AppCategory,
@@ -237,29 +237,6 @@ func timeAgo(t time.Time) string {
 
 func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
-}
-
-// formatDuration returns a human-friendly duration string (e.g. "10m" instead of "10m0s").
-func formatDuration(d time.Duration) string {
-	if d < time.Second {
-		return d.String()
-	}
-	totalSecs := int(d.Seconds())
-	h := totalSecs / 3600
-	m := (totalSecs % 3600) / 60
-	s := totalSecs % 60
-	switch {
-	case h > 0 && m > 0:
-		return fmt.Sprintf("%dh %dm", h, m)
-	case h > 0:
-		return fmt.Sprintf("%dh", h)
-	case m > 0 && s > 0:
-		return fmt.Sprintf("%dm %ds", m, s)
-	case m > 0:
-		return fmt.Sprintf("%dm", m)
-	default:
-		return fmt.Sprintf("%ds", s)
-	}
 }
 
 func seq(start, end int) []int {

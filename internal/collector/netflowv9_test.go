@@ -16,7 +16,7 @@ func buildNFV9TemplateFlowSet(templateID uint16, fields []nfv9TemplateField) []b
 	totalLen := 4 + bodyLen
 	data := make([]byte, totalLen)
 
-	binary.BigEndian.PutUint16(data[0:2], 0)              // FlowSet ID = Template
+	binary.BigEndian.PutUint16(data[0:2], 0)                // FlowSet ID = Template
 	binary.BigEndian.PutUint16(data[2:4], uint16(totalLen)) // FlowSet Length
 
 	binary.BigEndian.PutUint16(data[4:6], templateID)
@@ -52,11 +52,11 @@ func buildNFV9Packet(sourceID uint32, sysUptime uint32, unixSecs uint32, flowSet
 	pkt := make([]byte, nfv9HeaderSize+bodyLen)
 
 	// Header
-	binary.BigEndian.PutUint16(pkt[0:2], 9)               // version
+	binary.BigEndian.PutUint16(pkt[0:2], 9)                     // version
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(len(flowSets))) // count (FlowSets)
 	binary.BigEndian.PutUint32(pkt[4:8], sysUptime)
 	binary.BigEndian.PutUint32(pkt[8:12], unixSecs)
-	binary.BigEndian.PutUint32(pkt[12:16], 1)              // sequence
+	binary.BigEndian.PutUint32(pkt[12:16], 1) // sequence
 	binary.BigEndian.PutUint32(pkt[16:20], sourceID)
 
 	off := nfv9HeaderSize

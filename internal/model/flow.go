@@ -23,35 +23,35 @@ const (
 	ProtoUDP  = 17
 
 	// IP header sizes.
-	IPv4MinHeaderSize       = 20 // Minimum IPv4 header (no options)
-	IPv6HeaderSize          = 40 // Fixed IPv6 header size
-	TCPMinHeaderSize        = 20 // Minimum TCP header (no options)
+	IPv4MinHeaderSize       = 20                                   // Minimum IPv4 header (no options)
+	IPv6HeaderSize          = 40                                   // Fixed IPv6 header size
+	TCPMinHeaderSize        = 20                                   // Minimum TCP header (no options)
 	MinIPv4AndTCPHeaderSize = IPv4MinHeaderSize + TCPMinHeaderSize // 40 bytes
 	MinIPv6AndTCPHeaderSize = IPv6HeaderSize + TCPMinHeaderSize    // 60 bytes
 )
 
 // Flow represents a unified flow record decoded from any NetFlow/IPFIX version.
 type Flow struct {
-	Timestamp    time.Time
-	SrcAddr      net.IP
-	DstAddr      net.IP
-	SrcPort      uint16
-	DstPort      uint16
-	Protocol     uint8 // TCP=6, UDP=17, ICMP=1, etc.
-	Bytes        uint64
-	Packets      uint64
-	TCPFlags     uint8
-	ToS          uint8
-	InputIface   uint32
-	OutputIface  uint32
-	SrcAS        uint32
-	DstAS        uint32
-	Duration     time.Duration
-	ExporterIP   net.IP // which device sent this flow
-	AppProto     string // L7 application protocol (e.g. "HTTP", "DNS")
-	AppCat       string // traffic category (e.g. "Web", "Email")
-	RTTMicros      int64   // round-trip time in microseconds (0 = unknown)
-	ThroughputBPS  float64 // throughput in bits per second (0 = unknown)
+	Timestamp       time.Time
+	SrcAddr         net.IP
+	DstAddr         net.IP
+	SrcPort         uint16
+	DstPort         uint16
+	Protocol        uint8 // TCP=6, UDP=17, ICMP=1, etc.
+	Bytes           uint64
+	Packets         uint64
+	TCPFlags        uint8
+	ToS             uint8
+	InputIface      uint32
+	OutputIface     uint32
+	SrcAS           uint32
+	DstAS           uint32
+	Duration        time.Duration
+	ExporterIP      net.IP  // which device sent this flow
+	AppProto        string  // L7 application protocol (e.g. "HTTP", "DNS")
+	AppCat          string  // traffic category (e.g. "Web", "Email")
+	RTTMicros       int64   // round-trip time in microseconds (0 = unknown)
+	ThroughputBPS   float64 // throughput in bits per second (0 = unknown)
 	Retransmissions uint32  // TCP retransmission count (from IPFIX IE 321 or heuristic)
 	OutOfOrder      uint32  // TCP out-of-order segment count
 	PacketLoss      uint32  // estimated packet loss count
@@ -459,65 +459,65 @@ func AppCategory(appProto string) string {
 
 // wellKnownAS maps common AS numbers to their organization names.
 var wellKnownAS = map[uint32]string{
-	0:     "Private/Unknown",
-	13335: "Cloudflare",
-	15169: "Google",
-	16509: "Amazon (AWS)",
-	8075:  "Microsoft",
-	32934: "Facebook (Meta)",
-	20940: "Akamai",
-	14618: "Amazon",
-	16591: "Google Cloud",
-	36459: "GitHub",
-	54113: "Fastly",
-	13414: "Twitter (X)",
-	2906:  "Netflix",
-	714:   "Apple",
-	46489: "Twitch",
-	36183: "Akamai",
-	19551: "Incapsula",
-	14061: "DigitalOcean",
-	63949: "Linode (Akamai)",
-	24940: "Hetzner",
-	16276: "OVH",
+	0:      "Private/Unknown",
+	13335:  "Cloudflare",
+	15169:  "Google",
+	16509:  "Amazon (AWS)",
+	8075:   "Microsoft",
+	32934:  "Facebook (Meta)",
+	20940:  "Akamai",
+	14618:  "Amazon",
+	16591:  "Google Cloud",
+	36459:  "GitHub",
+	54113:  "Fastly",
+	13414:  "Twitter (X)",
+	2906:   "Netflix",
+	714:    "Apple",
+	46489:  "Twitch",
+	36183:  "Akamai",
+	19551:  "Incapsula",
+	14061:  "DigitalOcean",
+	63949:  "Linode (Akamai)",
+	24940:  "Hetzner",
+	16276:  "OVH",
 	396982: "Google Cloud",
-	8068:  "Microsoft (Azure)",
-	8069:  "Microsoft (Azure)",
-	3320:  "Deutsche Telekom",
-	3356:  "Lumen/CenturyLink",
-	6939:  "Hurricane Electric",
-	174:   "Cogent",
-	1299:  "Arelion (Telia)",
-	2914:  "NTT",
-	6461:  "Zayo",
-	7018:  "AT&T",
-	701:   "Verizon",
-	7922:  "Comcast",
-	22773: "Cox",
-	20115: "Charter",
-	6167:  "Verizon Business",
-	209:   "CenturyLink",
-	3257:  "GTT",
-	4134:  "ChinaNet",
-	4837:  "China Unicom",
-	4808:  "China Unicom",
-	9808:  "China Mobile",
-	17676: "SoftBank",
-	2516:  "KDDI",
-	4766:  "Korea Telecom",
-	9318:  "SK Broadband",
-	4755:  "Tata Communications",
-	9498:  "Bharti Airtel",
-	18881: "Telefônica Brasil",
-	28573: "Claro Brasil",
-	12322: "Free (France)",
-	5410:  "Bouygues Telecom",
-	15557: "SFR (France)",
-	6805:  "Telefónica Germany",
-	12876: "Scaleway",
+	8068:   "Microsoft (Azure)",
+	8069:   "Microsoft (Azure)",
+	3320:   "Deutsche Telekom",
+	3356:   "Lumen/CenturyLink",
+	6939:   "Hurricane Electric",
+	174:    "Cogent",
+	1299:   "Arelion (Telia)",
+	2914:   "NTT",
+	6461:   "Zayo",
+	7018:   "AT&T",
+	701:    "Verizon",
+	7922:   "Comcast",
+	22773:  "Cox",
+	20115:  "Charter",
+	6167:   "Verizon Business",
+	209:    "CenturyLink",
+	3257:   "GTT",
+	4134:   "ChinaNet",
+	4837:   "China Unicom",
+	4808:   "China Unicom",
+	9808:   "China Mobile",
+	17676:  "SoftBank",
+	2516:   "KDDI",
+	4766:   "Korea Telecom",
+	9318:   "SK Broadband",
+	4755:   "Tata Communications",
+	9498:   "Bharti Airtel",
+	18881:  "Telefônica Brasil",
+	28573:  "Claro Brasil",
+	12322:  "Free (France)",
+	5410:   "Bouygues Telecom",
+	15557:  "SFR (France)",
+	6805:   "Telefónica Germany",
+	12876:  "Scaleway",
 	197540: "Netcup",
-	47541: "Vkontakte",
-	13238: "Yandex",
+	47541:  "Vkontakte",
+	13238:  "Yandex",
 }
 
 // ASName returns a human-readable organization name for common AS numbers.

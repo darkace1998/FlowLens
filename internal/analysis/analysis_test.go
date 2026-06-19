@@ -35,7 +35,6 @@ func defaultCfg() config.AnalysisConfig {
 	}
 }
 
-
 // --- Engine tests ---
 
 func TestEngine_RunsAnalyzers(t *testing.T) {

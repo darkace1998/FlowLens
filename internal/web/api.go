@@ -15,10 +15,10 @@ import (
 
 // APIFlowsResponse is the JSON response for GET /api/flows.
 type APIFlowsResponse struct {
-	Page       int        `json:"page"`
-	TotalPages int        `json:"total_pages"`
-	TotalFlows int        `json:"total_flows"`
-	Flows      []APIFlow  `json:"flows"`
+	Page       int       `json:"page"`
+	TotalPages int       `json:"total_pages"`
+	TotalFlows int       `json:"total_flows"`
+	Flows      []APIFlow `json:"flows"`
 }
 
 // APIFlow is a single flow record in the JSON API.
@@ -38,9 +38,9 @@ type APIFlow struct {
 
 // APIHostsResponse is the JSON response for GET /api/hosts.
 type APIHostsResponse struct {
-	TotalHosts int        `json:"total_hosts"`
-	TotalBytes uint64     `json:"total_bytes"`
-	Hosts      []APIHost  `json:"hosts"`
+	TotalHosts int       `json:"total_hosts"`
+	TotalBytes uint64    `json:"total_bytes"`
+	Hosts      []APIHost `json:"hosts"`
 }
 
 // APIHost is a single host record in the JSON API.
@@ -273,15 +273,15 @@ func (s *Server) handleAPISessions(w http.ResponseWriter, r *http.Request) {
 		proto          uint8
 	}
 	type sessAgg struct {
-		srcAddr, dstAddr string
-		srcPort, dstPort uint16
-		proto            uint8
-		bytes, packets   uint64
-		flowCount        int
-		first, last      time.Time
+		srcAddr, dstAddr   string
+		srcPort, dstPort   uint16
+		proto              uint8
+		bytes, packets     uint64
+		flowCount          int
+		first, last        time.Time
 		retrans, ooo, loss uint32
-		appProto         string
-		tcpFlags         uint8
+		appProto           string
+		tcpFlags           uint8
 	}
 
 	agg := make(map[sessKey]*sessAgg)
