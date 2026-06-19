@@ -4,9 +4,10 @@
 <h1>Advisories</h1>
 
 {{if .Advisories}}
-<p class="flow-summary">{{len .Advisories}} advisory(ies) — active and resolved</p>
-
-<div class="advisory-list">
+<div class="panel">
+  <p class="flow-summary">{{len .Advisories}} advisory(ies) — active and resolved</p>
+  
+  <div class="advisory-list">
   {{range .Advisories}}
   <div class="advisory-card severity-{{severityClass .Severity}}{{if .Resolved}} advisory-resolved{{end}}">
     <div class="advisory-header">
@@ -19,6 +20,7 @@
     <p class="advisory-action"><strong>Action:</strong> {{.Action}}</p>
   </div>
   {{end}}
+  </div>
 </div>
 {{else}}
 <p class="empty">No active advisories. All clear!</p>

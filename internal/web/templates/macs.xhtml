@@ -5,33 +5,35 @@
 <p class="flow-summary">{{.TotalMACs}} MAC addresses observed</p>
 
 {{if .MACs}}
-<div class="table-responsive">
-<table class="flows-table">
-  <thead>
-    <tr>
-      <th>MAC Address</th>
-      <th>Associated IPs</th>
-      <th>VLAN</th>
-      <th>Bytes</th>
-      <th>Packets</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{range .MACs}}
-    <tr>
-      <td><code>{{.MAC}}</code></td>
-      <td>
-        {{range .IPs}}
-          <span class="tag"><a href="/flows?ip={{. | urlquery}}">{{.}}</a></span>
-        {{end}}
-      </td>
-      <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
-      <td>{{.BytesStr}}</td>
-      <td>{{.PktsStr}}</td>
-    </tr>
-    {{end}}
-  </tbody>
-</table>
+<div class="panel">
+  <div class="table-responsive">
+  <table class="flows-table">
+    <thead>
+      <tr>
+        <th>MAC Address</th>
+        <th>Associated IPs</th>
+        <th>VLAN</th>
+        <th>Bytes</th>
+        <th>Packets</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .MACs}}
+      <tr>
+        <td><code>{{.MAC}}</code></td>
+        <td>
+          {{range .IPs}}
+            <span class="tag"><a href="/flows?ip={{. | urlquery}}">{{.}}</a></span>
+          {{end}}
+        </td>
+        <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
+        <td>{{.BytesStr}}</td>
+        <td>{{.PktsStr}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
 </div>
 {{else}}
 <p class="empty">No MAC address data available. L2 data requires IPFIX IE 56/80 or packet capture.</p>
