@@ -52,28 +52,36 @@
 </div>
 
 <script>
+// Initialize map
 var map = L.map('map').setView([20, 0], 2);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 18
 }).addTo(map);
 
-var markers = [
-{{range .Markers}}
-  {lat: {{.Lat}}, lon: {{.Lon}}, label: "{{.Label}}"},
-{{end}}
-];
+// Use JSON data to avoid escaping issues
+var markers = {{.MarkersJSON}};
 
-markers.forEach(function(m) {
-    L.circleMarker([m.lat, m.lon], {
-        radius: 8,
-        fillColor: '#2563eb',
-        color: '#1e40af',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.7
-    }).addTo(map).bindPopup(m.label);
-});
+// Error handling for failed CDN load
+window.addEventListener('error', function(e) {
+    if (e.target.tagName === 'SCRIPT' && e.target.src.includes('leaflet')) {
+        document.getElementById('map').innerHTML = '<p style="padding:1em;text-align:center;color:red;">Error: Failed to load map library (Leaflet). The map requires an internet connection to load the Leaflet library from unpkg.com.</p>';
+    }
+}, true);
+
+// Render markers
+if (markers && markers.length > 0) {
+    markers.forEach(function(m) {
+        L.circleMarker([m.lat, m.lon], {
+            radius: 8,
+            fillColor: '#2563eb',
+            color: '#1e40af',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.7
+        }).addTo(map).bindPopup(m.label);
+    });
+}
 </script>
 {{else}}
 <p class="empty">No geolocated hosts found. To enable geolocation, add <code>geoip_path: /path/to/IP2LOCATION-LITE-DB5.CSV</code> to the <code>storage</code> section of your config file, or wait for traffic from known IP ranges (major cloud/CDN providers are detected automatically).</p>

@@ -1363,6 +1363,7 @@ type MapMarker struct {
 // MapPageData holds all data for the geo map template.
 type MapPageData struct {
 	Markers     []MapMarker
+	MarkersJSON string
 	TotalHosts  int
 	MappedHosts int
 }
@@ -1436,8 +1437,16 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 	// Sort by bytes descending.
 	sortByBytes(markers, func(e MapMarker) uint64 { return e.Bytes })
 
+	// Generate JSON for markers to avoid JavaScript escaping issues
+	markersJSON, err := json.Marshal(markers)
+	if err != nil {
+		// Fallback to empty array if marshaling fails
+		markersJSON = []byte("[]")
+	}
+
 	return MapPageData{
 		Markers:     markers,
+		MarkersJSON: string(markersJSON),
 		TotalHosts:  len(hostBytes),
 		MappedHosts: len(markers),
 	}
