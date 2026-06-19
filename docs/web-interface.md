@@ -9,7 +9,7 @@ After startup, open `http://localhost:8080`.
 | Dashboard | `/` | Throughput, top talkers, protocol breakdown, advisory overview |
 | Flow Explorer | `/flows` | Search/filter flows, paginate, export |
 | Hosts | `/hosts` | Host inventory with traffic and GeoIP context |
-| Sessions | `/sessions` | Bidirectional session views with quality metrics |
+| Sessions | `/sessions` | Bidirectional session views, quality metrics, and PCAP file import |
 | Advisories | `/advisories` | Active and resolved advisories |
 | Reports | `/reports` | Historical reporting from SQLite data |
 | Map | `/map` | Geographic flow visualization |
