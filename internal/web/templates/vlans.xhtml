@@ -5,33 +5,35 @@
 <p class="flow-summary">{{.TotalVLANs}} VLANs observed</p>
 
 {{if .VLANs}}
-<div class="table-responsive">
-<table class="flows-table">
-  <thead>
-    <tr>
-      <th>VLAN ID</th>
-      <th>Bytes</th>
-      <th>Packets</th>
-      <th>Flows</th>
-      <th>Top Hosts</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{range .VLANs}}
-    <tr>
-      <td>{{if .ID}}{{.ID}}{{else}}Untagged{{end}}</td>
-      <td>{{.BytesStr}}</td>
-      <td>{{.PktsStr}}</td>
-      <td>{{.Flows}}</td>
-      <td>
-        {{range .TopHosts}}
-          <span class="tag"><a href="/flows?ip={{urlquery .Addr}}">{{.Addr}}</a> ({{.BytesStr}})</span>
-        {{end}}
-      </td>
-    </tr>
-    {{end}}
-  </tbody>
-</table>
+<div class="panel">
+  <div class="table-responsive">
+  <table class="flows-table">
+    <thead>
+      <tr>
+        <th>VLAN ID</th>
+        <th>Bytes</th>
+        <th>Packets</th>
+        <th>Flows</th>
+        <th>Top Hosts</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .VLANs}}
+      <tr>
+        <td>{{if .ID}}{{.ID}}{{else}}Untagged{{end}}</td>
+        <td>{{.BytesStr}}</td>
+        <td>{{.PktsStr}}</td>
+        <td>{{.Flows}}</td>
+        <td>
+          {{range .TopHosts}}
+            <span class="tag"><a href="/flows?ip={{urlquery .Addr}}">{{.Addr}}</a> ({{.BytesStr}})</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
 </div>
 {{else}}
 <p class="empty">No VLAN data available.</p>

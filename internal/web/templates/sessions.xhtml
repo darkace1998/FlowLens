@@ -33,8 +33,9 @@
 
 {{if .Sessions}}
 <p class="flow-summary">{{.TotalSessions}} bidirectional sessions sorted by traffic volume.</p>
-<div class="table-responsive">
-<table class="flows-table">
+<div class="panel">
+  <div class="table-responsive">
+  <table class="flows-table">
   <thead>
     <tr>
       <th>Source</th>
@@ -79,7 +80,8 @@
     </tr>
     {{end}}
   </tbody>
-</table>
+  </table>
+  </div>
 </div>
 {{else}}
 <p class="empty">No sessions. Import a PCAP or wait for flow data to arrive.</p>
