@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // TopTalkers analyzes flow data to identify the highest-volume sources and
@@ -95,7 +97,7 @@ func (TopTalkers) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Ad
 			Title:     fmt.Sprintf("Top Talker: %s", e.IP),
 			Description: fmt.Sprintf(
 				"%s is responsible for %.1f%% of traffic (%s, %s packets) in the last %s.",
-				e.IP, pct, formatBytesShort(e.Bytes), formatCountShort(e.Packets),
+				e.IP, pct, util.FormatBytes(e.Bytes), util.FormatCount(e.Packets),
 				formatWindowShort(queryWindow(cfg)),
 			),
 			Action: actionForTalker(sev, e.IP),
@@ -112,29 +114,6 @@ func actionForTalker(sev Severity, ip string) string {
 	default:
 		return fmt.Sprintf("Monitor %s — significant bandwidth usage detected.", ip)
 	}
-}
-
-func formatBytesShort(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func formatCountShort(n uint64) string {
-	if n < 1000 {
-		return fmt.Sprintf("%d", n)
-	}
-	if n < 1000000 {
-		return fmt.Sprintf("%.1fK", float64(n)/1000)
-	}
-	return fmt.Sprintf("%.1fM", float64(n)/1000000)
 }
 
 // BuildTopTalkersReport generates a top-talkers summary from flows.

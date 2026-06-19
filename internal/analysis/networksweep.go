@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // NetworkSweepDetector identifies hosts that connect to a large number of
@@ -102,7 +104,7 @@ func (NetworkSweepDetector) Analyze(store storage.Storage, cfg config.AnalysisCo
 			"Host %s contacted %d unique IP addresses in %s "+
 				"(%s bytes, %s packets). This pattern strongly suggests a network sweep, worm propagation, or aggressive crawling.",
 			r.src, r.targetCount, windowStr,
-			formatBytesShort(r.bytes), formatCountShort(r.packets),
+			util.FormatBytes(r.bytes), util.FormatCount(r.packets),
 		)
 
 		advisories = append(advisories, Advisory{

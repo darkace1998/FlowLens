@@ -22,6 +22,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // --- Dashboard data structures ---
@@ -1028,8 +1030,8 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			SrcPort:     f.SrcPort,
 			DstPort:     f.DstPort,
 			Protocol:    model.ProtocolName(f.Protocol),
-			Bytes:       formatBytes(f.Bytes),
-			Packets:     formatPkts(f.Packets),
+			Bytes:       util.FormatBytes(f.Bytes),
+			Packets:     util.FormatCount(f.Packets),
 			Duration:    f.Duration.String(),
 			TimeAgo:     timeAgo(f.Timestamp),
 			AppProto:    appProto,
@@ -1430,7 +1432,7 @@ func (s *Server) buildMapData(flows []model.Flow) MapPageData {
 			Country: info.Country,
 			City:    info.City,
 			Bytes:   bytes,
-			Label:   fmt.Sprintf("%s (%s, %s) — %s", ip, info.City, info.Country, formatBytes(bytes)),
+			Label:   fmt.Sprintf("%s (%s, %s) — %s", ip, info.City, info.Country, util.FormatBytes(bytes)),
 		})
 	}
 
@@ -1689,25 +1691,25 @@ type AboutPageData struct {
 	NumCPU        int
 
 	// Config values
-	NetFlowPort      int
-	IPFIXPort        int
-	SFlowPort        int
-	BufferSize       int
-	RateLimit        int
-	RingBufferDur    string
+	NetFlowPort        int
+	IPFIXPort          int
+	SFlowPort          int
+	BufferSize         int
+	RateLimit          int
+	RingBufferDur      string
 	RingBufferCapacity int
-	SQLitePath       string
-	SQLiteRetention  string
-	PruneInterval    string
-	GeoIPPath        string
-	AnalysisInterval string
-	TopTalkersCount  int
-	BaselineWindow   string
-	ScanThreshold    int
-	QueryWindow     string
-	WebListen        string
-	PageSize         int
-	FlowCount        int
+	SQLitePath         string
+	SQLiteRetention    string
+	PruneInterval      string
+	GeoIPPath          string
+	AnalysisInterval   string
+	TopTalkersCount    int
+	BaselineWindow     string
+	ScanThreshold      int
+	QueryWindow        string
+	WebListen          string
+	PageSize           int
+	FlowCount          int
 	// Capture config
 	CaptureInterfaces []string
 	CaptureSnapLen    int
@@ -1747,15 +1749,15 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		TopTalkersCount:    s.fullCfg.Analysis.TopTalkersCount,
 		BaselineWindow:     s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
 		ScanThreshold:      s.fullCfg.Analysis.ScanThreshold,
-		QueryWindow:       s.fullCfg.Analysis.QueryWindow.String(),
+		QueryWindow:        s.fullCfg.Analysis.QueryWindow.String(),
 		WebListen:          s.fullCfg.Web.Listen,
 		PageSize:           s.fullCfg.Web.PageSize,
 		FlowCount:          s.flowSvc.FlowCount(),
 		CaptureInterfaces:  s.fullCfg.Capture.Interfaces,
-		CaptureSnapLen:      s.fullCfg.Capture.SnapLen,
-		CaptureDir:          s.fullCfg.Capture.Dir,
-		CaptureMaxSizeMB:    s.fullCfg.Capture.MaxSizeMB,
-		CaptureMaxFiles:     s.fullCfg.Capture.MaxFiles,
+		CaptureSnapLen:     s.fullCfg.Capture.SnapLen,
+		CaptureDir:         s.fullCfg.Capture.Dir,
+		CaptureMaxSizeMB:   s.fullCfg.Capture.MaxSizeMB,
+		CaptureMaxFiles:    s.fullCfg.Capture.MaxFiles,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1983,13 +1985,13 @@ func (s *Server) handleVLANs(w http.ResponseWriter, r *http.Request) {
 			Bytes:    agg.bytes,
 			Packets:  agg.packets,
 			Flows:    agg.flows,
-			BytesStr: formatBytes(agg.bytes),
-			PktsStr:  formatPkts(agg.packets),
+			BytesStr: util.FormatBytes(agg.bytes),
+			PktsStr:  util.FormatCount(agg.packets),
 		}
 		// Top 5 hosts by bytes
 		var hosts []VLANHost
 		for addr, b := range agg.hosts {
-			hosts = append(hosts, VLANHost{Addr: addr, Bytes: b, BytesStr: formatBytes(b)})
+			hosts = append(hosts, VLANHost{Addr: addr, Bytes: b, BytesStr: util.FormatBytes(b)})
 		}
 		sortByBytes(hosts, func(e VLANHost) uint64 { return e.Bytes })
 		if len(hosts) > 5 {
@@ -2092,8 +2094,8 @@ func (s *Server) handleMACs(w http.ResponseWriter, r *http.Request) {
 			VLAN:     agg.vlan,
 			Bytes:    agg.bytes,
 			Packets:  agg.packets,
-			BytesStr: formatBytes(agg.bytes),
-			PktsStr:  formatPkts(agg.packets),
+			BytesStr: util.FormatBytes(agg.bytes),
+			PktsStr:  util.FormatCount(agg.packets),
 		})
 	}
 	sortByBytes(entries, func(e MACEntry) uint64 { return e.Bytes })
@@ -2350,8 +2352,8 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 			Bytes:      a.bytes,
 			Packets:    a.packets,
 			FlowCount:  a.flowCount,
-			BytesStr:   formatBytes(a.bytes),
-			PktsStr:    formatPkts(a.packets),
+			BytesStr:   util.FormatBytes(a.bytes),
+			PktsStr:    util.FormatCount(a.packets),
 			FirstSeen:  a.first,
 			LastSeen:   a.last,
 			Duration:   formatUptime(dur),
@@ -2564,11 +2566,11 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 				IfIndex:    cs.IfIndex,
 				IfName:     ifName,
 				IfSpeed:    formatIfSpeed(cs.IfSpeed),
-				InOctets:   formatBytes(cs.InOctets),
+				InOctets:   util.FormatBytes(cs.InOctets),
 				InPackets:  cs.InPackets,
 				InErrors:   cs.InErrors,
 				InDrops:    cs.InDrops,
-				OutOctets:  formatBytes(cs.OutOctets),
+				OutOctets:  util.FormatBytes(cs.OutOctets),
 				OutPackets: cs.OutPackets,
 				OutErrors:  cs.OutErrors,
 				OutDrops:   cs.OutDrops,

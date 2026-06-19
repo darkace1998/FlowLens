@@ -83,8 +83,8 @@ func (pw *PcapWriter) openNewFile() error {
 
 	// Write PCAP global header (24 bytes).
 	if err := pw.writeGlobalHeader(f); err != nil {
-		_ = f.Close()          // nolint:errcheck // error ignored in cleanup path
-		_ = os.Remove(path)    // nolint:errcheck // error ignored in cleanup path
+		_ = f.Close()       // nolint:errcheck // error ignored in cleanup path
+		_ = os.Remove(path) // nolint:errcheck // error ignored in cleanup path
 		return err
 	}
 

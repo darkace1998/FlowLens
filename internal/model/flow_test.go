@@ -75,9 +75,9 @@ func TestAppProtocol(t *testing.T) {
 		{6, 12345, 3306, "MySQL"},
 		{6, 12345, 5432, "PostgreSQL"},
 		{17, 12345, 123, "NTP"},
-		{6, 80, 12345, "HTTP"},   // reversed: src is well-known
-		{1, 0, 0, "ICMP"},        // ICMP protocol
-		{58, 0, 0, "ICMP"},       // ICMPv6
+		{6, 80, 12345, "HTTP"},     // reversed: src is well-known
+		{1, 0, 0, "ICMP"},          // ICMP protocol
+		{58, 0, 0, "ICMP"},         // ICMPv6
 		{6, 50000, 60000, "Other"}, // unknown ports
 	}
 
@@ -134,12 +134,12 @@ func TestASName(t *testing.T) {
 
 func TestFlowClassify(t *testing.T) {
 	tests := []struct {
-		name     string
-		proto    uint8
-		srcPort  uint16
-		dstPort  uint16
-		wantApp  string
-		wantCat  string
+		name    string
+		proto   uint8
+		srcPort uint16
+		dstPort uint16
+		wantApp string
+		wantCat string
 	}{
 		{"HTTPS", 6, 12345, 443, "HTTPS", "Web"},
 		{"HTTP", 6, 12345, 80, "HTTP", "Web"},
@@ -421,7 +421,7 @@ func TestIsVoIP(t *testing.T) {
 		{"UDP SIP 5060", 17, 50000, 5060, true},
 		{"UDP SIP 5061", 17, 5061, 50000, true},
 		{"UDP low ports", 17, 1234, 80, false},
-		{"TCP RTP range", 6, 50000, 16000, false},     // TCP not VoIP
+		{"TCP RTP range", 6, 50000, 16000, false}, // TCP not VoIP
 		{"UDP both high non-RTP", 17, 50000, 50001, false},
 		// DNS should NOT be classified as VoIP even when ephemeral port is in RTP range.
 		{"DNS query ephemeral in RTP", 17, 15000, 53, false},
@@ -470,11 +470,11 @@ func TestCalcMOS(t *testing.T) {
 
 func TestClassifySetsMOSForVoIP(t *testing.T) {
 	f := Flow{
-		Protocol:     17,        // UDP
+		Protocol:     17, // UDP
 		SrcPort:      50000,
-		DstPort:      16000,     // RTP range
-		JitterMicros: 10000,     // 10ms
-		RTTMicros:    50000,     // 50ms
+		DstPort:      16000, // RTP range
+		JitterMicros: 10000, // 10ms
+		RTTMicros:    50000, // 50ms
 		Packets:      950,
 		PacketLoss:   50,
 	}
@@ -568,20 +568,20 @@ func TestFormatTCPFlags(t *testing.T) {
 		flags uint8
 		want  string
 	}{
-		{0x00, "—"},         // no flags
-		{0x02, "SYN"},       // SYN only
-		{0x12, "SYN ACK"},   // SYN+ACK
-		{0x10, "ACK"},       // ACK only
-		{0x11, "FIN ACK"},   // FIN+ACK
-		{0x18, "PSH ACK"},   // PSH+ACK
-		{0x04, "RST"},       // RST only
-		{0x14, "RST ACK"},   // RST+ACK
-		{0x01, "FIN"},       // FIN only
+		{0x00, "—"},                       // no flags
+		{0x02, "SYN"},                     // SYN only
+		{0x12, "SYN ACK"},                 // SYN+ACK
+		{0x10, "ACK"},                     // ACK only
+		{0x11, "FIN ACK"},                 // FIN+ACK
+		{0x18, "PSH ACK"},                 // PSH+ACK
+		{0x04, "RST"},                     // RST only
+		{0x14, "RST ACK"},                 // RST+ACK
+		{0x01, "FIN"},                     // FIN only
 		{0x3F, "FIN SYN RST PSH ACK URG"}, // all lower 6 flags
 		{0xFF, "FIN SYN RST PSH ACK URG ECE CWR"}, // all 8 flags
-		{0x40, "ECE"},       // ECE only
-		{0x80, "CWR"},       // CWR only
-		{0xC0, "ECE CWR"},   // ECE+CWR
+		{0x40, "ECE"},     // ECE only
+		{0x80, "CWR"},     // CWR only
+		{0xC0, "ECE CWR"}, // ECE+CWR
 	}
 	for _, tt := range tests {
 		got := FormatTCPFlags(tt.flags)

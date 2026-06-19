@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // NewTalkerDetector identifies hosts that are active in the recent window
@@ -112,7 +114,7 @@ func (NewTalkerDetector) Analyze(store storage.Storage, cfg config.AnalysisConfi
 			Description: fmt.Sprintf(
 				"%s was not seen in the baseline period but generated %s (%s packets, %d flows) in the last interval. "+
 					"May indicate a rogue device, misconfigured DHCP, or unauthorized access.",
-				r.ip, formatBytesShort(r.bytes), formatCountShort(r.packets), r.flows,
+				r.ip, util.FormatBytes(r.bytes), util.FormatCount(r.packets), r.flows,
 			),
 			Action: newTalkerAction(sev),
 		})

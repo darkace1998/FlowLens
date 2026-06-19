@@ -7,6 +7,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/config"
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // DNSVolume analyzes flow data to detect excessive DNS query rates.
@@ -85,7 +87,7 @@ func (DNSVolume) Analyze(store storage.Storage, cfg config.AnalysisConfig) []Adv
 				"%.0f DNS flows/min detected (%d total DNS flows, %s bytes, %s packets in last %s). "+
 					"Threshold: %d flows/min.",
 				dnsRatePerMin, dnsFlows,
-				formatBytesShort(dnsBytes), formatCountShort(dnsPackets),
+				util.FormatBytes(dnsBytes), util.FormatCount(dnsPackets),
 				formatWindowShort(queryWindow(cfg)),
 				int(rateThresh),
 			),

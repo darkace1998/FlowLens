@@ -35,27 +35,27 @@ func buildMinimalPcap() []byte {
 	// Global header (24 bytes).
 	var ghdr [24]byte
 	binary.LittleEndian.PutUint32(ghdr[0:4], 0xa1b2c3d4) // magic
-	binary.LittleEndian.PutUint16(ghdr[4:6], 2)           // major
-	binary.LittleEndian.PutUint16(ghdr[6:8], 4)           // minor
-	binary.LittleEndian.PutUint32(ghdr[16:20], 65535)      // snaplen
-	binary.LittleEndian.PutUint32(ghdr[20:24], 1)          // Ethernet
+	binary.LittleEndian.PutUint16(ghdr[4:6], 2)          // major
+	binary.LittleEndian.PutUint16(ghdr[6:8], 4)          // minor
+	binary.LittleEndian.PutUint32(ghdr[16:20], 65535)    // snaplen
+	binary.LittleEndian.PutUint32(ghdr[20:24], 1)        // Ethernet
 	buf.Write(ghdr[:])
 
 	// Minimal Ethernet + IPv4 + TCP frame (54 bytes).
 	pkt := make([]byte, 54)
 	pkt[12] = 0x08
-	pkt[13] = 0x00 // EtherType = IPv4
-	pkt[14] = 0x45 // IPv4 version+IHL
+	pkt[13] = 0x00                             // EtherType = IPv4
+	pkt[14] = 0x45                             // IPv4 version+IHL
 	binary.BigEndian.PutUint16(pkt[16:18], 40) // total length
-	pkt[23] = 6                                 // protocol = TCP
+	pkt[23] = 6                                // protocol = TCP
 	copy(pkt[26:30], net.IPv4(10, 0, 0, 1).To4())
 	copy(pkt[30:34], net.IPv4(192, 168, 1, 1).To4())
 
 	// Packet header (16 bytes).
 	var phdr [16]byte
 	binary.LittleEndian.PutUint32(phdr[0:4], 1700000000) // timestamp sec
-	binary.LittleEndian.PutUint32(phdr[8:12], 54)         // captured len
-	binary.LittleEndian.PutUint32(phdr[12:16], 54)        // original len
+	binary.LittleEndian.PutUint32(phdr[8:12], 54)        // captured len
+	binary.LittleEndian.PutUint32(phdr[12:16], 54)       // original len
 	buf.Write(phdr[:])
 	buf.Write(pkt)
 
@@ -69,10 +69,10 @@ func buildBEPcapHeader() []byte {
 	// Actually for BE: the reader reads magic as LE first.
 	// Use the constant pcapMagicBE = 0xd4c3b2a1 which is the LE reading of a BE file.
 	binary.LittleEndian.PutUint32(ghdr[0:4], 0xd4c3b2a1) // will match pcapMagicBE
-	binary.BigEndian.PutUint16(ghdr[4:6], 2)              // major
-	binary.BigEndian.PutUint16(ghdr[6:8], 4)              // minor
-	binary.BigEndian.PutUint32(ghdr[16:20], 65535)         // snaplen
-	binary.BigEndian.PutUint32(ghdr[20:24], 1)             // Ethernet
+	binary.BigEndian.PutUint16(ghdr[4:6], 2)             // major
+	binary.BigEndian.PutUint16(ghdr[6:8], 4)             // minor
+	binary.BigEndian.PutUint32(ghdr[16:20], 65535)       // snaplen
+	binary.BigEndian.PutUint32(ghdr[20:24], 1)           // Ethernet
 	return ghdr[:]
 }
 

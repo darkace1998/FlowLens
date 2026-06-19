@@ -9,6 +9,8 @@ import (
 	"github.com/darkace1998/FlowLens/internal/logging"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+
+	"github.com/darkace1998/FlowLens/internal/util"
 )
 
 // LongConnectionDetector identifies TCP/UDP connections that have been active
@@ -109,7 +111,7 @@ func (LongConnectionDetector) Analyze(store storage.Storage, cfg config.Analysis
 		desc := fmt.Sprintf(
 			"Long-running %s connection detected: %s. Transferred %s in %d packets.",
 			protoName, formatDurationShort(r.stats.duration),
-			formatBytesShort(r.stats.bytes), r.stats.packets,
+			util.FormatBytes(r.stats.bytes), r.stats.packets,
 		)
 
 		advisories = append(advisories, Advisory{
