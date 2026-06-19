@@ -90,7 +90,7 @@ func TestRingBuffer_Recent(t *testing.T) {
 		makeTestFlow("10.0.1.1", "192.168.1.1", 1000, 80, now.Add(-30*time.Minute)), // too old
 		makeTestFlow("10.0.1.2", "192.168.1.2", 1001, 80, now.Add(-5*time.Minute)),  // within 10m
 		makeTestFlow("10.0.1.3", "192.168.1.3", 1002, 80, now.Add(-1*time.Minute)),  // within 10m
-		makeTestFlow("10.0.1.4", "192.168.1.4", 1003, 80, now),                       // within 10m
+		makeTestFlow("10.0.1.4", "192.168.1.4", 1003, 80, now),                      // within 10m
 	}
 	if err := rb.Insert(flows); err != nil {
 		t.Fatalf("Insert failed: %v", err)

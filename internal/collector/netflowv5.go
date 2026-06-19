@@ -30,26 +30,26 @@ type nfv5Header struct {
 
 // nfv5Record represents a single NetFlow v5 flow record.
 type nfv5Record struct {
-	SrcAddr   uint32
-	DstAddr   uint32
-	NextHop   uint32
-	Input     uint16
-	Output    uint16
-	Packets   uint32
-	Bytes     uint32
-	First     uint32 // sysUptime at flow start
-	Last      uint32 // sysUptime at flow end
-	SrcPort   uint16
-	DstPort   uint16
-	_         uint8 // pad1
-	TCPFlags  uint8
-	Protocol  uint8
-	ToS       uint8
-	SrcAS     uint16
-	DstAS     uint16
-	SrcMask   uint8
-	DstMask   uint8
-	_         uint16 // pad2
+	SrcAddr  uint32
+	DstAddr  uint32
+	NextHop  uint32
+	Input    uint16
+	Output   uint16
+	Packets  uint32
+	Bytes    uint32
+	First    uint32 // sysUptime at flow start
+	Last     uint32 // sysUptime at flow end
+	SrcPort  uint16
+	DstPort  uint16
+	_        uint8 // pad1
+	TCPFlags uint8
+	Protocol uint8
+	ToS      uint8
+	SrcAS    uint16
+	DstAS    uint16
+	SrcMask  uint8
+	DstMask  uint8
+	_        uint16 // pad2
 }
 
 // DecodeNetFlowV5 decodes a raw NetFlow v5 UDP payload into a slice of Flow records.

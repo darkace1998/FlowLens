@@ -23,7 +23,7 @@ func buildIPFIXTemplateSet(templateID uint16, fields []ipfixTemplateField) []byt
 	data := make([]byte, totalLen)
 
 	binary.BigEndian.PutUint16(data[0:2], 2)                // Set ID = Template
-	binary.BigEndian.PutUint16(data[2:4], uint16(totalLen))  // Set Length
+	binary.BigEndian.PutUint16(data[2:4], uint16(totalLen)) // Set Length
 
 	binary.BigEndian.PutUint16(data[4:6], templateID)
 	binary.BigEndian.PutUint16(data[6:8], uint16(len(fields)))
@@ -68,10 +68,10 @@ func buildIPFIXPacket(obsDomainID uint32, exportTime uint32, sets ...[]byte) []b
 	pkt := make([]byte, msgLen)
 
 	// Header
-	binary.BigEndian.PutUint16(pkt[0:2], 10)              // version
-	binary.BigEndian.PutUint16(pkt[2:4], uint16(msgLen))   // length
+	binary.BigEndian.PutUint16(pkt[0:2], 10)             // version
+	binary.BigEndian.PutUint16(pkt[2:4], uint16(msgLen)) // length
 	binary.BigEndian.PutUint32(pkt[4:8], exportTime)
-	binary.BigEndian.PutUint32(pkt[8:12], 1)               // sequence
+	binary.BigEndian.PutUint32(pkt[8:12], 1) // sequence
 	binary.BigEndian.PutUint32(pkt[12:16], obsDomainID)
 
 	off := ipfixHeaderSize
@@ -370,7 +370,7 @@ func TestDecodeIPFIX_EnterpriseField(t *testing.T) {
 	recData := make([]byte, 13)
 	copy(recData[0:4], net.ParseIP("10.0.1.1").To4())
 	copy(recData[4:8], net.ParseIP("192.168.1.1").To4())
-	recData[8] = 6 // TCP
+	recData[8] = 6                                // TCP
 	binary.BigEndian.PutUint32(recData[9:13], 42) // enterprise value (ignored)
 	dataSet := buildIPFIXDataSet(256, recData)
 
@@ -417,7 +417,7 @@ func TestDecodeIPFIX_L2Fields(t *testing.T) {
 	binary.BigEndian.PutUint32(b4, 5000)
 	dataFields = append(dataFields, b4...) // bytes
 	binary.BigEndian.PutUint32(b4, 50)
-	dataFields = append(dataFields, b4...) // packets
+	dataFields = append(dataFields, b4...)                              // packets
 	dataFields = append(dataFields, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff) // srcMAC
 	dataFields = append(dataFields, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66) // dstMAC
 	b2 := make([]byte, 2)
@@ -452,82 +452,82 @@ func TestDecodeIPFIX_L2Fields(t *testing.T) {
 }
 
 func TestDecodeIPFIX_NATEventTemplateSkipped(t *testing.T) {
-cache := NewIPFIXTemplateCache()
-exporterIP := net.ParseIP("10.0.0.1")
+	cache := NewIPFIXTemplateCache()
+	exporterIP := net.ParseIP("10.0.0.1")
 
-// NAT event template mirroring Sophos template ID 260 (RFC 8158): contains
-// natEvent IE 230, no byte/packet counters. Records must be skipped so
-// they don't pollute flow stats with zero-counter entries.
-fields := []ipfixTemplateField{
-{ID: ipfixFieldProtocolID, Length: 1},
-{ID: ipfixFieldSourceIPv4Addr, Length: 4},
-{ID: ipfixFieldDestIPv4Addr, Length: 4},
-{ID: ipfixFieldSourceTransPort, Length: 2},
-{ID: ipfixFieldDestTransPort, Length: 2},
-{ID: ipfixFieldNatEvent, Length: 1},
-}
-tmplSet := buildIPFIXTemplateSet(260, fields)
+	// NAT event template mirroring Sophos template ID 260 (RFC 8158): contains
+	// natEvent IE 230, no byte/packet counters. Records must be skipped so
+	// they don't pollute flow stats with zero-counter entries.
+	fields := []ipfixTemplateField{
+		{ID: ipfixFieldProtocolID, Length: 1},
+		{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+		{ID: ipfixFieldDestIPv4Addr, Length: 4},
+		{ID: ipfixFieldSourceTransPort, Length: 2},
+		{ID: ipfixFieldDestTransPort, Length: 2},
+		{ID: ipfixFieldNatEvent, Length: 1},
+	}
+	tmplSet := buildIPFIXTemplateSet(260, fields)
 
-rec := make([]byte, 14)
-rec[0] = 6
-copy(rec[1:5], net.ParseIP("10.0.0.5").To4())
-copy(rec[5:9], net.ParseIP("8.8.8.8").To4())
-binary.BigEndian.PutUint16(rec[9:11], 12345)
-binary.BigEndian.PutUint16(rec[11:13], 443)
-rec[13] = 1
-dataSet := buildIPFIXDataSet(260, rec)
+	rec := make([]byte, 14)
+	rec[0] = 6
+	copy(rec[1:5], net.ParseIP("10.0.0.5").To4())
+	copy(rec[5:9], net.ParseIP("8.8.8.8").To4())
+	binary.BigEndian.PutUint16(rec[9:11], 12345)
+	binary.BigEndian.PutUint16(rec[11:13], 443)
+	rec[13] = 1
+	dataSet := buildIPFIXDataSet(260, rec)
 
-pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
-flows, err := DecodeIPFIX(pkt, exporterIP, cache)
-if err != nil {
-t.Fatalf("DecodeIPFIX err: %v", err)
-}
-if len(flows) != 0 {
-t.Fatalf("expected 0 flows from NAT-event template, got %d", len(flows))
-}
+	pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
+	flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+	if err != nil {
+		t.Fatalf("DecodeIPFIX err: %v", err)
+	}
+	if len(flows) != 0 {
+		t.Fatalf("expected 0 flows from NAT-event template, got %d", len(flows))
+	}
 }
 
 func TestDecodeIPFIX_BiflowAndTotalCounters(t *testing.T) {
-cache := NewIPFIXTemplateCache()
-exporterIP := net.ParseIP("10.0.0.1")
+	cache := NewIPFIXTemplateCache()
+	exporterIP := net.ParseIP("10.0.0.1")
 
-// Template using biflow counters (RFC 5103): initiator + responder octets/pkts
-// should be summed into Flow.Bytes / Flow.Packets.
-fields := []ipfixTemplateField{
-{ID: ipfixFieldSourceIPv4Addr, Length: 4},
-{ID: ipfixFieldDestIPv4Addr, Length: 4},
-{ID: ipfixFieldProtocolID, Length: 1},
-{ID: ipfixFieldInitiatorOctets, Length: 8},
-{ID: ipfixFieldResponderOctets, Length: 8},
-{ID: ipfixFieldInitiatorPackets, Length: 4},
-{ID: ipfixFieldResponderPackets, Length: 4},
-}
-tmplSet := buildIPFIXTemplateSet(300, fields)
+	// Template using biflow counters (RFC 5103): initiator + responder octets/pkts
+	// should be summed into Flow.Bytes / Flow.Packets.
+	fields := []ipfixTemplateField{
+		{ID: ipfixFieldSourceIPv4Addr, Length: 4},
+		{ID: ipfixFieldDestIPv4Addr, Length: 4},
+		{ID: ipfixFieldProtocolID, Length: 1},
+		{ID: ipfixFieldInitiatorOctets, Length: 8},
+		{ID: ipfixFieldResponderOctets, Length: 8},
+		{ID: ipfixFieldInitiatorPackets, Length: 4},
+		{ID: ipfixFieldResponderPackets, Length: 4},
+	}
+	tmplSet := buildIPFIXTemplateSet(300, fields)
 
-rec := make([]byte, 33)
-copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
-copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
-rec[8] = 6
-binary.BigEndian.PutUint64(rec[9:17], 1000)  // initiator octets
-binary.BigEndian.PutUint64(rec[17:25], 2500) // responder octets
-binary.BigEndian.PutUint32(rec[25:29], 10)   // initiator pkts
-binary.BigEndian.PutUint32(rec[29:33], 15)   // responder pkts
-dataSet := buildIPFIXDataSet(300, rec)
+	rec := make([]byte, 33)
+	copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
+	copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
+	rec[8] = 6
+	binary.BigEndian.PutUint64(rec[9:17], 1000)  // initiator octets
+	binary.BigEndian.PutUint64(rec[17:25], 2500) // responder octets
+	binary.BigEndian.PutUint32(rec[25:29], 10)   // initiator pkts
+	binary.BigEndian.PutUint32(rec[29:33], 15)   // responder pkts
+	dataSet := buildIPFIXDataSet(300, rec)
 
-pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
-flows, err := DecodeIPFIX(pkt, exporterIP, cache)
-if err != nil {
-t.Fatalf("DecodeIPFIX err: %v", err)
-}
-if len(flows) != 1 {
-t.Fatalf("expected 1 flow, got %d", len(flows))
-}
-if flows[0].Bytes != 3500 {
-t.Errorf("Bytes = %d, want 3500 (initiator+responder)", flows[0].Bytes)
-}
-if flows[0].Packets != 25 {
-t.Errorf("Packets = %d, want 25 (initiator+responder)", flows[0].Packets)
-}
+	pkt := buildIPFIXPacket(0, uint32(time.Now().Unix()), tmplSet, dataSet)
+	flows, err := DecodeIPFIX(pkt, exporterIP, cache)
+	if err != nil {
+		t.Fatalf("DecodeIPFIX err: %v", err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("expected 1 flow, got %d", len(flows))
+	}
+	if flows[0].Bytes != 3500 {
+		t.Errorf("Bytes = %d, want 3500 (initiator+responder)", flows[0].Bytes)
+	}
+	if flows[0].Packets != 25 {
+		t.Errorf("Packets = %d, want 25 (initiator+responder)", flows[0].Packets)
+	}
 }
 
 func TestDecodeIPFIX_DeltaCountersPreferredOverBiflow(t *testing.T) {
@@ -552,7 +552,7 @@ func TestDecodeIPFIX_DeltaCountersPreferredOverBiflow(t *testing.T) {
 	rec := make([]byte, 41)
 	copy(rec[0:4], net.ParseIP("10.0.0.5").To4())
 	copy(rec[4:8], net.ParseIP("8.8.8.8").To4())
-	rec[8] = 6 // TCP
+	rec[8] = 6                                   // TCP
 	binary.BigEndian.PutUint32(rec[9:13], 4000)  // octetDeltaCount
 	binary.BigEndian.PutUint32(rec[13:17], 40)   // packetDeltaCount
 	binary.BigEndian.PutUint64(rec[17:25], 1000) // initiator octets

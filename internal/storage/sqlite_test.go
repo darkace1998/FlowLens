@@ -180,7 +180,7 @@ func TestSQLiteStore_Prune(t *testing.T) {
 	flows := []model.Flow{
 		makeTestFlow("10.0.1.1", "192.168.1.1", 1000, 80, now.Add(-10*time.Minute)), // should be pruned
 		makeTestFlow("10.0.1.2", "192.168.1.2", 1001, 80, now.Add(-1*time.Minute)),  // should remain
-		makeTestFlow("10.0.1.3", "192.168.1.3", 1002, 80, now),                       // should remain
+		makeTestFlow("10.0.1.3", "192.168.1.3", 1002, 80, now),                      // should remain
 	}
 
 	if err := store.Insert(flows); err != nil {

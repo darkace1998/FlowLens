@@ -1689,25 +1689,25 @@ type AboutPageData struct {
 	NumCPU        int
 
 	// Config values
-	NetFlowPort      int
-	IPFIXPort        int
-	SFlowPort        int
-	BufferSize       int
-	RateLimit        int
-	RingBufferDur    string
+	NetFlowPort        int
+	IPFIXPort          int
+	SFlowPort          int
+	BufferSize         int
+	RateLimit          int
+	RingBufferDur      string
 	RingBufferCapacity int
-	SQLitePath       string
-	SQLiteRetention  string
-	PruneInterval    string
-	GeoIPPath        string
-	AnalysisInterval string
-	TopTalkersCount  int
-	BaselineWindow   string
-	ScanThreshold    int
-	QueryWindow     string
-	WebListen        string
-	PageSize         int
-	FlowCount        int
+	SQLitePath         string
+	SQLiteRetention    string
+	PruneInterval      string
+	GeoIPPath          string
+	AnalysisInterval   string
+	TopTalkersCount    int
+	BaselineWindow     string
+	ScanThreshold      int
+	QueryWindow        string
+	WebListen          string
+	PageSize           int
+	FlowCount          int
 	// Capture config
 	CaptureInterfaces []string
 	CaptureSnapLen    int
@@ -1747,15 +1747,15 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 		TopTalkersCount:    s.fullCfg.Analysis.TopTalkersCount,
 		BaselineWindow:     s.fullCfg.Analysis.AnomalyBaselineWindow.String(),
 		ScanThreshold:      s.fullCfg.Analysis.ScanThreshold,
-		QueryWindow:       s.fullCfg.Analysis.QueryWindow.String(),
+		QueryWindow:        s.fullCfg.Analysis.QueryWindow.String(),
 		WebListen:          s.fullCfg.Web.Listen,
 		PageSize:           s.fullCfg.Web.PageSize,
 		FlowCount:          s.flowSvc.FlowCount(),
 		CaptureInterfaces:  s.fullCfg.Capture.Interfaces,
-		CaptureSnapLen:      s.fullCfg.Capture.SnapLen,
-		CaptureDir:          s.fullCfg.Capture.Dir,
-		CaptureMaxSizeMB:    s.fullCfg.Capture.MaxSizeMB,
-		CaptureMaxFiles:     s.fullCfg.Capture.MaxFiles,
+		CaptureSnapLen:     s.fullCfg.Capture.SnapLen,
+		CaptureDir:         s.fullCfg.Capture.Dir,
+		CaptureMaxSizeMB:   s.fullCfg.Capture.MaxSizeMB,
+		CaptureMaxFiles:    s.fullCfg.Capture.MaxFiles,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

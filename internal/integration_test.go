@@ -256,11 +256,11 @@ func buildNFV5Packet(count int) []byte {
 	const recordSize = 48
 
 	pkt := make([]byte, headerSize+count*recordSize)
-	binary.BigEndian.PutUint16(pkt[0:2], 5)            // version
+	binary.BigEndian.PutUint16(pkt[0:2], 5)             // version
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(count)) // count
 	binary.BigEndian.PutUint32(pkt[4:8], 600000)        // sysUptime
 	binary.BigEndian.PutUint32(pkt[8:12], uint32(time.Now().Unix()))
-	binary.BigEndian.PutUint32(pkt[12:16], 0)           // nsecs
+	binary.BigEndian.PutUint32(pkt[12:16], 0) // nsecs
 
 	for i := 0; i < count; i++ {
 		off := headerSize + i*recordSize
@@ -278,7 +278,7 @@ func buildNFV5Packet(count int) []byte {
 
 		binary.BigEndian.PutUint16(rec[12:14], uint16(i+1))
 		binary.BigEndian.PutUint16(rec[14:16], uint16(i+2))
-		binary.BigEndian.PutUint32(rec[16:20], 100)   // packets
+		binary.BigEndian.PutUint32(rec[16:20], 100)    // packets
 		binary.BigEndian.PutUint32(rec[20:24], 15000)  // bytes
 		binary.BigEndian.PutUint32(rec[24:28], 594000) // first
 		binary.BigEndian.PutUint32(rec[28:32], 599000) // last

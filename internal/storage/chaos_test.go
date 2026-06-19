@@ -79,16 +79,16 @@ func TestSQLiteStore_ConcurrentInsertAndQuery(t *testing.T) {
 		defer close(done)
 		for i := 0; i < 200; i++ {
 			f := model.Flow{
-				Timestamp:   now.Add(-time.Duration(i) * time.Second),
-				SrcAddr:     net.IPv4(10, 0, 0, byte(i%255+1)),
-				DstAddr:     net.IPv4(192, 168, 1, 1),
-				SrcPort:     uint16(1000 + i),
-				DstPort:     80,
-				Protocol:    6,
-				Bytes:       1000,
-				Packets:     10,
-				ExporterIP:  net.ParseIP("10.0.0.1"),
-				Duration:    time.Second,
+				Timestamp:  now.Add(-time.Duration(i) * time.Second),
+				SrcAddr:    net.IPv4(10, 0, 0, byte(i%255+1)),
+				DstAddr:    net.IPv4(192, 168, 1, 1),
+				SrcPort:    uint16(1000 + i),
+				DstPort:    80,
+				Protocol:   6,
+				Bytes:      1000,
+				Packets:    10,
+				ExporterIP: net.ParseIP("10.0.0.1"),
+				Duration:   time.Second,
 			}
 			if err := store.Insert([]model.Flow{f}); err != nil {
 				t.Errorf("concurrent insert failed: %v", err)
@@ -131,16 +131,16 @@ func TestSQLiteStore_LargeInsert(t *testing.T) {
 	flows := make([]model.Flow, 1000)
 	for i := range flows {
 		flows[i] = model.Flow{
-			Timestamp:   now.Add(-time.Duration(i) * time.Second),
-			SrcAddr:     net.IPv4(10, 0, byte(i>>8), byte(i)),
-			DstAddr:     net.IPv4(192, 168, 1, 1),
-			SrcPort:     uint16(1000 + i%60000),
-			DstPort:     80,
-			Protocol:    6,
-			Bytes:       1500,
-			Packets:     10,
-			ExporterIP:  net.ParseIP("10.0.0.1"),
-			Duration:    time.Second,
+			Timestamp:  now.Add(-time.Duration(i) * time.Second),
+			SrcAddr:    net.IPv4(10, 0, byte(i>>8), byte(i)),
+			DstAddr:    net.IPv4(192, 168, 1, 1),
+			SrcPort:    uint16(1000 + i%60000),
+			DstPort:    80,
+			Protocol:   6,
+			Bytes:      1500,
+			Packets:    10,
+			ExporterIP: net.ParseIP("10.0.0.1"),
+			Duration:   time.Second,
 		}
 	}
 

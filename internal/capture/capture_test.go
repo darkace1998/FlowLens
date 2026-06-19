@@ -29,8 +29,8 @@ func buildTCPv4Packet(srcIP, dstIP net.IP, srcPort, dstPort uint16, payloadLen i
 	totalLen := 20 + 20 + payloadLen
 	ip[2] = byte(totalLen >> 8)
 	ip[3] = byte(totalLen)
-	ip[8] = 64  // TTL
-	ip[9] = 6   // Protocol: TCP
+	ip[8] = 64 // TTL
+	ip[9] = 6  // Protocol: TCP
 	copy(ip[12:16], srcIP.To4())
 	copy(ip[16:20], dstIP.To4())
 
@@ -251,7 +251,7 @@ func TestDecodeIPv6(t *testing.T) {
 	payloadLen := 20
 	ip6[4] = byte(payloadLen >> 8)
 	ip6[5] = byte(payloadLen)
-	ip6[6] = 6 // Next Header: TCP
+	ip6[6] = 6  // Next Header: TCP
 	ip6[7] = 64 // Hop Limit
 
 	// Src IPv6: ::1

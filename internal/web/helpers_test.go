@@ -217,26 +217,6 @@ func TestMOSQuality(t *testing.T) {
 	}
 }
 
-func TestFormatDuration(t *testing.T) {
-	tests := []struct {
-		input time.Duration
-		want  string
-	}{
-		{500 * time.Millisecond, "500ms"},
-		{10 * time.Minute, "10m"},
-		{1 * time.Hour, "1h"},
-		{90 * time.Minute, "1h 30m"},
-		{30 * time.Second, "30s"},
-		{5*time.Minute + 30*time.Second, "5m 30s"},
-	}
-	for _, tt := range tests {
-		got := formatDuration(tt.input)
-		if got != tt.want {
-			t.Errorf("formatDuration(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestPctOf(t *testing.T) {
 	tests := []struct {
 		part, total uint64

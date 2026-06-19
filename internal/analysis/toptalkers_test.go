@@ -1,9 +1,9 @@
 package analysis
 
 import (
-	"testing"
 	"github.com/darkace1998/FlowLens/internal/model"
 	"github.com/darkace1998/FlowLens/internal/storage"
+	"testing"
 )
 
 func TestTopTalkers_Name(t *testing.T) {

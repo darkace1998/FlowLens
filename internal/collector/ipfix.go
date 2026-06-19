@@ -28,14 +28,14 @@ const (
 	ipfixFieldIPNextHopIPv4Addr = 15
 	ipfixFieldBgpSourceAS       = 16
 	ipfixFieldBgpDestAS         = 17
-	ipfixFieldFlowEndSysUp     = 21
-	ipfixFieldFlowStartSysUp   = 22
+	ipfixFieldFlowEndSysUp      = 21
+	ipfixFieldFlowStartSysUp    = 22
 	ipfixFieldSourceIPv6Addr    = 27
 	ipfixFieldDestIPv6Addr      = 28
-	ipfixFieldFlowStartSec     = 150
-	ipfixFieldFlowEndSec       = 151
-	ipfixFieldFlowStartMilli   = 152
-	ipfixFieldFlowEndMilli     = 153
+	ipfixFieldFlowStartSec      = 150
+	ipfixFieldFlowEndSec        = 151
+	ipfixFieldFlowStartMilli    = 152
+	ipfixFieldFlowEndMilli      = 153
 	// Alternative total counters (used by some exporters instead of deltaCount).
 	ipfixFieldOctetTotalCount  = 85
 	ipfixFieldPacketTotalCount = 86
@@ -47,12 +47,12 @@ const (
 	// NAT event fields (RFC 8158). Presence of IE 230 natEvent in a template
 	// identifies a NAT-logging record rather than a traffic flow; such records
 	// carry no byte/packet counters and would otherwise pollute flow statistics.
-	ipfixFieldPostNATSourceIPv4      = 225
-	ipfixFieldPostNATDestIPv4        = 226
-	ipfixFieldPostNAPTSourcePort     = 227
-	ipfixFieldPostNAPTDestPort       = 228
-	ipfixFieldNatEvent               = 230
-	ipfixFieldObservationTimeMilli   = 323
+	ipfixFieldPostNATSourceIPv4    = 225
+	ipfixFieldPostNATDestIPv4      = 226
+	ipfixFieldPostNAPTSourcePort   = 227
+	ipfixFieldPostNAPTDestPort     = 228
+	ipfixFieldNatEvent             = 230
+	ipfixFieldObservationTimeMilli = 323
 	// TCP quality metrics (IANA IPFIX assignments).
 	// Note: Actual IE support varies by exporter vendor. These IDs cover
 	// common implementations; exporters that use different IDs will simply
@@ -63,12 +63,12 @@ const (
 	// or packet loss count. IE 227 is postMCastOctetDeltaCount and IE 233
 	// is firewallEvent — mapping them as OOO/loss produced false positives.
 	// OOO and loss are now detected only via the heuristic analyzer.
-	ipfixFieldRTPJitter              = 387 // transportRtpJitterMean (IANA IPFIX IE 387) in microseconds
+	ipfixFieldRTPJitter = 387 // transportRtpJitterMean (IANA IPFIX IE 387) in microseconds
 
 	// Layer-2 fields (IANA IPFIX assignments).
-	ipfixFieldSourceMacAddress       = 56  // sourceMacAddress — 6 bytes
-	ipfixFieldVlanId                 = 58  // vlanId — 2 bytes
-	ipfixFieldDestMacAddress         = 80  // destinationMacAddress — 6 bytes
+	ipfixFieldSourceMacAddress = 56 // sourceMacAddress — 6 bytes
+	ipfixFieldVlanId           = 58 // vlanId — 2 bytes
+	ipfixFieldDestMacAddress   = 80 // destinationMacAddress — 6 bytes
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).
@@ -76,16 +76,16 @@ const ipfixHeaderSize = 16
 
 // ipfixTemplateField describes one field in an IPFIX template record.
 type ipfixTemplateField struct {
-	ID             uint16
-	Length         uint16
-	EnterpriseNum  uint32
-	IsEnterprise   bool
+	ID            uint16
+	Length        uint16
+	EnterpriseNum uint32
+	IsEnterprise  bool
 }
 
 // ipfixTemplate holds a cached IPFIX template.
 type ipfixTemplate struct {
 	Fields     []ipfixTemplateField
-	Size       int // total bytes per data record
+	Size       int  // total bytes per data record
 	IsNATEvent bool // true if template contains natEvent IE (RFC 8158); records are NAT logs, not flows
 }
 
