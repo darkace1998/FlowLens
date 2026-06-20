@@ -152,6 +152,7 @@ func main() {
 		analysis.LongConnectionDetector{},
 		analysis.AmplificationDetector{},
 		analysis.NetworkSweepDetector{},
+		analysis.ICMPFloodDetector{},
 	)
 	engine.Start()
 

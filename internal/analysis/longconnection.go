@@ -111,7 +111,7 @@ func (LongConnectionDetector) Analyze(store storage.Storage, cfg config.Analysis
 		desc := fmt.Sprintf(
 			"Long-running %s connection detected: %s. Transferred %s in %d packets.",
 			protoName, model.FormatDurationShort(r.stats.duration),
-			formatBytesShort(r.stats.bytes), r.stats.packets,
+			util.FormatBytes(r.stats.bytes), r.stats.packets,
 		)
 
 		advisories = append(advisories, Advisory{

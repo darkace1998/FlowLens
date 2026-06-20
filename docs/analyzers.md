@@ -9,6 +9,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Protocol Distribution | Detects unusual protocol ratios and insecure protocols |
 | Scan Detector | Detects reconnaissance patterns by unique-port fanout |
 | Network Sweep Detector | Detects hosts connecting to many unique destination IPs |
+| ICMP Flood Detector | Detects hosts receiving a large number of ICMP packets |
 | Anomaly Detector | Detects spikes/drops against historical baseline |
 | DNS Volume | Flags unusual DNS rates and ratios |
 | Flow Asymmetry | Detects directional imbalances between peers |
