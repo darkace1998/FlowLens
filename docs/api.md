@@ -188,6 +188,8 @@ This endpoint does not accept any query parameters.
 
 Liveness endpoint used by health checks and orchestration.
 
+*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+
 Example response:
 
 ```json
@@ -200,3 +202,25 @@ Example response:
 ### `GET /ping`
 
 Simple ping endpoint to check if the server is running. Returns `pong`.
+
+*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+
+## Webhooks
+
+When `analysis.webhook_url` is configured, FlowLens will send new advisories to the configured URL via HTTP POST. The payload is sent as `application/json`.
+
+**Example Payload:**
+
+```json
+{
+  "timestamp": "2023-10-25T10:00:00Z",
+  "advisories": [
+    {
+      "severity": "high",
+      "title": "Port Scan Detected",
+      "description": "Host 192.168.1.100 is scanning multiple ports on 10.0.0.5.",
+      "action": "Investigate host 192.168.1.100 for compromise."
+    }
+  ]
+}
+```

@@ -19,3 +19,5 @@ After startup, open `http://localhost:8080`.
 | Counters | `/counters` | sFlow counter summaries |
 | Exporters | `/exporters` | Per-exporter comparisons and activity |
 | About | `/about` | Runtime status and configuration summary |
+| Healthz | `/healthz` | Liveness endpoint returning JSON status |
+| Ping | `/ping` | Simple text endpoint returning "pong" |
