@@ -109,6 +109,10 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/flows", s.handleFlows)
 	s.mux.HandleFunc("/flows/export", s.handleFlowsExport)
+	// Phase 3: Filter preset routes
+	s.mux.HandleFunc("/flows/filter-preset/save", csrf.csrfProtect(s.handleSaveFilterPreset))
+	s.mux.HandleFunc("/flows/filter-preset/load", s.handleLoadFilterPreset)
+	s.mux.HandleFunc("/flows/filter-preset/delete", csrf.csrfProtect(s.handleDeleteFilterPreset))
 	s.mux.HandleFunc("/hosts", s.handleHosts)
 	s.mux.HandleFunc("/reports", s.handleReports)
 	s.mux.HandleFunc("/reports/export", s.handleReportsExport)

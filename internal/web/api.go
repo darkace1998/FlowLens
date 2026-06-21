@@ -157,6 +157,121 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
+
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
+	// TCP Quality filters
+	var filterRTTMin, filterRTTMax int64
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_min")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMin = val
+		}
+	}
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_max")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMax = val
+		}
+	}
+
+	var filterRetransMin uint32
+	if rt := strings.TrimSpace(r.URL.Query().Get("retrans_min")); rt != "" {
+		if val, err := strconv.ParseUint(rt, 10, 32); err == nil {
+			filterRetransMin = uint32(val)
+		}
+	}
+
+	var filterOOOMin uint32
+	if ooo := strings.TrimSpace(r.URL.Query().Get("ooo_min")); ooo != "" {
+		if val, err := strconv.ParseUint(ooo, 10, 32); err == nil {
+			filterOOOMin = uint32(val)
+		}
+	}
+
+	var filterLossMin uint32
+	if loss := strings.TrimSpace(r.URL.Query().Get("loss_min")); loss != "" {
+		if val, err := strconv.ParseUint(loss, 10, 32); err == nil {
+			filterLossMin = uint32(val)
+		}
+	}
+
+	var filterJitterMin, filterJitterMax int64
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_min")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMin = val
+		}
+	}
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_max")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMax = val
+		}
+	}
+
+	var filterMOSMin float32
+	if mos := strings.TrimSpace(r.URL.Query().Get("mos_min")); mos != "" {
+		if val, err := strconv.ParseFloat(mos, 32); err == nil {
+			filterMOSMin = float32(val)
+		}
+	}
 
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
@@ -170,7 +285,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter, filterRTTMin, filterRTTMax, filterRetransMin, filterOOOMin, filterLossMin, filterJitterMin, filterJitterMax, filterMOSMin)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize

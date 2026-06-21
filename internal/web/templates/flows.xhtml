@@ -9,14 +9,75 @@
   <label>Dst IP <input type="text" name="dst_ip" value="{{.FilterDstIP}}" placeholder="e.g. 192.168" /></label>
   <label>Port <input type="text" name="port" value="{{.FilterPort}}" placeholder="e.g. 443" /></label>
   <label>Protocol <input type="text" name="protocol" value="{{.FilterProtocol}}" placeholder="tcp/udp/6/17" /></label>
+  <label>App Protocol <input type="text" name="app_proto" value="{{.FilterAppProto}}" placeholder="e.g. HTTP, DNS" /></label>
+  <label>App Category <input type="text" name="app_cat" value="{{.FilterAppCat}}" placeholder="e.g. Web, Database" /></label>
+  <label>Bytes Min <input type="number" name="bytes_min" value="{{if .FilterBytesMin}}{{.FilterBytesMin}}{{end}}" placeholder="minimum bytes" /></label>
+  <label>Bytes Max <input type="number" name="bytes_max" value="{{if .FilterBytesMax}}{{.FilterBytesMax}}{{end}}" placeholder="maximum bytes" /></label>
+  <label>Start Time <input type="datetime-local" name="start" value="{{.FilterStart}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
+  <label>End Time <input type="datetime-local" name="end" value="{{.FilterEnd}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
+  <label>TCP Flags <input type="text" name="tcp_flags" value="{{.FilterTCPFlags}}" placeholder="e.g. SYN, SYN,ACK, 0x12" /></label>
+  <label>ToS <input type="number" name="tos" value="{{if .FilterToS}}{{.FilterToS}}{{end}}" min="0" max="255" placeholder="ToS/DSCP value" /></label>
+  <label>In Interface <input type="text" name="in_iface" value="{{.FilterInIface}}" placeholder="e.g. eth0" /></label>
+  <label>Out Interface <input type="text" name="out_iface" value="{{.FilterOutIface}}" placeholder="e.g. eth1" /></label>
+  <label>Src AS <input type="number" name="src_as" value="{{if .FilterSrcAS}}{{.FilterSrcAS}}{{end}}" placeholder="source AS number" /></label>
+  <label>Dst AS <input type="number" name="dst_as" value="{{if .FilterDstAS}}{{.FilterDstAS}}{{end}}" placeholder="destination AS number" /></label>
+  <label>Src MAC <input type="text" name="src_mac" value="{{.FilterSrcMAC}}" placeholder="e.g. 00:11:22:33:44:55" /></label>
+  <label>Dst MAC <input type="text" name="dst_mac" value="{{.FilterDstMAC}}" placeholder="e.g. aa:bb:cc:dd:ee:ff" /></label>
+  <label>VLAN <input type="number" name="vlan" value="{{if .FilterVLAN}}{{.FilterVLAN}}{{end}}" min="0" max="4095" placeholder="VLAN ID" /></label>
+  <label>EtherType <input type="text" name="ether_type" value="{{if .FilterEtherType}}0x{{printf "%04x" .FilterEtherType}}{{end}}" placeholder="e.g. 0x0800, 2048" /></label>
+  <label>Exporter IP <input type="text" name="exporter" value="{{.FilterExporter}}" placeholder="e.g. 192.168.1.1" /></label>
+  <label>RTT Min (μs) <input type="number" name="rtt_min" value="{{if .FilterRTTMin}}{{.FilterRTTMin}}{{end}}" placeholder="minimum RTT" /></label>
+  <label>RTT Max (μs) <input type="number" name="rtt_max" value="{{if .FilterRTTMax}}{{.FilterRTTMax}}{{end}}" placeholder="maximum RTT" /></label>
+  <label>Retrans Min <input type="number" name="retrans_min" value="{{if .FilterRetransMin}}{{.FilterRetransMin}}{{end}}" placeholder="min retransmissions" /></label>
+  <label>OOO Min <input type="number" name="ooo_min" value="{{if .FilterOOOMin}}{{.FilterOOOMin}}{{end}}" placeholder="min out-of-order" /></label>
+  <label>Loss Min <input type="number" name="loss_min" value="{{if .FilterLossMin}}{{.FilterLossMin}}{{end}}" placeholder="min packet loss" /></label>
+  <label>Jitter Min (μs) <input type="number" name="jitter_min" value="{{if .FilterJitterMin}}{{.FilterJitterMin}}{{end}}" placeholder="min jitter" /></label>
+  <label>Jitter Max (μs) <input type="number" name="jitter_max" value="{{if .FilterJitterMax}}{{.FilterJitterMax}}{{end}}" placeholder="max jitter" /></label>
+  <label>MOS Min <input type="number" name="mos_min" value="{{if .FilterMOSMin}}{{printf "%.2f" .FilterMOSMin}}{{end}}" step="0.01" min="1" max="4.41" placeholder="min MOS score" /></label>
   <button type="submit">Filter</button>
   <a href="/flows" class="btn-clear">Clear</a>
 </form>
 
+{{/* Phase 3: Filter Presets */}}
+{{if .FilterPresetErr}}
+<div class="alert alert-info">{{.FilterPresetErr}}</div>
+{{end}}
+
+<div class="filter-presets" style="margin: 1em 0;">
+  <details>
+    <summary><strong>📋 Filter Presets</strong></summary>
+    <div style="margin-top: 0.5em; padding: 0.5em; background: #f5f5f5; border-radius: 4px;">
+      {{if .FilterPresets}}
+      <div style="margin-bottom: 0.5em;">
+        <strong>Saved Presets:</strong>
+        {{range .FilterPresets}}
+        <span style="margin-right: 0.5em; white-space: nowrap;">
+          <a href="/flows/filter-preset/load?name={{urlquery .Name}}" class="btn btn-sm" style="padding: 0.25em 0.5em;">{{.Name}}</a>
+          <form action="/flows/filter-preset/delete" method="post" style="display: inline; margin-left: 0.25em;">
+            <input type="hidden" name="name" value="{{.Name}}" />
+            <button type="submit" class="btn btn-sm btn-danger" style="padding: 0.25em 0.5em;" onclick="return confirm('Delete preset {{.Name}}?')">×</button>
+          </form>
+          {{if .Description}}<small title="{{.Description}}"> ({{.Description}})</small>{{end}}
+        </span>
+        {{end}}
+      </div>
+      {{end}}
+      <form action="/flows/filter-preset/save" method="post" style="margin-top: 0.5em; padding-top: 0.5em; border-top: 1px solid #ddd;">
+        <label style="margin-right: 0.5em;">
+          <strong>Save Current Filters:</strong>
+          <input type="text" name="name" placeholder="Preset Name" required style="padding: 0.25em; width: 120px;" />
+          <input type="text" name="description" placeholder="Description (optional)" style="padding: 0.25em; width: 200px; margin-left: 0.5em;" />
+          <button type="submit" class="btn btn-sm" style="padding: 0.25em 0.5em; margin-left: 0.5em;">Save</button>
+        </label>
+      </form>
+    </div>
+  </details>
+</div>
+
 <p class="flow-summary">Showing page {{.Page}} of {{.TotalPages}} ({{.TotalFlows}} flows)</p>
 <div class="export-buttons" style="margin: 0.5em 0;">
-  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
-  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}" class="btn btn-sm">⬇ Export JSON</a>
+  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}{{if .FilterTCPFlags}}&amp;tcp_flags={{urlquery .FilterTCPFlags}}{{end}}{{if .FilterToS}}&amp;tos={{.FilterToS}}{{end}}{{if .FilterInIface}}&amp;in_iface={{urlquery .FilterInIface}}{{end}}{{if .FilterOutIface}}&amp;out_iface={{urlquery .FilterOutIface}}{{end}}{{if .FilterSrcAS}}&amp;src_as={{.FilterSrcAS}}{{end}}{{if .FilterDstAS}}&amp;dst_as={{.FilterDstAS}}{{end}}{{if .FilterSrcMAC}}&amp;src_mac={{urlquery .FilterSrcMAC}}{{end}}{{if .FilterDstMAC}}&amp;dst_mac={{urlquery .FilterDstMAC}}{{end}}{{if .FilterVLAN}}&amp;vlan={{.FilterVLAN}}{{end}}{{if .FilterEtherType}}&amp;ether_type=0x{{printf "%04x" .FilterEtherType}}{{end}}{{if .FilterExporter}}&amp;exporter={{urlquery .FilterExporter}}{{end}}{{if .FilterRTTMin}}&amp;rtt_min={{.FilterRTTMin}}{{end}}{{if .FilterRTTMax}}&amp;rtt_max={{.FilterRTTMax}}{{end}}{{if .FilterRetransMin}}&amp;retrans_min={{.FilterRetransMin}}{{end}}{{if .FilterOOOMin}}&amp;ooo_min={{.FilterOOOMin}}{{end}}{{if .FilterLossMin}}&amp;loss_min={{.FilterLossMin}}{{end}}{{if .FilterJitterMin}}&amp;jitter_min={{.FilterJitterMin}}{{end}}{{if .FilterJitterMax}}&amp;jitter_max={{.FilterJitterMax}}{{end}}{{if .FilterMOSMin}}&amp;mos_min={{.FilterMOSMin}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
+  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}{{if .FilterTCPFlags}}&amp;tcp_flags={{urlquery .FilterTCPFlags}}{{end}}{{if .FilterToS}}&amp;tos={{.FilterToS}}{{end}}{{if .FilterInIface}}&amp;in_iface={{urlquery .FilterInIface}}{{end}}{{if .FilterOutIface}}&amp;out_iface={{urlquery .FilterOutIface}}{{end}}{{if .FilterSrcAS}}&amp;src_as={{.FilterSrcAS}}{{end}}{{if .FilterDstAS}}&amp;dst_as={{.FilterDstAS}}{{end}}{{if .FilterSrcMAC}}&amp;src_mac={{urlquery .FilterSrcMAC}}{{end}}{{if .FilterDstMAC}}&amp;dst_mac={{urlquery .FilterDstMAC}}{{end}}{{if .FilterVLAN}}&amp;vlan={{.FilterVLAN}}{{end}}{{if .FilterEtherType}}&amp;ether_type=0x{{printf "%04x" .FilterEtherType}}{{end}}{{if .FilterExporter}}&amp;exporter={{urlquery .FilterExporter}}{{end}}{{if .FilterRTTMin}}&amp;rtt_min={{.FilterRTTMin}}{{end}}{{if .FilterRTTMax}}&amp;rtt_max={{.FilterRTTMax}}{{end}}{{if .FilterRetransMin}}&amp;retrans_min={{.FilterRetransMin}}{{end}}{{if .FilterOOOMin}}&amp;ooo_min={{.FilterOOOMin}}{{end}}{{if .FilterLossMin}}&amp;loss_min={{.FilterLossMin}}{{end}}{{if .FilterJitterMin}}&amp;jitter_min={{.FilterJitterMin}}{{end}}{{if .FilterJitterMax}}&amp;jitter_max={{.FilterJitterMax}}{{end}}{{if .FilterMOSMin}}&amp;mos_min={{.FilterMOSMin}}{{end}}" class="btn btn-sm">⬇ Export JSON</a>
 </div>
 
 {{if .Flows}}

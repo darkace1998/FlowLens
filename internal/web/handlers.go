@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -908,6 +909,14 @@ type FlowRow struct {
 	TCPFlags    string
 }
 
+// FilterPreset represents a saved filter configuration
+type FilterPreset struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Filters     string `json:"filters"` // URL-encoded query string
+	CreatedAt   string `json:"created_at"`
+}
+
 // FlowsPageData holds all data for the flows explorer template.
 type FlowsPageData struct {
 	Flows      []FlowRow
@@ -923,6 +932,36 @@ type FlowsPageData struct {
 	FilterPort     string
 	FilterProtocol string
 	FilterIP       string // matches either src or dst
+	FilterAppProto string // filter by application protocol
+	FilterAppCat   string // filter by application category
+	FilterStart    string // filter by start time
+	FilterEnd      string // filter by end time
+	FilterBytesMin uint64 // filter by minimum bytes
+	FilterBytesMax uint64 // filter by maximum bytes
+	// Phase 2 filters
+	FilterTCPFlags    string // filter by TCP flags (SYN, ACK, etc.)
+	FilterToS        uint8  // filter by ToS/DSCP value
+	FilterInIface    string // filter by input interface
+	FilterOutIface   string // filter by output interface
+	FilterSrcAS      uint32 // filter by source AS number
+	FilterDstAS      uint32 // filter by destination AS number
+	FilterSrcMAC     string // filter by source MAC address
+	FilterDstMAC     string // filter by destination MAC address
+	FilterVLAN       uint16 // filter by VLAN ID
+	FilterEtherType  uint16 // filter by ethernet type
+	FilterExporter   string // filter by exporter IP address
+	// TCP Quality filters
+	FilterRTTMin     int64  // filter by minimum RTT (microseconds)
+	FilterRTTMax     int64  // filter by maximum RTT (microseconds)
+	FilterRetransMin uint32 // filter by minimum retransmissions
+	FilterOOOMin     uint32 // filter by minimum out-of-order packets
+	FilterLossMin    uint32 // filter by minimum packet loss
+	FilterJitterMin  int64  // filter by minimum jitter (microseconds)
+	FilterJitterMax  int64  // filter by maximum jitter (microseconds)
+	FilterMOSMin     float32 // filter by minimum MOS score
+	// Phase 3: Filter presets
+	FilterPresets   []FilterPreset // list of saved filter presets
+	FilterPresetErr string          // error message for preset operations
 }
 
 // --- Flow Explorer handler ---
@@ -942,6 +981,121 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
+
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
+	// TCP Quality filters
+	var filterRTTMin, filterRTTMax int64
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_min")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMin = val
+		}
+	}
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_max")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMax = val
+		}
+	}
+
+	var filterRetransMin uint32
+	if rt := strings.TrimSpace(r.URL.Query().Get("retrans_min")); rt != "" {
+		if val, err := strconv.ParseUint(rt, 10, 32); err == nil {
+			filterRetransMin = uint32(val)
+		}
+	}
+
+	var filterOOOMin uint32
+	if ooo := strings.TrimSpace(r.URL.Query().Get("ooo_min")); ooo != "" {
+		if val, err := strconv.ParseUint(ooo, 10, 32); err == nil {
+			filterOOOMin = uint32(val)
+		}
+	}
+
+	var filterLossMin uint32
+	if loss := strings.TrimSpace(r.URL.Query().Get("loss_min")); loss != "" {
+		if val, err := strconv.ParseUint(loss, 10, 32); err == nil {
+			filterLossMin = uint32(val)
+		}
+	}
+
+	var filterJitterMin, filterJitterMax int64
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_min")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMin = val
+		}
+	}
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_max")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMax = val
+		}
+	}
+
+	var filterMOSMin float32
+	if mos := strings.TrimSpace(r.URL.Query().Get("mos_min")); mos != "" {
+		if val, err := strconv.ParseFloat(mos, 32); err == nil {
+			filterMOSMin = float32(val)
+		}
+	}
 
 	// Fetch all recent flows from the ring buffer using the configured window.
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
@@ -958,7 +1112,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(allFlows)
 
 	// Apply filters.
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter, filterRTTMin, filterRTTMax, filterRetransMin, filterOOOMin, filterLossMin, filterJitterMin, filterJitterMax, filterMOSMin)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize
@@ -1056,6 +1210,36 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterPort:     filterPort,
 		FilterProtocol: filterProto,
 		FilterIP:       filterIP,
+		FilterAppProto: filterAppProto,
+		FilterAppCat:   filterAppCat,
+		FilterStart:    filterStart,
+		FilterEnd:      filterEnd,
+		FilterBytesMin: filterBytesMin,
+		FilterBytesMax: filterBytesMax,
+		// Phase 2 filters
+		FilterTCPFlags:   filterTCPFlags,
+		FilterToS:       filterToS,
+		FilterInIface:   filterInIface,
+		FilterOutIface:  filterOutIface,
+		FilterSrcAS:     filterSrcAS,
+		FilterDstAS:     filterDstAS,
+		FilterSrcMAC:    filterSrcMAC,
+		FilterDstMAC:    filterDstMAC,
+		FilterVLAN:      filterVLAN,
+		FilterEtherType: filterEtherType,
+		FilterExporter:  filterExporter,
+		// TCP Quality filters
+		FilterRTTMin:     filterRTTMin,
+		FilterRTTMax:     filterRTTMax,
+		FilterRetransMin: filterRetransMin,
+		FilterOOOMin:     filterOOOMin,
+		FilterLossMin:    filterLossMin,
+		FilterJitterMin:  filterJitterMin,
+		FilterJitterMax:  filterJitterMax,
+		FilterMOSMin:     filterMOSMin,
+		// Phase 3: Filter presets
+		FilterPresets:   s.getFilterPresets(),
+		FilterPresetErr: strings.TrimSpace(r.URL.Query().Get("preset_err")),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1076,6 +1260,22 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
 
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
@@ -1087,8 +1287,107 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
+	// TCP Quality filters
+	var filterRTTMin, filterRTTMax int64
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_min")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMin = val
+		}
+	}
+	if rtt := strings.TrimSpace(r.URL.Query().Get("rtt_max")); rtt != "" {
+		if val, err := strconv.ParseInt(rtt, 10, 64); err == nil {
+			filterRTTMax = val
+		}
+	}
+
+	var filterRetransMin uint32
+	if rt := strings.TrimSpace(r.URL.Query().Get("retrans_min")); rt != "" {
+		if val, err := strconv.ParseUint(rt, 10, 32); err == nil {
+			filterRetransMin = uint32(val)
+		}
+	}
+
+	var filterOOOMin uint32
+	if ooo := strings.TrimSpace(r.URL.Query().Get("ooo_min")); ooo != "" {
+		if val, err := strconv.ParseUint(ooo, 10, 32); err == nil {
+			filterOOOMin = uint32(val)
+		}
+	}
+
+	var filterLossMin uint32
+	if loss := strings.TrimSpace(r.URL.Query().Get("loss_min")); loss != "" {
+		if val, err := strconv.ParseUint(loss, 10, 32); err == nil {
+			filterLossMin = uint32(val)
+		}
+	}
+
+	var filterJitterMin, filterJitterMax int64
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_min")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMin = val
+		}
+	}
+	if jit := strings.TrimSpace(r.URL.Query().Get("jitter_max")); jit != "" {
+		if val, err := strconv.ParseInt(jit, 10, 64); err == nil {
+			filterJitterMax = val
+		}
+	}
+
+	var filterMOSMin float32
+	if mos := strings.TrimSpace(r.URL.Query().Get("mos_min")); mos != "" {
+		if val, err := strconv.ParseFloat(mos, 32); err == nil {
+			filterMOSMin = float32(val)
+		}
+	}
+
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter, filterRTTMin, filterRTTMax, filterRetransMin, filterOOOMin, filterLossMin, filterJitterMin, filterJitterMax, filterMOSMin)
 
 	switch format {
 	case "json":
@@ -1165,9 +1464,151 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) []model.Flow {
-	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" {
+// FilterOperator represents the comparison operator for a filter
+type FilterOperator int
+
+const (
+	FilterOpEqual FilterOperator = iota
+	FilterOpNotEqual
+	FilterOpGreaterThan
+	FilterOpGreaterThanOrEqual
+	FilterOpLessThan
+	FilterOpLessThanOrEqual
+	FilterOpNone
+)
+
+// ParseFilterOperator parses a string operator into a FilterOperator
+func ParseFilterOperator(op string) FilterOperator {
+	switch strings.ToLower(strings.TrimSpace(op)) {
+	case "=", "==":
+		return FilterOpEqual
+	case "!=", "<>":
+		return FilterOpNotEqual
+	case ">":
+		return FilterOpGreaterThan
+	case ">=":
+		return FilterOpGreaterThanOrEqual
+	case "<":
+		return FilterOpLessThan
+	case "<=":
+		return FilterOpLessThanOrEqual
+	default:
+		return FilterOpNone
+	}
+}
+
+// NumericFilter represents a numeric filter with operator
+type NumericFilter struct {
+	Value  float64
+	Op     FilterOperator
+	Active bool
+}
+
+// ParseNumericFilter parses a string value with optional operator prefix
+// Examples: ">100", "<=500", "!=0", "1000" (defaults to >= for backward compatibility with min filters)
+func ParseNumericFilter(input string) NumericFilter {
+	if input == "" {
+		return NumericFilter{Active: false}
+	}
+
+	f := NumericFilter{Active: true, Op: FilterOpGreaterThanOrEqual}
+
+	// Try to detect operator prefixes
+	operators := []string{">=", "<=", "!=", ">", "<"}
+	var opFound string
+	for _, op := range operators {
+		if strings.HasPrefix(input, op) {
+			opFound = op
+			break
+		}
+	}
+
+	if opFound != "" {
+		f.Op = ParseFilterOperator(opFound)
+		valueStr := strings.TrimPrefix(input, opFound)
+		if val, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			f.Value = val
+		} else {
+			f.Active = false
+		}
+	} else {
+		// No operator prefix, parse as value with default operator (>= for backward compat)
+		if val, err := strconv.ParseFloat(input, 64); err == nil {
+			f.Value = val
+		} else {
+			f.Active = false
+		}
+	}
+
+	return f
+}
+
+// applyNumericFilter applies a numeric filter based on the operator
+func applyNumericFilter(value, filterValue float64, op FilterOperator) bool {
+	switch op {
+	case FilterOpEqual:
+		return value == filterValue
+	case FilterOpNotEqual:
+		return value != filterValue
+	case FilterOpGreaterThan:
+		return value > filterValue
+	case FilterOpGreaterThanOrEqual:
+		return value >= filterValue
+	case FilterOpLessThan:
+		return value < filterValue
+	case FilterOpLessThanOrEqual:
+		return value <= filterValue
+	default:
+		return true
+	}
+}
+
+func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto, appCat, start, end string, bytesMin, bytesMax uint64, tcpFlags string, toS uint8, inIface, outIface string, srcAS, dstAS uint32, srcMAC, dstMAC string, vlan uint16, etherType uint16, exporter string, rttMin, rttMax int64, retransMin, oooMin, lossMin uint32, jitterMin, jitterMax int64, mosMin float32) []model.Flow {
+	// Check if all filters are empty
+	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" && appProto == "" && appCat == "" && start == "" && end == "" && bytesMin == 0 && bytesMax == 0 && tcpFlags == "" && toS == 0 && inIface == "" && outIface == "" && srcAS == 0 && dstAS == 0 && srcMAC == "" && dstMAC == "" && vlan == 0 && etherType == 0 && exporter == "" && rttMin == 0 && rttMax == 0 && retransMin == 0 && oooMin == 0 && lossMin == 0 && jitterMin == 0 && jitterMax == 0 && mosMin == 0 {
 		return flows
+	}
+
+	// Parse TCP flags filter
+	var tcpFlagsNum uint8
+	tcpFlagsFilterSet := false
+	if tcpFlags != "" {
+		// Parse TCP flags (e.g., "SYN", "SYN,ACK", "0x12")
+		tcpFlagsClean := strings.ReplaceAll(strings.ToUpper(tcpFlags), " ", "")
+		// Try to parse as hex first (0x12 = SYN+ACK)
+		if strings.HasPrefix(tcpFlagsClean, "0X") {
+			if val, err := strconv.ParseUint(tcpFlagsClean[2:], 16, 8); err == nil {
+				tcpFlagsNum = uint8(val)
+				tcpFlagsFilterSet = true
+			}
+		} else {
+			// Parse as flag names
+			var flags uint8
+			for _, flag := range strings.Split(tcpFlagsClean, ",") {
+				switch flag {
+				case "FIN":
+					flags |= 0x01
+				case "SYN":
+					flags |= 0x02
+				case "RST":
+					flags |= 0x04
+				case "PSH":
+					flags |= 0x08
+				case "ACK":
+					flags |= 0x10
+				case "URG":
+					flags |= 0x20
+				case "ECE":
+					flags |= 0x40
+				case "CWR":
+					flags |= 0x80
+				}
+			}
+			if flags > 0 {
+				tcpFlagsNum = flags
+				tcpFlagsFilterSet = true
+			}
+		}
 	}
 
 	var portNum uint16
@@ -1204,6 +1645,19 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 		}
 	}
 
+	// Parse time range filters
+	var startTime, endTime *time.Time
+	if start != "" {
+		if t, err := time.Parse(time.RFC3339, start); err == nil {
+			startTime = &t
+		}
+	}
+	if end != "" {
+		if t, err := time.Parse(time.RFC3339, end); err == nil {
+			endTime = &t
+		}
+	}
+
 	result := make([]model.Flow, 0, len(flows))
 	for _, f := range flows {
 		if srcIP != "" && !matchIP(f.SrcAddr, srcIP) {
@@ -1219,6 +1673,122 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 			continue
 		}
 		if protoFilterSet && f.Protocol != protoNum {
+			continue
+		}
+		// Filter by application protocol
+		if appProto != "" {
+			app := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+			if !strings.EqualFold(app, appProto) {
+				continue
+			}
+		}
+		// Filter by application category
+		if appCat != "" {
+			app := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+			cat := model.AppCategory(app)
+			if !strings.EqualFold(cat, appCat) {
+				continue
+			}
+		}
+		// Filter by time range
+		if startTime != nil && f.Timestamp.Before(*startTime) {
+			continue
+		}
+		if endTime != nil && f.Timestamp.After(*endTime) {
+			continue
+		}
+		// Filter by bytes range
+		if bytesMin > 0 && f.Bytes < bytesMin {
+			continue
+		}
+		if bytesMax > 0 && f.Bytes > bytesMax {
+			continue
+		}
+		// Filter by TCP flags
+		if tcpFlagsFilterSet && f.TCPFlags != tcpFlagsNum {
+			continue
+		}
+		// Filter by ToS/DSCP
+		if toS > 0 && f.ToS != toS {
+			continue
+		}
+		// Filter by input interface (by index or name)
+		if inIface != "" {
+			// Try numeric comparison first
+			if ifNum, err := strconv.ParseUint(inIface, 10, 32); err == nil {
+				if f.InputIface != uint32(ifNum) {
+					continue
+				}
+				// Note: String-based interface filtering requires interface names to be set in the flow.
+				// For now, we only support numeric interface filtering in the filter function.
+				// The name-based filtering is handled in the display layer.
+			}
+		}
+		// Filter by output interface (by index)
+		if outIface != "" {
+			if ifNum, err := strconv.ParseUint(outIface, 10, 32); err == nil {
+				if f.OutputIface != uint32(ifNum) {
+					continue
+				}
+			}
+		}
+		// Filter by source AS
+		if srcAS > 0 && f.SrcAS != srcAS {
+			continue
+		}
+		// Filter by destination AS
+		if dstAS > 0 && f.DstAS != dstAS {
+			continue
+		}
+		// Filter by source MAC
+		if srcMAC != "" && !strings.EqualFold(model.FormatMAC(f.SrcMAC), srcMAC) {
+			continue
+		}
+		// Filter by destination MAC
+		if dstMAC != "" && !strings.EqualFold(model.FormatMAC(f.DstMAC), dstMAC) {
+			continue
+		}
+		// Filter by VLAN
+		if vlan > 0 && f.VLAN != vlan {
+			continue
+		}
+		// Filter by ethernet type
+		if etherType > 0 && f.EtherType != etherType {
+			continue
+		}
+		// Filter by exporter IP
+		if exporter != "" && !matchIP(f.ExporterIP, exporter) {
+			continue
+		}
+		// TCP Quality filters
+		// Note: RTT is stored in microseconds, filter is also in microseconds
+		if rttMin > 0 && f.RTTMicros < rttMin {
+			continue
+		}
+		if rttMax > 0 && f.RTTMicros > rttMax {
+			continue
+		}
+		// Filter by retransmissions (minimum)
+		if retransMin > 0 && f.Retransmissions < retransMin {
+			continue
+		}
+		// Filter by out-of-order packets (minimum)
+		if oooMin > 0 && f.OutOfOrder < oooMin {
+			continue
+		}
+		// Filter by packet loss (minimum)
+		if lossMin > 0 && f.PacketLoss < lossMin {
+			continue
+		}
+		// Filter by jitter (minimum and maximum in microseconds)
+		if jitterMin > 0 && f.JitterMicros < jitterMin {
+			continue
+		}
+		if jitterMax > 0 && f.JitterMicros > jitterMax {
+			continue
+		}
+		// Filter by MOS (minimum score)
+		if mosMin > 0 && f.MOS < mosMin {
 			continue
 		}
 		result = append(result, f)
@@ -2594,6 +3164,193 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmplCounters.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
+}
+
+// --- Filter Preset Handlers (Phase 3) ---
+
+// filterPresetsFile is the path to the filter presets storage file
+const filterPresetsFile = "data/filter_presets.json"
+
+// SaveFilterPreset saves a new filter preset to the presets file
+func (s *Server) handleSaveFilterPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+
+	if name == "" {
+		http.Redirect(w, r, "/flows?preset_err=Name is required", http.StatusSeeOther)
+		return
+	}
+
+	// Build the query string from all filter parameters
+	query := r.URL.Query()
+	// Remove non-filter parameters
+	query.Del("preset_err")
+	query.Del("save_preset")
+	query.Del("load_preset")
+	query.Del("delete_preset")
+	query.Del("page")
+
+	filters := query.Encode()
+
+	// Create new preset
+	preset := FilterPreset{
+		Name:        name,
+		Description: description,
+		Filters:     filters,
+		CreatedAt:   time.Now().Format(time.RFC3339),
+	}
+
+	// Load existing presets
+	presets, err := s.loadFilterPresets()
+	if err != nil && !os.IsNotExist(err) {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		presets = []FilterPreset{}
+	}
+
+	// Check for duplicate name
+	for _, p := range presets {
+		if p.Name == name {
+			http.Redirect(w, r, "/flows?preset_err=Preset with this name already exists", http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Add new preset
+	presets = append(presets, preset)
+
+	// Save presets
+	if err := s.saveFilterPresets(presets); err != nil {
+		logging.Default().Error("Failed to save filter preset: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to save preset", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/flows?preset_err=Preset saved successfully", http.StatusSeeOther)
+}
+
+// LoadFilterPresets loads filter presets from the presets file
+func (s *Server) loadFilterPresets() ([]FilterPreset, error) {
+	if _, err := os.Stat(filterPresetsFile); os.IsNotExist(err) {
+		return []FilterPreset{}, nil
+	}
+
+	data, err := os.ReadFile(filterPresetsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var presets []FilterPreset
+	if err := json.Unmarshal(data, &presets); err != nil {
+		return nil, err
+	}
+
+	return presets, nil
+}
+
+// SaveFilterPresets saves filter presets to the presets file
+func (s *Server) saveFilterPresets(presets []FilterPreset) error {
+	// Ensure data directory exists
+	if err := os.MkdirAll(filepath.Dir(filterPresetsFile), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(presets, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filterPresetsFile, data, 0644)
+}
+
+// handleLoadFilterPreset loads a filter preset and redirects to flows with the preset filters
+func (s *Server) handleLoadFilterPreset(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	presets, err := s.loadFilterPresets()
+	if err != nil {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to load presets", http.StatusSeeOther)
+		return
+	}
+
+	var preset *FilterPreset
+	for _, p := range presets {
+		if p.Name == name {
+			preset = &p
+			break
+		}
+	}
+
+	if preset == nil {
+		http.Redirect(w, r, "/flows?preset_err=Preset not found", http.StatusSeeOther)
+		return
+	}
+
+	// Redirect to flows with the preset filters
+	http.Redirect(w, r, "/flows?"+preset.Filters, http.StatusSeeOther)
+}
+
+// handleDeleteFilterPreset deletes a filter preset
+func (s *Server) handleDeleteFilterPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		http.Redirect(w, r, "/flows?preset_err=Preset name is required", http.StatusSeeOther)
+		return
+	}
+
+	presets, err := s.loadFilterPresets()
+	if err != nil && !os.IsNotExist(err) {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		presets = []FilterPreset{}
+	}
+
+	// Filter out the preset to delete
+	var newPresets []FilterPreset
+	found := false
+	for _, p := range presets {
+		if p.Name == name {
+			found = true
+		} else {
+			newPresets = append(newPresets, p)
+		}
+	}
+
+	if !found {
+		http.Redirect(w, r, "/flows?preset_err=Preset not found", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.saveFilterPresets(newPresets); err != nil {
+		logging.Default().Error("Failed to delete filter preset: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to delete preset", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/flows?preset_err=Preset deleted successfully", http.StatusSeeOther)
+}
+
+// getFilterPresets returns the list of filter presets
+func (s *Server) getFilterPresets() []FilterPreset {
+	presets, err := s.loadFilterPresets()
+	if err != nil {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		return []FilterPreset{}
+	}
+	return presets
 }
 
 func formatIfSpeed(speed uint64) string {
