@@ -50,6 +50,7 @@ Open `http://localhost:8080`.
 | Analyzer reference | [`docs/analyzers.md`](docs/analyzers.md) |
 | Development workflow | [`docs/development.md`](docs/development.md) |
 | Reverse proxy examples | [`docs/reverse-proxy.md`](docs/reverse-proxy.md) |
+| Troubleshooting | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
 
 ## Contributing
 
