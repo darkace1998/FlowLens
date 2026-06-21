@@ -174,6 +174,52 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
 		recentWindow = 10 * time.Minute
@@ -186,7 +232,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize

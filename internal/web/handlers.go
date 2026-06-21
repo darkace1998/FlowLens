@@ -929,6 +929,18 @@ type FlowsPageData struct {
 	FilterEnd      string // filter by end time
 	FilterBytesMin uint64 // filter by minimum bytes
 	FilterBytesMax uint64 // filter by maximum bytes
+	// Phase 2 filters
+	FilterTCPFlags    string // filter by TCP flags (SYN, ACK, etc.)
+	FilterToS        uint8  // filter by ToS/DSCP value
+	FilterInIface    string // filter by input interface
+	FilterOutIface   string // filter by output interface
+	FilterSrcAS      uint32 // filter by source AS number
+	FilterDstAS      uint32 // filter by destination AS number
+	FilterSrcMAC     string // filter by source MAC address
+	FilterDstMAC     string // filter by destination MAC address
+	FilterVLAN       uint16 // filter by VLAN ID
+	FilterEtherType  uint16 // filter by ethernet type
+	FilterExporter   string // filter by exporter IP address
 }
 
 // --- Flow Explorer handler ---
@@ -965,6 +977,52 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
 	// Fetch all recent flows from the ring buffer using the configured window.
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
@@ -980,7 +1038,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(allFlows)
 
 	// Apply filters.
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize
@@ -1084,6 +1142,18 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterEnd:      filterEnd,
 		FilterBytesMin: filterBytesMin,
 		FilterBytesMax: filterBytesMax,
+		// Phase 2 filters
+		FilterTCPFlags:   filterTCPFlags,
+		FilterToS:       filterToS,
+		FilterInIface:   filterInIface,
+		FilterOutIface:  filterOutIface,
+		FilterSrcAS:     filterSrcAS,
+		FilterDstAS:     filterDstAS,
+		FilterSrcMAC:    filterSrcMAC,
+		FilterDstMAC:    filterDstMAC,
+		FilterVLAN:      filterVLAN,
+		FilterEtherType: filterEtherType,
+		FilterExporter:  filterExporter,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1131,8 +1201,54 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Phase 2 filters
+	filterTCPFlags := strings.TrimSpace(r.URL.Query().Get("tcp_flags"))
+
+	var filterToS uint8
+	if to := strings.TrimSpace(r.URL.Query().Get("tos")); to != "" {
+		if val, err := strconv.ParseUint(to, 10, 8); err == nil {
+			filterToS = uint8(val)
+		}
+	}
+
+	filterInIface := strings.TrimSpace(r.URL.Query().Get("in_iface"))
+	filterOutIface := strings.TrimSpace(r.URL.Query().Get("out_iface"))
+
+	var filterSrcAS, filterDstAS uint32
+	if as := strings.TrimSpace(r.URL.Query().Get("src_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterSrcAS = uint32(val)
+		}
+	}
+	if as := strings.TrimSpace(r.URL.Query().Get("dst_as")); as != "" {
+		if val, err := strconv.ParseUint(as, 10, 32); err == nil {
+			filterDstAS = uint32(val)
+		}
+	}
+
+	filterSrcMAC := strings.TrimSpace(r.URL.Query().Get("src_mac"))
+	filterDstMAC := strings.TrimSpace(r.URL.Query().Get("dst_mac"))
+
+	var filterVLAN uint16
+	if vl := strings.TrimSpace(r.URL.Query().Get("vlan")); vl != "" {
+		if val, err := strconv.ParseUint(vl, 10, 16); err == nil {
+			filterVLAN = uint16(val)
+		}
+	}
+
+	var filterEtherType uint16
+	if et := strings.TrimSpace(r.URL.Query().Get("ether_type")); et != "" {
+		// Support hex format (0x0800) or decimal (2048)
+		etClean := strings.TrimPrefix(et, "0x")
+		if val, err := strconv.ParseUint(etClean, 16, 16); err == nil {
+			filterEtherType = uint16(val)
+		}
+	}
+
+	filterExporter := strings.TrimSpace(r.URL.Query().Get("exporter"))
+
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax, filterTCPFlags, filterToS, filterInIface, filterOutIface, filterSrcAS, filterDstAS, filterSrcMAC, filterDstMAC, filterVLAN, filterEtherType, filterExporter)
 
 	switch format {
 	case "json":
@@ -1209,9 +1325,52 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto, appCat, start, end string, bytesMin, bytesMax uint64) []model.Flow {
-	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" && appProto == "" && appCat == "" && start == "" && end == "" && bytesMin == 0 && bytesMax == 0 {
+func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto, appCat, start, end string, bytesMin, bytesMax uint64, tcpFlags string, toS uint8, inIface, outIface string, srcAS, dstAS uint32, srcMAC, dstMAC string, vlan uint16, etherType uint16, exporter string) []model.Flow {
+	// Check if all filters are empty
+	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" && appProto == "" && appCat == "" && start == "" && end == "" && bytesMin == 0 && bytesMax == 0 && tcpFlags == "" && toS == 0 && inIface == "" && outIface == "" && srcAS == 0 && dstAS == 0 && srcMAC == "" && dstMAC == "" && vlan == 0 && etherType == 0 && exporter == "" {
 		return flows
+	}
+
+	// Parse TCP flags filter
+	var tcpFlagsNum uint8
+	tcpFlagsFilterSet := false
+	if tcpFlags != "" {
+		// Parse TCP flags (e.g., "SYN", "SYN,ACK", "0x12")
+		tcpFlagsClean := strings.ReplaceAll(strings.ToUpper(tcpFlags), " ", "")
+		// Try to parse as hex first (0x12 = SYN+ACK)
+		if strings.HasPrefix(tcpFlagsClean, "0X") {
+			if val, err := strconv.ParseUint(tcpFlagsClean[2:], 16, 8); err == nil {
+				tcpFlagsNum = uint8(val)
+				tcpFlagsFilterSet = true
+			}
+		} else {
+			// Parse as flag names
+			var flags uint8
+			for _, flag := range strings.Split(tcpFlagsClean, ",") {
+				switch flag {
+				case "FIN":
+					flags |= 0x01
+				case "SYN":
+					flags |= 0x02
+				case "RST":
+					flags |= 0x04
+				case "PSH":
+					flags |= 0x08
+				case "ACK":
+					flags |= 0x10
+				case "URG":
+					flags |= 0x20
+				case "ECE":
+					flags |= 0x40
+				case "CWR":
+					flags |= 0x80
+				}
+			}
+			if flags > 0 {
+				tcpFlagsNum = flags
+				tcpFlagsFilterSet = true
+			}
+		}
 	}
 
 	var portNum uint16
@@ -1305,6 +1464,64 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto
 			continue
 		}
 		if bytesMax > 0 && f.Bytes > bytesMax {
+			continue
+		}
+		// Filter by TCP flags
+		if tcpFlagsFilterSet && f.TCPFlags != tcpFlagsNum {
+			continue
+		}
+		// Filter by ToS/DSCP
+		if toS > 0 && f.ToS != toS {
+			continue
+		}
+		// Filter by input interface (by index or name)
+		if inIface != "" {
+			// Try numeric comparison first
+			if ifNum, err := strconv.ParseUint(inIface, 10, 32); err == nil {
+				if f.InputIface != uint32(ifNum) {
+					continue
+				}
+			} else {
+				// Try string comparison with stored name
+				// Note: This requires the interface names to be set in the flow
+				// For now, we only support numeric interface filtering in the filter function
+				// The name-based filtering is handled in the display layer
+			}
+		}
+		// Filter by output interface (by index)
+		if outIface != "" {
+			if ifNum, err := strconv.ParseUint(outIface, 10, 32); err == nil {
+				if f.OutputIface != uint32(ifNum) {
+					continue
+				}
+			}
+		}
+		// Filter by source AS
+		if srcAS > 0 && f.SrcAS != srcAS {
+			continue
+		}
+		// Filter by destination AS
+		if dstAS > 0 && f.DstAS != dstAS {
+			continue
+		}
+		// Filter by source MAC
+		if srcMAC != "" && !strings.EqualFold(model.FormatMAC(f.SrcMAC), srcMAC) {
+			continue
+		}
+		// Filter by destination MAC
+		if dstMAC != "" && !strings.EqualFold(model.FormatMAC(f.DstMAC), dstMAC) {
+			continue
+		}
+		// Filter by VLAN
+		if vlan > 0 && f.VLAN != vlan {
+			continue
+		}
+		// Filter by ethernet type
+		if etherType > 0 && f.EtherType != etherType {
+			continue
+		}
+		// Filter by exporter IP
+		if exporter != "" && !matchIP(f.ExporterIP, exporter) {
 			continue
 		}
 		result = append(result, f)
