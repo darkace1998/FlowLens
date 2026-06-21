@@ -15,3 +15,4 @@ This directory contains detailed project documentation. The top-level `README.md
 | [`analyzers.md`](analyzers.md) | Built-in analyzer catalog |
 | [`development.md`](development.md) | Build, test, lint, and CI workflows |
 | [`reverse-proxy.md`](reverse-proxy.md) | nginx and Caddy reverse proxy examples |
+| [`troubleshooting.md`](troubleshooting.md) | Common issues and solutions |

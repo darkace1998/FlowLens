@@ -47,6 +47,23 @@ docker run -d \
   flowlens
 ```
 
+## Enabling Full GeoIP
+
+FlowLens includes a built-in table of well-known IPs. For full geolocation, download a CSV database (like IP2Location LITE) and mount it.
+
+```bash
+docker run -d \
+  -p 2055:2055/udp \
+  -p 4739:4739/udp \
+  -p 6343:6343/udp \
+  -p 8080:8080 \
+  -v /path/to/flowlens.yaml:/app/configs/flowlens.yaml \
+  -v /path/to/db.csv:/app/db.csv \
+  --name flowlens \
+  flowlens
+```
+Make sure `storage.geoip_path` in `flowlens.yaml` points to `/app/db.csv`.
+
 ## Run with Docker Compose
 
 ```bash
