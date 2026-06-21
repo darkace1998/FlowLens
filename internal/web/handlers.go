@@ -2239,6 +2239,7 @@ type SessionsPageData struct {
 	TotalBytes    uint64
 	TotalPackets  uint64
 	Window        time.Duration
+	FilterIP      string
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -2354,6 +2355,18 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		totalPackets += a.packets
 	}
 
+	// Apply IP filter if provided
+	filterIP := r.URL.Query().Get("ip")
+	if filterIP != "" {
+		filtered := make([]SessionEntry, 0, len(entries))
+		for _, e := range entries {
+			if e.SrcAddr == filterIP || e.DstAddr == filterIP {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+	}
+
 	sortByBytes(entries, func(e SessionEntry) uint64 { return e.Bytes })
 
 	data := SessionsPageData{
@@ -2361,6 +2374,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		TotalSessions: len(entries),
 		TotalBytes:    totalBytes,
 		TotalPackets:  totalPackets,
+		FilterIP:      filterIP,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
