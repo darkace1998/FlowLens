@@ -397,3 +397,115 @@ func TestCounters_Empty(t *testing.T) {
 		t.Error("empty counters page should show no-data message")
 	}
 }
+
+func TestAPIExporters_Empty(t *testing.T) {
+	srv, _ := newTestServer(t)
+	err := error(nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/exporters", nil)
+	w := httptest.NewRecorder()
+	srv.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp APIExportersResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if resp.TotalExporters != 0 {
+		t.Errorf("expected 0 exporters, got %d", resp.TotalExporters)
+	}
+	if len(resp.Exporters) != 0 {
+		t.Errorf("expected empty exporters slice, got len %d", len(resp.Exporters))
+	}
+}
+
+func TestAPIExporters_WithData(t *testing.T) {
+	srv, rb := newTestServer(t)
+	err := error(nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	flows := []model.Flow{
+		{
+			Timestamp:  time.Now(),
+			ExporterIP: net.ParseIP("10.0.0.1"),
+			Protocol:   model.ProtoTCP,
+			Bytes:      1000,
+			Packets:    10,
+		},
+		{
+			Timestamp:  time.Now(),
+			ExporterIP: net.ParseIP("10.0.0.1"),
+			Protocol:   model.ProtoUDP,
+			Bytes:      500,
+			Packets:    5,
+		},
+		{
+			Timestamp:  time.Now(),
+			ExporterIP: net.ParseIP("192.168.1.1"),
+			Protocol:   model.ProtoICMP,
+			Bytes:      200,
+			Packets:    2,
+		},
+	}
+	for _, f := range flows {
+		rb.Insert([]model.Flow{f})
+	}
+
+	req := httptest.NewRequest("GET", "/api/exporters", nil)
+	w := httptest.NewRecorder()
+	srv.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp APIExportersResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+
+	if resp.TotalExporters != 2 {
+		t.Errorf("expected 2 exporters, got %d", resp.TotalExporters)
+	}
+	if resp.TotalBytes != 1700 {
+		t.Errorf("expected 1700 total bytes, got %d", resp.TotalBytes)
+	}
+	if len(resp.Exporters) != 2 {
+		t.Fatalf("expected 2 exporters, got %d", len(resp.Exporters))
+	}
+
+	// Should be sorted by bytes descending
+	if resp.Exporters[0].IP != "10.0.0.1" {
+		t.Errorf("expected first exporter to be 10.0.0.1, got %s", resp.Exporters[0].IP)
+	}
+	if resp.Exporters[0].Bytes != 1500 {
+		t.Errorf("expected 1500 bytes for 10.0.0.1, got %d", resp.Exporters[0].Bytes)
+	}
+	if resp.Exporters[0].Packets != 15 {
+		t.Errorf("expected 15 packets for 10.0.0.1, got %d", resp.Exporters[0].Packets)
+	}
+	if resp.Exporters[0].FlowCount != 2 {
+		t.Errorf("expected flow count 2 for 10.0.0.1, got %d", resp.Exporters[0].FlowCount)
+	}
+	if resp.Exporters[0].TopProto != "TCP" && resp.Exporters[0].TopProto != "UDP" {
+		t.Errorf("expected top proto TCP for 10.0.0.1, got %s", resp.Exporters[0].TopProto)
+	}
+
+	if resp.Exporters[1].IP != "192.168.1.1" {
+		t.Errorf("expected second exporter to be 192.168.1.1, got %s", resp.Exporters[1].IP)
+	}
+	if resp.Exporters[1].Bytes != 200 {
+		t.Errorf("expected 200 bytes for 192.168.1.1, got %d", resp.Exporters[1].Bytes)
+	}
+	if resp.Exporters[1].TopProto != "ICMP" {
+		t.Errorf("expected top proto ICMP for 192.168.1.1, got %s", resp.Exporters[1].TopProto)
+	}
+}
