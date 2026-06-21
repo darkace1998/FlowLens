@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -609,57 +610,150 @@ func TestFilterFlows(t *testing.T) {
 	}
 
 	// Filter by port
-	result := filterFlows(flows, "", "", "443", "", "")
+	result := filterFlows(flows, "", "", "443", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 1 {
 		t.Errorf("filter port=443: got %d flows, want 1", len(result))
 	}
 
 	// Filter by protocol
-	result = filterFlows(flows, "", "", "", "udp", "")
+	result = filterFlows(flows, "", "", "", "udp", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 1 {
 		t.Errorf("filter proto=udp: got %d flows, want 1", len(result))
 	}
 
 	// Filter by dst IP
-	result = filterFlows(flows, "", "192.168.1.1", "", "", "")
+	result = filterFlows(flows, "", "192.168.1.1", "", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 2 {
 		t.Errorf("filter dst=192.168.1.1: got %d flows, want 2", len(result))
 	}
 
 	// No filter
-	result = filterFlows(flows, "", "", "", "", "")
+	result = filterFlows(flows, "", "", "", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 3 {
 		t.Errorf("no filter: got %d flows, want 3", len(result))
 	}
 
 	// Filter by host IP (matches either src or dst)
-	result = filterFlows(flows, "", "", "", "", "192.168.1.1")
+	result = filterFlows(flows, "", "", "", "", "192.168.1.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 2 {
 		t.Errorf("filter ip=192.168.1.1: got %d flows, want 2", len(result))
 	}
 
 	// Filter by host IP that only appears as source
-	result = filterFlows(flows, "", "", "", "", "172.16.0.1")
+	result = filterFlows(flows, "", "", "", "", "172.16.0.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 1 {
 		t.Errorf("filter ip=172.16.0.1: got %d flows, want 1", len(result))
 	}
 
 	// Filter by host IP with prefix matching
-	result = filterFlows(flows, "", "", "", "", "10.0.1")
+	result = filterFlows(flows, "", "", "", "", "10.0.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 2 {
 		t.Errorf("filter ip=10.0.1 (prefix): got %d flows, want 2", len(result))
 	}
 
 	// Invalid port filter should fail closed.
-	result = filterFlows(flows, "", "", "not-a-port", "", "")
+	result = filterFlows(flows, "", "", "not-a-port", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 0 {
 		t.Errorf("invalid port filter should return 0 flows, got %d", len(result))
 	}
 
 	// Invalid protocol filter should fail closed.
-	result = filterFlows(flows, "", "", "", "not-a-proto", "")
+	result = filterFlows(flows, "", "", "", "not-a-proto", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
 	if len(result) != 0 {
 		t.Errorf("invalid protocol filter should return 0 flows, got %d", len(result))
+	}
+}
+
+// Phase 3: Test filter operator functions
+func TestFilterOperators(t *testing.T) {
+	// Test ParseFilterOperator
+	tests := []struct {
+		input    string
+		expected FilterOperator
+	}{
+		{">", FilterOpGreaterThan},
+		{">=", FilterOpGreaterThanOrEqual},
+		{"<", FilterOpLessThan},
+		{"<=", FilterOpLessThanOrEqual},
+		{"!=", FilterOpNotEqual},
+		{"==", FilterOpEqual},
+		{"=", FilterOpEqual},
+		{"<>", FilterOpNotEqual},
+		{"unknown", FilterOpNone},
+		{"", FilterOpNone},
+	}
+
+	for _, tt := range tests {
+		t.Run("ParseOperator_"+tt.input, func(t *testing.T) {
+			result := ParseFilterOperator(tt.input)
+			if result != tt.expected {
+				t.Errorf("ParseFilterOperator(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+
+	// Test ParseNumericFilter
+	filterTests := []struct {
+		input         string
+		expectedValue float64
+		expectedOp    FilterOperator
+		expectedActive bool
+	}{
+		{">100", 100, FilterOpGreaterThan, true},
+		{">=500", 500, FilterOpGreaterThanOrEqual, true},
+		{"<1000", 1000, FilterOpLessThan, true},
+		{"<=" + "5000", 5000, FilterOpLessThanOrEqual, true},
+		{"!=0", 0, FilterOpNotEqual, true},
+		{"1000", 1000, FilterOpGreaterThanOrEqual, true}, // default operator
+		{"", 0, FilterOpNone, false},
+		{"invalid", 0, FilterOpNone, false},
+	}
+
+	for _, tt := range filterTests {
+		t.Run("ParseNumeric_"+tt.input, func(t *testing.T) {
+			result := ParseNumericFilter(tt.input)
+			if result.Active != tt.expectedActive {
+				t.Errorf("ParseNumericFilter(%q).Active = %v, want %v", tt.input, result.Active, tt.expectedActive)
+			}
+			if result.Active {
+				if result.Value != tt.expectedValue {
+					t.Errorf("ParseNumericFilter(%q).Value = %v, want %v", tt.input, result.Value, tt.expectedValue)
+				}
+				if result.Op != tt.expectedOp {
+					t.Errorf("ParseNumericFilter(%q).Op = %v, want %v", tt.input, result.Op, tt.expectedOp)
+				}
+			}
+		})
+	}
+
+	// Test applyNumericFilter
+	applyTests := []struct {
+		value    float64
+		filter   float64
+		op       FilterOperator
+		expected bool
+	}{
+		{100, 50, FilterOpGreaterThan, true},
+		{50, 50, FilterOpGreaterThan, false},
+		{100, 50, FilterOpGreaterThanOrEqual, true},
+		{50, 50, FilterOpGreaterThanOrEqual, true},
+		{50, 100, FilterOpLessThan, true},
+		{100, 100, FilterOpLessThan, false},
+		{50, 100, FilterOpLessThanOrEqual, true},
+		{100, 100, FilterOpLessThanOrEqual, true},
+		{100, 100, FilterOpEqual, true},
+		{50, 100, FilterOpEqual, false},
+		{100, 50, FilterOpNotEqual, true},
+		{100, 100, FilterOpNotEqual, false},
+	}
+
+	for _, tt := range applyTests {
+		t.Run(fmt.Sprintf("Apply_%.0f_%d_%.0f", tt.value, tt.op, tt.filter), func(t *testing.T) {
+			result := applyNumericFilter(tt.value, tt.filter, tt.op)
+			if result != tt.expected {
+				t.Errorf("applyNumericFilter(%v, %v, %v) = %v, want %v", tt.value, tt.filter, tt.op, result, tt.expected)
+			}
+		})
 	}
 }
 

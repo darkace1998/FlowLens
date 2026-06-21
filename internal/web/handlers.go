@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -908,6 +909,14 @@ type FlowRow struct {
 	TCPFlags    string
 }
 
+// FilterPreset represents a saved filter configuration
+type FilterPreset struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Filters     string `json:"filters"` // URL-encoded query string
+	CreatedAt   string `json:"created_at"`
+}
+
 // FlowsPageData holds all data for the flows explorer template.
 type FlowsPageData struct {
 	Flows      []FlowRow
@@ -950,6 +959,9 @@ type FlowsPageData struct {
 	FilterJitterMin  int64  // filter by minimum jitter (microseconds)
 	FilterJitterMax  int64  // filter by maximum jitter (microseconds)
 	FilterMOSMin     float32 // filter by minimum MOS score
+	// Phase 3: Filter presets
+	FilterPresets   []FilterPreset // list of saved filter presets
+	FilterPresetErr string          // error message for preset operations
 }
 
 // --- Flow Explorer handler ---
@@ -1225,6 +1237,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterJitterMin:  filterJitterMin,
 		FilterJitterMax:  filterJitterMax,
 		FilterMOSMin:     filterMOSMin,
+		// Phase 3: Filter presets
+		FilterPresets:   s.getFilterPresets(),
+		FilterPresetErr: strings.TrimSpace(r.URL.Query().Get("preset_err")),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1449,6 +1464,105 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// FilterOperator represents the comparison operator for a filter
+type FilterOperator int
+
+const (
+	FilterOpEqual FilterOperator = iota
+	FilterOpNotEqual
+	FilterOpGreaterThan
+	FilterOpGreaterThanOrEqual
+	FilterOpLessThan
+	FilterOpLessThanOrEqual
+	FilterOpNone
+)
+
+// ParseFilterOperator parses a string operator into a FilterOperator
+func ParseFilterOperator(op string) FilterOperator {
+	switch strings.ToLower(strings.TrimSpace(op)) {
+	case "=", "==":
+		return FilterOpEqual
+	case "!=", "<>":
+		return FilterOpNotEqual
+	case ">":
+		return FilterOpGreaterThan
+	case ">=":
+		return FilterOpGreaterThanOrEqual
+	case "<":
+		return FilterOpLessThan
+	case "<=":
+		return FilterOpLessThanOrEqual
+	default:
+		return FilterOpNone
+	}
+}
+
+// NumericFilter represents a numeric filter with operator
+type NumericFilter struct {
+	Value  float64
+	Op     FilterOperator
+	Active bool
+}
+
+// ParseNumericFilter parses a string value with optional operator prefix
+// Examples: ">100", "<=500", "!=0", "1000" (defaults to >= for backward compatibility with min filters)
+func ParseNumericFilter(input string) NumericFilter {
+	if input == "" {
+		return NumericFilter{Active: false}
+	}
+
+	f := NumericFilter{Active: true, Op: FilterOpGreaterThanOrEqual}
+
+	// Try to detect operator prefixes
+	operators := []string{">=", "<=", "!=", ">", "<"}
+	var opFound string
+	for _, op := range operators {
+		if strings.HasPrefix(input, op) {
+			opFound = op
+			break
+		}
+	}
+
+	if opFound != "" {
+		f.Op = ParseFilterOperator(opFound)
+		valueStr := strings.TrimPrefix(input, opFound)
+		if val, err := strconv.ParseFloat(valueStr, 64); err == nil {
+			f.Value = val
+		} else {
+			f.Active = false
+		}
+	} else {
+		// No operator prefix, parse as value with default operator (>= for backward compat)
+		if val, err := strconv.ParseFloat(input, 64); err == nil {
+			f.Value = val
+		} else {
+			f.Active = false
+		}
+	}
+
+	return f
+}
+
+// applyNumericFilter applies a numeric filter based on the operator
+func applyNumericFilter(value, filterValue float64, op FilterOperator) bool {
+	switch op {
+	case FilterOpEqual:
+		return value == filterValue
+	case FilterOpNotEqual:
+		return value != filterValue
+	case FilterOpGreaterThan:
+		return value > filterValue
+	case FilterOpGreaterThanOrEqual:
+		return value >= filterValue
+	case FilterOpLessThan:
+		return value < filterValue
+	case FilterOpLessThanOrEqual:
+		return value <= filterValue
+	default:
+		return true
+	}
+}
+
 func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto, appCat, start, end string, bytesMin, bytesMax uint64, tcpFlags string, toS uint8, inIface, outIface string, srcAS, dstAS uint32, srcMAC, dstMAC string, vlan uint16, etherType uint16, exporter string, rttMin, rttMax int64, retransMin, oooMin, lossMin uint32, jitterMin, jitterMax int64, mosMin float32) []model.Flow {
 	// Check if all filters are empty
 	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" && appProto == "" && appCat == "" && start == "" && end == "" && bytesMin == 0 && bytesMax == 0 && tcpFlags == "" && toS == 0 && inIface == "" && outIface == "" && srcAS == 0 && dstAS == 0 && srcMAC == "" && dstMAC == "" && vlan == 0 && etherType == 0 && exporter == "" && rttMin == 0 && rttMax == 0 && retransMin == 0 && oooMin == 0 && lossMin == 0 && jitterMin == 0 && jitterMax == 0 && mosMin == 0 {
@@ -1605,11 +1719,9 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto
 				if f.InputIface != uint32(ifNum) {
 					continue
 				}
-			} else {
-				// Try string comparison with stored name
-				// Note: This requires the interface names to be set in the flow
-				// For now, we only support numeric interface filtering in the filter function
-				// The name-based filtering is handled in the display layer
+				// Note: String-based interface filtering requires interface names to be set in the flow.
+				// For now, we only support numeric interface filtering in the filter function.
+				// The name-based filtering is handled in the display layer.
 			}
 		}
 		// Filter by output interface (by index)
@@ -3052,6 +3164,193 @@ func (s *Server) handleCounters(w http.ResponseWriter, r *http.Request) {
 	if err := s.tmplCounters.ExecuteTemplate(w, "layout", data); err != nil {
 		logging.Default().Error("Template execute error: %v", err)
 	}
+}
+
+// --- Filter Preset Handlers (Phase 3) ---
+
+// filterPresetsFile is the path to the filter presets storage file
+const filterPresetsFile = "data/filter_presets.json"
+
+// SaveFilterPreset saves a new filter preset to the presets file
+func (s *Server) handleSaveFilterPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+
+	if name == "" {
+		http.Redirect(w, r, "/flows?preset_err=Name is required", http.StatusSeeOther)
+		return
+	}
+
+	// Build the query string from all filter parameters
+	query := r.URL.Query()
+	// Remove non-filter parameters
+	query.Del("preset_err")
+	query.Del("save_preset")
+	query.Del("load_preset")
+	query.Del("delete_preset")
+	query.Del("page")
+
+	filters := query.Encode()
+
+	// Create new preset
+	preset := FilterPreset{
+		Name:        name,
+		Description: description,
+		Filters:     filters,
+		CreatedAt:   time.Now().Format(time.RFC3339),
+	}
+
+	// Load existing presets
+	presets, err := s.loadFilterPresets()
+	if err != nil && !os.IsNotExist(err) {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		presets = []FilterPreset{}
+	}
+
+	// Check for duplicate name
+	for _, p := range presets {
+		if p.Name == name {
+			http.Redirect(w, r, "/flows?preset_err=Preset with this name already exists", http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Add new preset
+	presets = append(presets, preset)
+
+	// Save presets
+	if err := s.saveFilterPresets(presets); err != nil {
+		logging.Default().Error("Failed to save filter preset: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to save preset", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/flows?preset_err=Preset saved successfully", http.StatusSeeOther)
+}
+
+// LoadFilterPresets loads filter presets from the presets file
+func (s *Server) loadFilterPresets() ([]FilterPreset, error) {
+	if _, err := os.Stat(filterPresetsFile); os.IsNotExist(err) {
+		return []FilterPreset{}, nil
+	}
+
+	data, err := os.ReadFile(filterPresetsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var presets []FilterPreset
+	if err := json.Unmarshal(data, &presets); err != nil {
+		return nil, err
+	}
+
+	return presets, nil
+}
+
+// SaveFilterPresets saves filter presets to the presets file
+func (s *Server) saveFilterPresets(presets []FilterPreset) error {
+	// Ensure data directory exists
+	if err := os.MkdirAll(filepath.Dir(filterPresetsFile), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(presets, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filterPresetsFile, data, 0644)
+}
+
+// handleLoadFilterPreset loads a filter preset and redirects to flows with the preset filters
+func (s *Server) handleLoadFilterPreset(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	presets, err := s.loadFilterPresets()
+	if err != nil {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to load presets", http.StatusSeeOther)
+		return
+	}
+
+	var preset *FilterPreset
+	for _, p := range presets {
+		if p.Name == name {
+			preset = &p
+			break
+		}
+	}
+
+	if preset == nil {
+		http.Redirect(w, r, "/flows?preset_err=Preset not found", http.StatusSeeOther)
+		return
+	}
+
+	// Redirect to flows with the preset filters
+	http.Redirect(w, r, "/flows?"+preset.Filters, http.StatusSeeOther)
+}
+
+// handleDeleteFilterPreset deletes a filter preset
+func (s *Server) handleDeleteFilterPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/flows", http.StatusSeeOther)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		http.Redirect(w, r, "/flows?preset_err=Preset name is required", http.StatusSeeOther)
+		return
+	}
+
+	presets, err := s.loadFilterPresets()
+	if err != nil && !os.IsNotExist(err) {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		presets = []FilterPreset{}
+	}
+
+	// Filter out the preset to delete
+	var newPresets []FilterPreset
+	found := false
+	for _, p := range presets {
+		if p.Name == name {
+			found = true
+		} else {
+			newPresets = append(newPresets, p)
+		}
+	}
+
+	if !found {
+		http.Redirect(w, r, "/flows?preset_err=Preset not found", http.StatusSeeOther)
+		return
+	}
+
+	if err := s.saveFilterPresets(newPresets); err != nil {
+		logging.Default().Error("Failed to delete filter preset: %v", err)
+		http.Redirect(w, r, "/flows?preset_err=Failed to delete preset", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/flows?preset_err=Preset deleted successfully", http.StatusSeeOther)
+}
+
+// getFilterPresets returns the list of filter presets
+func (s *Server) getFilterPresets() []FilterPreset {
+	presets, err := s.loadFilterPresets()
+	if err != nil {
+		logging.Default().Error("Failed to load filter presets: %v", err)
+		return []FilterPreset{}
+	}
+	return presets
 }
 
 func formatIfSpeed(speed uint64) string {

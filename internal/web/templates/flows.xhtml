@@ -38,6 +38,42 @@
   <a href="/flows" class="btn-clear">Clear</a>
 </form>
 
+{{/* Phase 3: Filter Presets */}}
+{{if .FilterPresetErr}}
+<div class="alert alert-info">{{.FilterPresetErr}}</div>
+{{end}}
+
+<div class="filter-presets" style="margin: 1em 0;">
+  <details>
+    <summary><strong>📋 Filter Presets</strong></summary>
+    <div style="margin-top: 0.5em; padding: 0.5em; background: #f5f5f5; border-radius: 4px;">
+      {{if .FilterPresets}}
+      <div style="margin-bottom: 0.5em;">
+        <strong>Saved Presets:</strong>
+        {{range .FilterPresets}}
+        <span style="margin-right: 0.5em; white-space: nowrap;">
+          <a href="/flows/filter-preset/load?name={{urlquery .Name}}" class="btn btn-sm" style="padding: 0.25em 0.5em;">{{.Name}}</a>
+          <form action="/flows/filter-preset/delete" method="post" style="display: inline; margin-left: 0.25em;">
+            <input type="hidden" name="name" value="{{.Name}}" />
+            <button type="submit" class="btn btn-sm btn-danger" style="padding: 0.25em 0.5em;" onclick="return confirm('Delete preset {{.Name}}?')">×</button>
+          </form>
+          {{if .Description}}<small title="{{.Description}}"> ({{.Description}})</small>{{end}}
+        </span>
+        {{end}}
+      </div>
+      {{end}}
+      <form action="/flows/filter-preset/save" method="post" style="margin-top: 0.5em; padding-top: 0.5em; border-top: 1px solid #ddd;">
+        <label style="margin-right: 0.5em;">
+          <strong>Save Current Filters:</strong>
+          <input type="text" name="name" placeholder="Preset Name" required style="padding: 0.25em; width: 120px;" />
+          <input type="text" name="description" placeholder="Description (optional)" style="padding: 0.25em; width: 200px; margin-left: 0.5em;" />
+          <button type="submit" class="btn btn-sm" style="padding: 0.25em 0.5em; margin-left: 0.5em;">Save</button>
+        </label>
+      </form>
+    </div>
+  </details>
+</div>
+
 <p class="flow-summary">Showing page {{.Page}} of {{.TotalPages}} ({{.TotalFlows}} flows)</p>
 <div class="export-buttons" style="margin: 0.5em 0;">
   <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}{{if .FilterTCPFlags}}&amp;tcp_flags={{urlquery .FilterTCPFlags}}{{end}}{{if .FilterToS}}&amp;tos={{.FilterToS}}{{end}}{{if .FilterInIface}}&amp;in_iface={{urlquery .FilterInIface}}{{end}}{{if .FilterOutIface}}&amp;out_iface={{urlquery .FilterOutIface}}{{end}}{{if .FilterSrcAS}}&amp;src_as={{.FilterSrcAS}}{{end}}{{if .FilterDstAS}}&amp;dst_as={{.FilterDstAS}}{{end}}{{if .FilterSrcMAC}}&amp;src_mac={{urlquery .FilterSrcMAC}}{{end}}{{if .FilterDstMAC}}&amp;dst_mac={{urlquery .FilterDstMAC}}{{end}}{{if .FilterVLAN}}&amp;vlan={{.FilterVLAN}}{{end}}{{if .FilterEtherType}}&amp;ether_type=0x{{printf "%04x" .FilterEtherType}}{{end}}{{if .FilterExporter}}&amp;exporter={{urlquery .FilterExporter}}{{end}}{{if .FilterRTTMin}}&amp;rtt_min={{.FilterRTTMin}}{{end}}{{if .FilterRTTMax}}&amp;rtt_max={{.FilterRTTMax}}{{end}}{{if .FilterRetransMin}}&amp;retrans_min={{.FilterRetransMin}}{{end}}{{if .FilterOOOMin}}&amp;ooo_min={{.FilterOOOMin}}{{end}}{{if .FilterLossMin}}&amp;loss_min={{.FilterLossMin}}{{end}}{{if .FilterJitterMin}}&amp;jitter_min={{.FilterJitterMin}}{{end}}{{if .FilterJitterMax}}&amp;jitter_max={{.FilterJitterMax}}{{end}}{{if .FilterMOSMin}}&amp;mos_min={{.FilterMOSMin}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
