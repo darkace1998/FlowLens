@@ -31,8 +31,18 @@
   <p class="flow-summary" style="margin-top:.5rem">Upload a PCAP file (max 200 MB) to import packets as flows for analysis. Classic pcap format only; pcapng must be re-exported.</p>
 </div>
 
+<form class="filter-bar" method="get" action="/sessions">
+  <label>IP <input type="text" name="ip" value="{{.FilterIP}}" placeholder="Filter by IP address" /></label>
+  <button type="submit">Filter</button>
+  <a href="/sessions" class="btn-clear">Clear</a>
+</form>
+
 {{if .Sessions}}
+{{if .FilterIP}}
+<p class="flow-summary">Showing sessions for host: <strong>{{.FilterIP}}</strong></p>
+{{else}}
 <p class="flow-summary">{{.TotalSessions}} bidirectional sessions sorted by traffic volume.</p>
+{{end}}
 <div class="panel">
   <div class="table-responsive">
   <table class="flows-table">
@@ -84,6 +94,10 @@
   </div>
 </div>
 {{else}}
+{{if .FilterIP}}
+<p class="empty">No sessions found for host: <strong>{{.FilterIP}}</strong></p>
+{{else}}
 <p class="empty">No sessions. Import a PCAP or wait for flow data to arrive.</p>
+{{end}}
 {{end}}
 {{end}}
