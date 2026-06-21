@@ -157,6 +157,22 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
 
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
@@ -170,7 +186,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize

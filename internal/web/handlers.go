@@ -923,6 +923,12 @@ type FlowsPageData struct {
 	FilterPort     string
 	FilterProtocol string
 	FilterIP       string // matches either src or dst
+	FilterAppProto string // filter by application protocol
+	FilterAppCat   string // filter by application category
+	FilterStart    string // filter by start time
+	FilterEnd      string // filter by end time
+	FilterBytesMin uint64 // filter by minimum bytes
+	FilterBytesMax uint64 // filter by maximum bytes
 }
 
 // --- Flow Explorer handler ---
@@ -942,6 +948,22 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
 
 	// Fetch all recent flows from the ring buffer using the configured window.
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
@@ -958,7 +980,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	model.StitchFlows(allFlows)
 
 	// Apply filters.
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
 
 	totalFlows := len(filtered)
 	totalPages := (totalFlows + pageSize - 1) / pageSize
@@ -1056,6 +1078,12 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterPort:     filterPort,
 		FilterProtocol: filterProto,
 		FilterIP:       filterIP,
+		FilterAppProto: filterAppProto,
+		FilterAppCat:   filterAppCat,
+		FilterStart:    filterStart,
+		FilterEnd:      filterEnd,
+		FilterBytesMin: filterBytesMin,
+		FilterBytesMax: filterBytesMax,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1076,6 +1104,22 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	filterPort := strings.TrimSpace(r.URL.Query().Get("port"))
 	filterProto := strings.TrimSpace(r.URL.Query().Get("protocol"))
 	filterIP := strings.TrimSpace(r.URL.Query().Get("ip"))
+	filterAppProto := strings.TrimSpace(r.URL.Query().Get("app_proto"))
+	filterAppCat := strings.TrimSpace(r.URL.Query().Get("app_cat"))
+	filterStart := strings.TrimSpace(r.URL.Query().Get("start"))
+	filterEnd := strings.TrimSpace(r.URL.Query().Get("end"))
+
+	var filterBytesMin, filterBytesMax uint64
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_min")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMin = val
+		}
+	}
+	if bs := strings.TrimSpace(r.URL.Query().Get("bytes_max")); bs != "" {
+		if val, err := strconv.ParseUint(bs, 10, 64); err == nil {
+			filterBytesMax = val
+		}
+	}
 
 	recentWindow := s.fullCfg.Storage.RingBufferDuration
 	if recentWindow <= 0 {
@@ -1088,7 +1132,7 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.StitchFlows(allFlows)
-	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP)
+	filtered := filterFlows(allFlows, filterSrcIP, filterDstIP, filterPort, filterProto, filterIP, filterAppProto, filterAppCat, filterStart, filterEnd, filterBytesMin, filterBytesMax)
 
 	switch format {
 	case "json":
@@ -1165,8 +1209,8 @@ func (s *Server) handleFlowsExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) []model.Flow {
-	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" {
+func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP, appProto, appCat, start, end string, bytesMin, bytesMax uint64) []model.Flow {
+	if srcIP == "" && dstIP == "" && port == "" && proto == "" && hostIP == "" && appProto == "" && appCat == "" && start == "" && end == "" && bytesMin == 0 && bytesMax == 0 {
 		return flows
 	}
 
@@ -1204,6 +1248,19 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 		}
 	}
 
+	// Parse time range filters
+	var startTime, endTime *time.Time
+	if start != "" {
+		if t, err := time.Parse(time.RFC3339, start); err == nil {
+			startTime = &t
+		}
+	}
+	if end != "" {
+		if t, err := time.Parse(time.RFC3339, end); err == nil {
+			endTime = &t
+		}
+	}
+
 	result := make([]model.Flow, 0, len(flows))
 	for _, f := range flows {
 		if srcIP != "" && !matchIP(f.SrcAddr, srcIP) {
@@ -1219,6 +1276,35 @@ func filterFlows(flows []model.Flow, srcIP, dstIP, port, proto, hostIP string) [
 			continue
 		}
 		if protoFilterSet && f.Protocol != protoNum {
+			continue
+		}
+		// Filter by application protocol
+		if appProto != "" {
+			app := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+			if !strings.EqualFold(app, appProto) {
+				continue
+			}
+		}
+		// Filter by application category
+		if appCat != "" {
+			app := model.AppProtocol(f.Protocol, f.SrcPort, f.DstPort)
+			cat := model.AppCategory(app)
+			if !strings.EqualFold(cat, appCat) {
+				continue
+			}
+		}
+		// Filter by time range
+		if startTime != nil && f.Timestamp.Before(*startTime) {
+			continue
+		}
+		if endTime != nil && f.Timestamp.After(*endTime) {
+			continue
+		}
+		// Filter by bytes range
+		if bytesMin > 0 && f.Bytes < bytesMin {
+			continue
+		}
+		if bytesMax > 0 && f.Bytes > bytesMax {
 			continue
 		}
 		result = append(result, f)

@@ -9,14 +9,20 @@
   <label>Dst IP <input type="text" name="dst_ip" value="{{.FilterDstIP}}" placeholder="e.g. 192.168" /></label>
   <label>Port <input type="text" name="port" value="{{.FilterPort}}" placeholder="e.g. 443" /></label>
   <label>Protocol <input type="text" name="protocol" value="{{.FilterProtocol}}" placeholder="tcp/udp/6/17" /></label>
+  <label>App Protocol <input type="text" name="app_proto" value="{{.FilterAppProto}}" placeholder="e.g. HTTP, DNS" /></label>
+  <label>App Category <input type="text" name="app_cat" value="{{.FilterAppCat}}" placeholder="e.g. Web, Database" /></label>
+  <label>Bytes Min <input type="number" name="bytes_min" value="{{if .FilterBytesMin}}{{.FilterBytesMin}}{{end}}" placeholder="minimum bytes" /></label>
+  <label>Bytes Max <input type="number" name="bytes_max" value="{{if .FilterBytesMax}}{{.FilterBytesMax}}{{end}}" placeholder="maximum bytes" /></label>
+  <label>Start Time <input type="datetime-local" name="start" value="{{.FilterStart}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
+  <label>End Time <input type="datetime-local" name="end" value="{{.FilterEnd}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
   <button type="submit">Filter</button>
   <a href="/flows" class="btn-clear">Clear</a>
 </form>
 
 <p class="flow-summary">Showing page {{.Page}} of {{.TotalPages}} ({{.TotalFlows}} flows)</p>
 <div class="export-buttons" style="margin: 0.5em 0;">
-  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
-  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}" class="btn btn-sm">⬇ Export JSON</a>
+  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
+  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}" class="btn btn-sm">⬇ Export JSON</a>
 </div>
 
 {{if .Flows}}
