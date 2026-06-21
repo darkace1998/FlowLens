@@ -400,10 +400,6 @@ func TestCounters_Empty(t *testing.T) {
 
 func TestAPIExporters_Empty(t *testing.T) {
 	srv, _ := newTestServer(t)
-	err := error(nil)
-	if err != nil {
-		t.Fatalf("failed to create server: %v", err)
-	}
 
 	req := httptest.NewRequest("GET", "/api/exporters", nil)
 	w := httptest.NewRecorder()
@@ -427,10 +423,6 @@ func TestAPIExporters_Empty(t *testing.T) {
 
 func TestAPIExporters_WithData(t *testing.T) {
 	srv, rb := newTestServer(t)
-	err := error(nil)
-	if err != nil {
-		t.Fatalf("failed to create server: %v", err)
-	}
 
 	flows := []model.Flow{
 		{
