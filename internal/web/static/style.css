@@ -137,8 +137,15 @@ h2 { margin-bottom: 0.75rem; font-size: 1.1rem; color: var(--muted); }
   border-radius: 6px;
   padding: 1rem 1.25rem;
   margin-bottom: 1rem;
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Table responsive wrapper improvements */
+.table-responsive {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 /* Tables */
@@ -146,11 +153,15 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
+  table-layout: fixed;
 }
 th, td {
   padding: 0.4rem 0.6rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
 }
 th {
   font-weight: 600;
@@ -158,6 +169,9 @@ th {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
 }
 tr:hover td { background: var(--accent-light); }
 
@@ -231,10 +245,55 @@ tr:hover td { background: var(--accent-light); }
 .flow-summary { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
 
 /* Flows table */
-.flows-table { font-size: 0.8rem; }
+.flows-table { 
+  font-size: 0.8rem; 
+  width: 100%;
+  table-layout: fixed;
+}
 .flows-table th,
-.flows-table td { white-space: nowrap; }
-.flows-table td { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.flows-table td { 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.flows-table td { 
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+/* Flows table - first column sticky */
+.flows-table th:first-child,
+.flows-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--card);
+  z-index: 10;
+}
+.flows-table th:first-child {
+  z-index: 20;
+}
+
+/* Dark mode support for sticky columns */
+body.dark .flows-table th:first-child,
+body.dark .flows-table td:first-child {
+  background: var(--card);
+}
+
+/* Hover to see full content */
+.flows-table th:hover,
+.flows-table td:hover {
+  white-space: normal;
+  overflow: visible;
+  z-index: 30;
+}
+
+/* Responsive column hiding for mobile */
+@media (max-width: 1024px) {
+  .flows-table th.col-optional,
+  .flows-table td.col-optional {
+    display: none;
+  }
+}
 
 /* Pagination */
 .pagination {
@@ -526,6 +585,22 @@ body.dark select {
   }
   .stat-value { font-size: 1.2rem; }
   .two-col { grid-template-columns: 1fr; }
+}
+
+/* Small screens - improved table handling */
+@media (max-width: 768px) {
+  .flows-table th,
+  .flows-table td {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.75rem;
+  }
+  th {
+    font-size: 0.7rem;
+  }
+  /* Ensure panel doesn't add extra padding on small screens */
+  .panel {
+    padding: 0.75rem 1rem;
+  }
 }
 
 /* --- Button / Time-range selector --- */
