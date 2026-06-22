@@ -159,6 +159,36 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	}
 }
 
+// APIVLANsResponse is the JSON response for GET /api/vlans.
+type APIVLANsResponse struct {
+	TotalVLANs int       `json:"total_vlans"`
+	TotalBytes uint64    `json:"total_bytes"`
+	VLANs      []APIVLAN `json:"vlans"`
+}
+
+// APIVLAN is a single VLAN record in the JSON API.
+type APIVLAN struct {
+	ID      uint16 `json:"id"`
+	Bytes   uint64 `json:"bytes"`
+	Packets uint64 `json:"packets"`
+	Flows   int    `json:"flows"`
+}
+
+// APIMACsResponse is the JSON response for GET /api/macs.
+type APIMACsResponse struct {
+	TotalMACs  int      `json:"total_macs"`
+	TotalBytes uint64   `json:"total_bytes"`
+	MACs       []APIMAC `json:"macs"`
+}
+
+// APIMAC is a single MAC address record in the JSON API.
+type APIMAC struct {
+	MAC     string `json:"mac"`
+	Bytes   uint64 `json:"bytes"`
+	Packets uint64 `json:"packets"`
+	VLAN    uint16 `json:"vlan"`
+}
+
 // --- API Handlers ---
 
 func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
@@ -653,5 +683,135 @@ func (s *Server) handleAPIExporters(w http.ResponseWriter, r *http.Request) {
 		TotalExporters: len(exporters),
 		TotalBytes:     totalBytes,
 		Exporters:      exporters,
+	})
+}
+
+func (s *Server) handleAPIVLANs(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	allFlows, err := s.flowSvc.RecentFlows(window, 0)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
+		logging.Default().Error("API vlans query error: %v", err)
+		return
+	}
+
+	type vlanAgg struct {
+		bytes   uint64
+		packets uint64
+		flows   int
+	}
+	aggMap := make(map[uint16]*vlanAgg)
+	var totalBytes uint64
+
+	for _, f := range allFlows {
+		totalBytes += f.Bytes
+		vid := f.VLAN
+		if a, ok := aggMap[vid]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flows++
+		} else {
+			aggMap[vid] = &vlanAgg{
+				bytes:   f.Bytes,
+				packets: f.Packets,
+				flows:   1,
+			}
+		}
+	}
+
+	vlans := make([]APIVLAN, 0, len(aggMap))
+	for vid, a := range aggMap {
+		vlans = append(vlans, APIVLAN{
+			ID:      vid,
+			Bytes:   a.bytes,
+			Packets: a.packets,
+			Flows:   a.flows,
+		})
+	}
+
+	sortByBytes(vlans, func(e APIVLAN) uint64 { return e.Bytes })
+
+	writeJSON(w, http.StatusOK, APIVLANsResponse{
+		TotalVLANs: len(vlans),
+		TotalBytes: totalBytes,
+		VLANs:      vlans,
+	})
+}
+
+func (s *Server) handleAPIMACs(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	allFlows, err := s.flowSvc.RecentFlows(window, 0)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
+		logging.Default().Error("API macs query error: %v", err)
+		return
+	}
+
+	type macAgg struct {
+		vlan    uint16
+		bytes   uint64
+		packets uint64
+	}
+	aggMap := make(map[string]*macAgg)
+	var totalBytes uint64
+
+	for _, f := range allFlows {
+		srcMAC := model.FormatMAC(f.SrcMAC)
+		dstMAC := model.FormatMAC(f.DstMAC)
+
+		if srcMAC != "—" || dstMAC != "—" {
+			totalBytes += f.Bytes
+		}
+
+		if srcMAC != "—" {
+			if a, ok := aggMap[srcMAC]; ok {
+				a.vlan = f.VLAN
+				a.bytes += f.Bytes
+				a.packets += f.Packets
+			} else {
+				aggMap[srcMAC] = &macAgg{
+					vlan:    f.VLAN,
+					bytes:   f.Bytes,
+					packets: f.Packets,
+				}
+			}
+		}
+		if dstMAC != "—" {
+			if a, ok := aggMap[dstMAC]; ok {
+				a.vlan = f.VLAN
+				a.bytes += f.Bytes
+				a.packets += f.Packets
+			} else {
+				aggMap[dstMAC] = &macAgg{
+					vlan:    f.VLAN,
+					bytes:   f.Bytes,
+					packets: f.Packets,
+				}
+			}
+		}
+	}
+
+	macs := make([]APIMAC, 0, len(aggMap))
+	for mac, a := range aggMap {
+		macs = append(macs, APIMAC{
+			MAC:     mac,
+			Bytes:   a.bytes,
+			Packets: a.packets,
+			VLAN:    a.vlan,
+		})
+	}
+
+	sortByBytes(macs, func(e APIMAC) uint64 { return e.Bytes })
+
+	writeJSON(w, http.StatusOK, APIMACsResponse{
+		TotalMACs:  len(macs),
+		TotalBytes: totalBytes,
+		MACs:       macs,
 	})
 }

@@ -139,6 +139,8 @@ func NewServer(cfg config.WebConfig, ringBuf *storage.RingBuffer, sqlStore *stor
 	s.mux.HandleFunc("/api/advisories", s.handleAPIAdvisories)
 	s.mux.HandleFunc("/api/dashboard", s.handleAPIDashboard)
 	s.mux.HandleFunc("/api/exporters", s.handleAPIExporters)
+	s.mux.HandleFunc("/api/vlans", s.handleAPIVLANs)
+	s.mux.HandleFunc("/api/macs", s.handleAPIMACs)
 
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(staticFileSystem(staticDir))))
 

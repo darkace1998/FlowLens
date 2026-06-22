@@ -501,3 +501,136 @@ func TestAPIExporters_WithData(t *testing.T) {
 		t.Errorf("expected top proto ICMP for 192.168.1.1, got %s", resp.Exporters[1].TopProto)
 	}
 }
+
+func TestAPIVLANs_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/api/vlans", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIVLANsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalVLANs != 0 {
+		t.Errorf("expected 0 VLANs, got %d", resp.TotalVLANs)
+	}
+}
+
+func TestAPIVLANs_WithData(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	f1 := model.Flow{SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("192.168.1.1"), SrcPort: 1234, DstPort: 80, Protocol: 6, Bytes: 1000, Packets: 10, Timestamp: time.Now()}
+	f1.VLAN = 100
+	f2 := model.Flow{SrcAddr: net.ParseIP("10.0.0.2"), DstAddr: net.ParseIP("192.168.1.1"), SrcPort: 1235, DstPort: 80, Protocol: 6, Bytes: 500, Packets: 5, Timestamp: time.Now()}
+	f2.VLAN = 200
+	rb.Insert([]model.Flow{f1, f2})
+
+	req := httptest.NewRequest("GET", "/api/vlans", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIVLANsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalVLANs != 2 {
+		t.Fatalf("expected 2 VLANs, got %d", resp.TotalVLANs)
+	}
+	if resp.TotalBytes != 1500 {
+		t.Errorf("expected 1500 bytes total, got %d", resp.TotalBytes)
+	}
+
+	// Should be sorted by bytes descending
+	if resp.VLANs[0].ID != 100 {
+		t.Errorf("expected first VLAN ID 100, got %d", resp.VLANs[0].ID)
+	}
+	if resp.VLANs[0].Bytes != 1000 {
+		t.Errorf("expected 1000 bytes for VLAN 100, got %d", resp.VLANs[0].Bytes)
+	}
+	if resp.VLANs[0].Flows != 1 {
+		t.Errorf("expected flow count 1 for VLAN 100, got %d", resp.VLANs[0].Flows)
+	}
+
+	if resp.VLANs[1].ID != 200 {
+		t.Errorf("expected second VLAN ID 200, got %d", resp.VLANs[1].ID)
+	}
+}
+
+func TestAPIMACs_Empty(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/api/macs", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIMACsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalMACs != 0 {
+		t.Errorf("expected 0 MACs, got %d", resp.TotalMACs)
+	}
+}
+
+func TestAPIMACs_WithData(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	mac1, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	mac2, _ := net.ParseMAC("11:22:33:44:55:66")
+	mac3, _ := net.ParseMAC("aa:bb:cc:dd:ee:00")
+	f1 := model.Flow{SrcAddr: net.ParseIP("10.0.0.1"), DstAddr: net.ParseIP("192.168.1.1"), SrcPort: 1234, DstPort: 80, Protocol: 6, Bytes: 1000, Packets: 10, Timestamp: time.Now()}
+	f1.SrcMAC = mac1
+	f1.DstMAC = mac2
+	f1.VLAN = 100
+
+	f2 := model.Flow{SrcAddr: net.ParseIP("10.0.0.2"), DstAddr: net.ParseIP("192.168.1.1"), SrcPort: 1235, DstPort: 80, Protocol: 6, Bytes: 500, Packets: 5, Timestamp: time.Now()}
+	f2.SrcMAC = mac3
+	// DstMAC is left nil implicitly
+	rb.Insert([]model.Flow{f1, f2})
+
+	req := httptest.NewRequest("GET", "/api/macs", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIMACsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalMACs != 3 {
+		t.Fatalf("expected 3 MACs, got %d", resp.TotalMACs)
+	}
+
+	// total bytes should be sum of flows that match any MAC
+	// totalBytes = 1000 + 500 = 1500
+	if resp.TotalBytes != 1500 {
+		t.Errorf("expected 1500 bytes total, got %d", resp.TotalBytes)
+	}
+
+	// Should be sorted by bytes descending (both aa:bb:cc...ff and 11:22... have 1000 bytes, order may vary between them but they must precede aa:bb:cc...00 which has 500)
+	if resp.MACs[2].Bytes != 500 {
+		t.Errorf("expected third MAC to have 500 bytes, got %d", resp.MACs[2].Bytes)
+	}
+	if resp.MACs[2].MAC != "aa:bb:cc:dd:ee:00" {
+		t.Errorf("expected third MAC to be aa:bb:cc:dd:ee:00, got %s", resp.MACs[2].MAC)
+	}
+}
