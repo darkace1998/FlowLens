@@ -1,44 +1,112 @@
 {{define "title"}}Flow Explorer{{end}}
-{{define "head"}}{{end}}
+{{define "head"}}
+<style>
+  .filter-section { margin-bottom: 0.5em; }
+  .filter-section summary { cursor: pointer; font-weight: bold; padding: 0.25em 0.5em; background: #f0f0f0; border-radius: 4px; }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center; padding: 0.25em 0 0 0.5em; }
+  .filter-row label { display: flex; align-items: center; gap: 0.25em; }
+  .filter-row input, .filter-row select { padding: 0.25em; }
+  .toggleable-col { display: table-cell; }
+  .toggleable-col.hidden { display: none; }
+</style>
+{{end}}
 {{define "content"}}
 <h1>Flow Explorer</h1>
 
+<!-- Column Toggle Controls -->
+<div style="margin: 0.5em 0; padding: 0.5em; background: #f5f5f5; border-radius: 4px;">
+  <strong>Show/Hide Columns:</strong>
+  <label><input type="checkbox" id="col-time" checked onchange="toggleCol('time')"> Time</label>
+  <label><input type="checkbox" id="col-src" checked onchange="toggleCol('src')"> Source</label>
+  <label><input type="checkbox" id="col-srcport" checked onchange="toggleCol('srcport')"> Src Port</label>
+  <label><input type="checkbox" id="col-srccountry" checked onchange="toggleCol('srccountry')"> Src Country</label>
+  <label><input type="checkbox" id="col-dst" checked onchange="toggleCol('dst')"> Destination</label>
+  <label><input type="checkbox" id="col-dstport" checked onchange="toggleCol('dstport')"> Dst Port</label>
+  <label><input type="checkbox" id="col-dstcountry" checked onchange="toggleCol('dstcountry')"> Dst Country</label>
+  <label><input type="checkbox" id="col-proto" checked onchange="toggleCol('proto')"> Protocol</label>
+  <label><input type="checkbox" id="col-app" checked onchange="toggleCol('app')"> Application</label>
+  <label><input type="checkbox" id="col-category" checked onchange="toggleCol('category')"> Category</label>
+  <label><input type="checkbox" id="col-bytes" checked onchange="toggleCol('bytes')"> Bytes</label>
+  <label><input type="checkbox" id="col-packets" checked onchange="toggleCol('packets')"> Packets</label>
+  <label><input type="checkbox" id="col-tcpflags" onchange="toggleCol('tcpflags')"> TCP Flags</label>
+  <label><input type="checkbox" id="col-throughput" checked onchange="toggleCol('throughput')"> Throughput</label>
+  <label><input type="checkbox" id="col-rtt" onchange="toggleCol('rtt')"> RTT</label>
+  <label><input type="checkbox" id="col-duration" checked onchange="toggleCol('duration')"> Duration</label>
+  <label><input type="checkbox" id="col-age" checked onchange="toggleCol('age')"> Age</label>
+  <label><input type="checkbox" id="col-iniface" onchange="toggleCol('iniface')"> In Iface</label>
+  <label><input type="checkbox" id="col-outiface" onchange="toggleCol('outiface')"> Out Iface</label>
+  <label><input type="checkbox" id="col-exporter" onchange="toggleCol('exporter')"> Exporter</label>
+  <label><input type="checkbox" id="col-vlan" onchange="toggleCol('vlan')"> VLAN</label>
+  <label><input type="checkbox" id="col-ether" onchange="toggleCol('ether')"> EtherType</label>
+  <label><input type="checkbox" id="col-srcmac" onchange="toggleCol('srcmac')"> Src MAC</label>
+  <label><input type="checkbox" id="col-dstmac" onchange="toggleCol('dstmac')"> Dst MAC</label>
+  <label><input type="checkbox" id="col-retrans" onchange="toggleCol('retrans')"> Retrans</label>
+  <label><input type="checkbox" id="col-ooo" onchange="toggleCol('ooo')"> OOO</label>
+  <label><input type="checkbox" id="col-loss" onchange="toggleCol('loss')"> Loss</label>
+  <label><input type="checkbox" id="col-jitter" onchange="toggleCol('jitter')"> Jitter</label>
+  <label><input type="checkbox" id="col-mos" onchange="toggleCol('mos')"> MOS</label>
+</div>
+
 <form class="filter-bar" method="get" action="/flows">
-  <label>IP <input type="text" name="ip" value="{{.FilterIP}}" placeholder="src or dst" /></label>
-  <label>Src IP <input type="text" name="src_ip" value="{{.FilterSrcIP}}" placeholder="e.g. 10.0.1" /></label>
-  <label>Dst IP <input type="text" name="dst_ip" value="{{.FilterDstIP}}" placeholder="e.g. 192.168" /></label>
-  <label>Port <input type="text" name="port" value="{{.FilterPort}}" placeholder="e.g. 443" /></label>
-  <label>Protocol <input type="text" name="protocol" value="{{.FilterProtocol}}" placeholder="tcp/udp/6/17" /></label>
-  <label>App Protocol <input type="text" name="app_proto" value="{{.FilterAppProto}}" placeholder="e.g. HTTP, DNS" /></label>
-  <label>App Category <input type="text" name="app_cat" value="{{.FilterAppCat}}" placeholder="e.g. Web, Database" /></label>
-  <label>Bytes Min <input type="number" name="bytes_min" value="{{if .FilterBytesMin}}{{.FilterBytesMin}}{{end}}" placeholder="minimum bytes" /></label>
-  <label>Bytes Max <input type="number" name="bytes_max" value="{{if .FilterBytesMax}}{{.FilterBytesMax}}{{end}}" placeholder="maximum bytes" /></label>
-  <label>Start Time <input type="datetime-local" name="start" value="{{.FilterStart}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
-  <label>End Time <input type="datetime-local" name="end" value="{{.FilterEnd}}" placeholder="YYYY-MM-DDTHH:MM" /></label>
-  <label>TCP Flags <input type="text" name="tcp_flags" value="{{.FilterTCPFlags}}" placeholder="e.g. SYN, SYN,ACK, 0x12" /></label>
-  <label>ToS <input type="number" name="tos" value="{{if .FilterToS}}{{.FilterToS}}{{end}}" min="0" max="255" placeholder="ToS/DSCP value" /></label>
-  <label>In Interface <input type="text" name="in_iface" value="{{.FilterInIface}}" placeholder="e.g. eth0" /></label>
-  <label>Out Interface <input type="text" name="out_iface" value="{{.FilterOutIface}}" placeholder="e.g. eth1" /></label>
-  <label>Src AS <input type="number" name="src_as" value="{{if .FilterSrcAS}}{{.FilterSrcAS}}{{end}}" placeholder="source AS number" /></label>
-  <label>Dst AS <input type="number" name="dst_as" value="{{if .FilterDstAS}}{{.FilterDstAS}}{{end}}" placeholder="destination AS number" /></label>
-  <label>Src MAC <input type="text" name="src_mac" value="{{.FilterSrcMAC}}" placeholder="e.g. 00:11:22:33:44:55" /></label>
-  <label>Dst MAC <input type="text" name="dst_mac" value="{{.FilterDstMAC}}" placeholder="e.g. aa:bb:cc:dd:ee:ff" /></label>
-  <label>VLAN <input type="number" name="vlan" value="{{if .FilterVLAN}}{{.FilterVLAN}}{{end}}" min="0" max="4095" placeholder="VLAN ID" /></label>
-  <label>EtherType <input type="text" name="ether_type" value="{{if .FilterEtherType}}0x{{printf "%04x" .FilterEtherType}}{{end}}" placeholder="e.g. 0x0800, 2048" /></label>
-  <label>Exporter IP <input type="text" name="exporter" value="{{.FilterExporter}}" placeholder="e.g. 192.168.1.1" /></label>
-  <label>RTT Min (μs) <input type="number" name="rtt_min" value="{{if .FilterRTTMin}}{{.FilterRTTMin}}{{end}}" placeholder="minimum RTT" /></label>
-  <label>RTT Max (μs) <input type="number" name="rtt_max" value="{{if .FilterRTTMax}}{{.FilterRTTMax}}{{end}}" placeholder="maximum RTT" /></label>
-  <label>Retrans Min <input type="number" name="retrans_min" value="{{if .FilterRetransMin}}{{.FilterRetransMin}}{{end}}" placeholder="min retransmissions" /></label>
-  <label>OOO Min <input type="number" name="ooo_min" value="{{if .FilterOOOMin}}{{.FilterOOOMin}}{{end}}" placeholder="min out-of-order" /></label>
-  <label>Loss Min <input type="number" name="loss_min" value="{{if .FilterLossMin}}{{.FilterLossMin}}{{end}}" placeholder="min packet loss" /></label>
-  <label>Jitter Min (μs) <input type="number" name="jitter_min" value="{{if .FilterJitterMin}}{{.FilterJitterMin}}{{end}}" placeholder="min jitter" /></label>
-  <label>Jitter Max (μs) <input type="number" name="jitter_max" value="{{if .FilterJitterMax}}{{.FilterJitterMax}}{{end}}" placeholder="max jitter" /></label>
-  <label>MOS Min <input type="number" name="mos_min" value="{{if .FilterMOSMin}}{{printf "%.2f" .FilterMOSMin}}{{end}}" step="0.01" min="1" max="4.41" placeholder="min MOS score" /></label>
-  <button type="submit">Filter</button>
-  <a href="/flows" class="btn-clear">Clear</a>
+  <div class="filter-section">
+    <details open>
+      <summary>Common Filters</summary>
+      <div class="filter-row">
+        <label>IP <input type="text" name="ip" value="{{.FilterIP}}" placeholder="src or dst" /></label>
+        <label>Src IP <input type="text" name="src_ip" value="{{.FilterSrcIP}}" placeholder="e.g. 10.0.1" /></label>
+        <label>Dst IP <input type="text" name="dst_ip" value="{{.FilterDstIP}}" placeholder="e.g. 192.168" /></label>
+        <label>Port <input type="text" name="port" value="{{.FilterPort}}" placeholder="e.g. 443" /></label>
+        <label>Protocol <input type="text" name="protocol" value="{{.FilterProtocol}}" placeholder="tcp/udp/6/17" /></label>
+      </div>
+      <div class="filter-row">
+        <label>App Protocol <input type="text" name="app_proto" value="{{.FilterAppProto}}" placeholder="e.g. HTTP, DNS" /></label>
+        <label>App Category <input type="text" name="app_cat" value="{{.FilterAppCat}}" placeholder="e.g. Web, Database" /></label>
+        <label>Bytes Min <input type="number" name="bytes_min" value="{{if .FilterBytesMin}}{{.FilterBytesMin}}{{end}}" placeholder="min bytes" /></label>
+        <label>Bytes Max <input type="number" name="bytes_max" value="{{if .FilterBytesMax}}{{.FilterBytesMax}}{{end}}" placeholder="max bytes" /></label>
+      </div>
+      <div class="filter-row">
+        <label>Time Range <input type="datetime-local" name="start" value="{{.FilterStart}}" /> to <input type="datetime-local" name="end" value="{{.FilterEnd}}" /></label>
+        <button type="submit">Filter</button>
+        <a href="/flows" class="btn-clear">Clear</a>
+      </div>
+    </details>
+  </div>
+  <div class="filter-section">
+    <details>
+      <summary>Advanced Filters</summary>
+      <div class="filter-row">
+        <label>TCP Flags <input type="text" name="tcp_flags" value="{{.FilterTCPFlags}}" placeholder="e.g. SYN,ACK, 0x12" /></label>
+        <label>ToS <input type="number" name="tos" value="{{if .FilterToS}}{{.FilterToS}}{{end}}" min="0" max="255" placeholder="ToS/DSCP" /></label>
+        <label>In Iface <input type="text" name="in_iface" value="{{.FilterInIface}}" placeholder="e.g. eth0" /></label>
+        <label>Out Iface <input type="text" name="out_iface" value="{{.FilterOutIface}}" placeholder="e.g. eth1" /></label>
+      </div>
+      <div class="filter-row">
+        <label>Src AS <input type="number" name="src_as" value="{{if .FilterSrcAS}}{{.FilterSrcAS}}{{end}}" placeholder="source AS" /></label>
+        <label>Dst AS <input type="number" name="dst_as" value="{{if .FilterDstAS}}{{.FilterDstAS}}{{end}}" placeholder="dest AS" /></label>
+        <label>Src MAC <input type="text" name="src_mac" value="{{.FilterSrcMAC}}" placeholder="e.g. 00:11:22:33:44:55" /></label>
+        <label>Dst MAC <input type="text" name="dst_mac" value="{{.FilterDstMAC}}" placeholder="e.g. aa:bb:cc:dd:ee:ff" /></label>
+      </div>
+      <div class="filter-row">
+        <label>VLAN <input type="number" name="vlan" value="{{if .FilterVLAN}}{{.FilterVLAN}}{{end}}" min="0" max="4095" placeholder="VLAN ID" /></label>
+        <label>EtherType <input type="text" name="ether_type" value="{{if .FilterEtherType}}0x{{printf "%04x" .FilterEtherType}}{{end}}" placeholder="e.g. 0x0800" /></label>
+        <label>Exporter <input type="text" name="exporter" value="{{.FilterExporter}}" placeholder="e.g. 192.168.1.1" /></label>
+      </div>
+      <div class="filter-row">
+        <label>RTT Min <input type="number" name="rtt_min" value="{{if .FilterRTTMin}}{{.FilterRTTMin}}{{end}}" placeholder="μs" /></label>
+        <label>RTT Max <input type="number" name="rtt_max" value="{{if .FilterRTTMax}}{{.FilterRTTMax}}{{end}}" placeholder="μs" /></label>
+        <label>Retrans Min <input type="number" name="retrans_min" value="{{if .FilterRetransMin}}{{.FilterRetransMin}}{{end}}" /></label>
+        <label>OOO Min <input type="number" name="ooo_min" value="{{if .FilterOOOMin}}{{.FilterOOOMin}}{{end}}" /></label>
+      </div>
+      <div class="filter-row">
+        <label>Loss Min <input type="number" name="loss_min" value="{{if .FilterLossMin}}{{.FilterLossMin}}{{end}}" /></label>
+        <label>Jitter Min <input type="number" name="jitter_min" value="{{if .FilterJitterMin}}{{.FilterJitterMin}}{{end}}" placeholder="μs" /></label>
+        <label>Jitter Max <input type="number" name="jitter_max" value="{{if .FilterJitterMax}}{{.FilterJitterMax}}{{end}}" placeholder="μs" /></label>
+        <label>MOS Min <input type="number" name="mos_min" value="{{if .FilterMOSMin}}{{printf "%.2f" .FilterMOSMin}}{{end}}" step="0.01" min="1" max="4.41" /></label>
+      </div>
+    </details>
+  </div>
 </form>
 
-{{/* Phase 3: Filter Presets */}}
 {{if .FilterPresetErr}}
 <div class="alert alert-info">{{.FilterPresetErr}}</div>
 {{end}}
@@ -64,9 +132,9 @@
       {{end}}
       <form action="/flows/filter-preset/save" method="post" style="margin-top: 0.5em; padding-top: 0.5em; border-top: 1px solid #ddd;">
         <label style="margin-right: 0.5em;">
-          <strong>Save Current Filters:</strong>
-          <input type="text" name="name" placeholder="Preset Name" required style="padding: 0.25em; width: 120px;" />
-          <input type="text" name="description" placeholder="Description (optional)" style="padding: 0.25em; width: 200px; margin-left: 0.5em;" />
+          <strong>Save Current:</strong>
+          <input type="text" name="name" placeholder="Name" required style="padding: 0.25em; width: 120px;" />
+          <input type="text" name="description" placeholder="Description" style="padding: 0.25em; width: 200px; margin-left: 0.5em;" />
           <button type="submit" class="btn btn-sm" style="padding: 0.25em 0.5em; margin-left: 0.5em;">Save</button>
         </label>
       </form>
@@ -76,82 +144,82 @@
 
 <p class="flow-summary">Showing page {{.Page}} of {{.TotalPages}} ({{.TotalFlows}} flows)</p>
 <div class="export-buttons" style="margin: 0.5em 0;">
-  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}{{if .FilterTCPFlags}}&amp;tcp_flags={{urlquery .FilterTCPFlags}}{{end}}{{if .FilterToS}}&amp;tos={{.FilterToS}}{{end}}{{if .FilterInIface}}&amp;in_iface={{urlquery .FilterInIface}}{{end}}{{if .FilterOutIface}}&amp;out_iface={{urlquery .FilterOutIface}}{{end}}{{if .FilterSrcAS}}&amp;src_as={{.FilterSrcAS}}{{end}}{{if .FilterDstAS}}&amp;dst_as={{.FilterDstAS}}{{end}}{{if .FilterSrcMAC}}&amp;src_mac={{urlquery .FilterSrcMAC}}{{end}}{{if .FilterDstMAC}}&amp;dst_mac={{urlquery .FilterDstMAC}}{{end}}{{if .FilterVLAN}}&amp;vlan={{.FilterVLAN}}{{end}}{{if .FilterEtherType}}&amp;ether_type=0x{{printf "%04x" .FilterEtherType}}{{end}}{{if .FilterExporter}}&amp;exporter={{urlquery .FilterExporter}}{{end}}{{if .FilterRTTMin}}&amp;rtt_min={{.FilterRTTMin}}{{end}}{{if .FilterRTTMax}}&amp;rtt_max={{.FilterRTTMax}}{{end}}{{if .FilterRetransMin}}&amp;retrans_min={{.FilterRetransMin}}{{end}}{{if .FilterOOOMin}}&amp;ooo_min={{.FilterOOOMin}}{{end}}{{if .FilterLossMin}}&amp;loss_min={{.FilterLossMin}}{{end}}{{if .FilterJitterMin}}&amp;jitter_min={{.FilterJitterMin}}{{end}}{{if .FilterJitterMax}}&amp;jitter_max={{.FilterJitterMax}}{{end}}{{if .FilterMOSMin}}&amp;mos_min={{.FilterMOSMin}}{{end}}" class="btn btn-sm">⬇ Export CSV</a>
-  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}{{if .FilterTCPFlags}}&amp;tcp_flags={{urlquery .FilterTCPFlags}}{{end}}{{if .FilterToS}}&amp;tos={{.FilterToS}}{{end}}{{if .FilterInIface}}&amp;in_iface={{urlquery .FilterInIface}}{{end}}{{if .FilterOutIface}}&amp;out_iface={{urlquery .FilterOutIface}}{{end}}{{if .FilterSrcAS}}&amp;src_as={{.FilterSrcAS}}{{end}}{{if .FilterDstAS}}&amp;dst_as={{.FilterDstAS}}{{end}}{{if .FilterSrcMAC}}&amp;src_mac={{urlquery .FilterSrcMAC}}{{end}}{{if .FilterDstMAC}}&amp;dst_mac={{urlquery .FilterDstMAC}}{{end}}{{if .FilterVLAN}}&amp;vlan={{.FilterVLAN}}{{end}}{{if .FilterEtherType}}&amp;ether_type=0x{{printf "%04x" .FilterEtherType}}{{end}}{{if .FilterExporter}}&amp;exporter={{urlquery .FilterExporter}}{{end}}{{if .FilterRTTMin}}&amp;rtt_min={{.FilterRTTMin}}{{end}}{{if .FilterRTTMax}}&amp;rtt_max={{.FilterRTTMax}}{{end}}{{if .FilterRetransMin}}&amp;retrans_min={{.FilterRetransMin}}{{end}}{{if .FilterOOOMin}}&amp;ooo_min={{.FilterOOOMin}}{{end}}{{if .FilterLossMin}}&amp;loss_min={{.FilterLossMin}}{{end}}{{if .FilterJitterMin}}&amp;jitter_min={{.FilterJitterMin}}{{end}}{{if .FilterJitterMax}}&amp;jitter_max={{.FilterJitterMax}}{{end}}{{if .FilterMOSMin}}&amp;mos_min={{.FilterMOSMin}}{{end}}" class="btn btn-sm">⬇ Export JSON</a>
+  <a href="/flows/export?format=csv{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}" class="btn btn-sm">⬇ CSV</a>
+  <a href="/flows/export?format=json{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterAppProto}}&amp;app_proto={{urlquery .FilterAppProto}}{{end}}{{if .FilterAppCat}}&amp;app_cat={{urlquery .FilterAppCat}}{{end}}{{if .FilterStart}}&amp;start={{urlquery .FilterStart}}{{end}}{{if .FilterEnd}}&amp;end={{urlquery .FilterEnd}}{{end}}{{if .FilterBytesMin}}&amp;bytes_min={{.FilterBytesMin}}{{end}}{{if .FilterBytesMax}}&amp;bytes_max={{.FilterBytesMax}}{{end}}" class="btn btn-sm">⬇ JSON</a>
 </div>
 
 {{if .Flows}}
 <div class="panel">
   <div class="table-responsive">
   <table class="flows-table">
-  <thead>
-    <tr>
-      <th>Time</th>
-      <th>Source</th>
-      <th>Src Port</th>
-      <th>Src Country</th>
-      <th>Destination</th>
-      <th>Dst Port</th>
-      <th>Dst Country</th>
-      <th>Protocol</th>
-      <th>TCP Flags</th>
-      <th>Application</th>
-      <th>Category</th>
-      <th>Bytes</th>
-      <th>Packets</th>
-      <th>Throughput</th>
-      <th>RTT</th>
-      <th>In Iface</th>
-      <th>Out Iface</th>
-      <th>Exporter</th>
-      <th>Src MAC</th>
-      <th>Dst MAC</th>
-      <th>VLAN</th>
-      <th>EtherType</th>
-      <th>Retrans</th>
-      <th>OOO</th>
-      <th>Loss</th>
-      <th>Jitter</th>
-      <th>MOS</th>
-      <th>Duration</th>
-      <th>Age</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{range .Flows}}
-    <tr>
-      <td>{{.Timestamp}}</td>
-      <td><a href="/flows?src_ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a></td>
-      <td>{{if .SrcPort}}<a href="/flows?port={{urlquery .SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
-      <td>{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
-      <td><a href="/flows?dst_ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
-      <td>{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
-      <td>{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
-      <td><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
-      <td>{{.TCPFlags}}</td>
-      <td>{{.AppProto}}</td>
-      <td>{{.AppCategory}}</td>
-      <td>{{.Bytes}}</td>
-      <td>{{.Packets}}</td>
-      <td>{{.Throughput}}</td>
-      <td>{{.RTT}}</td>
-      <td>{{.InIface}}</td>
-      <td>{{.OutIface}}</td>
-      <td>{{if ne .Exporter "0.0.0.0"}}{{.Exporter}}{{else}}—{{end}}</td>
-      <td>{{.SrcMAC}}</td>
-      <td>{{.DstMAC}}</td>
-      <td>{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
-      <td>{{.EtherType}}</td>
-      <td>{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
-      <td>{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
-      <td>{{if .Loss}}{{.Loss}}{{else}}—{{end}}</td>
-      <td>{{.Jitter}}</td>
-      <td>{{if ne .MOS "—"}}<span class="mos-{{.MOSClass}}">{{.MOS}}</span>{{else}}—{{end}}</td>
-      <td>{{.Duration}}</td>
-      <td>{{.TimeAgo}}</td>
-    </tr>
-    {{end}}
-  </tbody>
+    <thead>
+      <tr>
+        <th class="toggleable-col" data-col="time">Time</th>
+        <th class="toggleable-col" data-col="src">Source</th>
+        <th class="toggleable-col" data-col="srcport">Src Port</th>
+        <th class="toggleable-col" data-col="srccountry">Src Country</th>
+        <th class="toggleable-col" data-col="dst">Destination</th>
+        <th class="toggleable-col" data-col="dstport">Dst Port</th>
+        <th class="toggleable-col" data-col="dstcountry">Dst Country</th>
+        <th class="toggleable-col" data-col="proto">Protocol</th>
+        <th class="toggleable-col" data-col="app">Application</th>
+        <th class="toggleable-col" data-col="category">Category</th>
+        <th class="toggleable-col" data-col="bytes">Bytes</th>
+        <th class="toggleable-col" data-col="packets">Packets</th>
+        <th class="toggleable-col" data-col="throughput">Throughput</th>
+        <th class="toggleable-col" data-col="tcpflags" title="TCP Flags">TCP Flags</th>
+        <th class="toggleable-col" data-col="rtt" title="RTT">RTT</th>
+        <th class="toggleable-col hidden" data-col="iniface" title="Input Interface">In Iface</th>
+        <th class="toggleable-col hidden" data-col="outiface" title="Output Interface">Out Iface</th>
+        <th class="toggleable-col hidden" data-col="exporter">Exporter</th>
+        <th class="toggleable-col hidden" data-col="srcmac" title="Source MAC">Src MAC</th>
+        <th class="toggleable-col hidden" data-col="dstmac" title="Dest MAC">Dst MAC</th>
+        <th class="toggleable-col hidden" data-col="vlan" title="VLAN">VLAN</th>
+        <th class="toggleable-col hidden" data-col="ether" title="EtherType">EtherType</th>
+        <th class="toggleable-col hidden" data-col="retrans" title="Retrans">Retrans</th>
+        <th class="toggleable-col hidden" data-col="ooo" title="Out-of-Order">OOO</th>
+        <th class="toggleable-col hidden" data-col="loss" title="Loss">Loss</th>
+        <th class="toggleable-col hidden" data-col="jitter" title="Jitter">Jitter</th>
+        <th class="toggleable-col hidden" data-col="mos" title="MOS">MOS</th>
+        <th class="toggleable-col" data-col="duration">Duration</th>
+        <th class="toggleable-col" data-col="age">Age</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Flows}}
+      <tr>
+        <td class="toggleable-col" data-col="time">{{.Timestamp}}</td>
+        <td class="toggleable-col" data-col="src"><a href="/flows?src_ip={{urlquery .SrcAddr}}">{{.SrcAddr}}</a></td>
+        <td class="toggleable-col" data-col="srcport">{{if .SrcPort}}<a href="/flows?port={{urlquery .SrcPort}}">{{.SrcPort}}</a>{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="srccountry">{{if .SrcCountry}}{{.SrcCountry}}{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="dst"><a href="/flows?dst_ip={{urlquery .DstAddr}}">{{.DstAddr}}</a></td>
+        <td class="toggleable-col" data-col="dstport">{{if .DstPort}}<a href="/flows?port={{urlquery .DstPort}}">{{.DstPort}}</a>{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="dstcountry">{{if .DstCountry}}{{.DstCountry}}{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="proto"><a href="/flows?protocol={{urlquery .Protocol}}">{{.Protocol}}</a></td>
+        <td class="toggleable-col" data-col="app">{{.AppProto}}</td>
+        <td class="toggleable-col" data-col="category">{{.AppCategory}}</td>
+        <td class="toggleable-col" data-col="bytes">{{.Bytes}}</td>
+        <td class="toggleable-col" data-col="packets">{{.Packets}}</td>
+        <td class="toggleable-col" data-col="throughput">{{.Throughput}}</td>
+        <td class="toggleable-col" data-col="tcpflags">{{.TCPFlags}}</td>
+        <td class="toggleable-col" data-col="rtt">{{.RTT}}</td>
+        <td class="toggleable-col hidden" data-col="iniface">{{.InIface}}</td>
+        <td class="toggleable-col hidden" data-col="outiface">{{.OutIface}}</td>
+        <td class="toggleable-col hidden" data-col="exporter">{{if ne .Exporter "0.0.0.0"}}{{.Exporter}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="srcmac">{{.SrcMAC}}</td>
+        <td class="toggleable-col hidden" data-col="dstmac">{{.DstMAC}}</td>
+        <td class="toggleable-col hidden" data-col="vlan">{{if .VLAN}}{{.VLAN}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="ether">{{.EtherType}}</td>
+        <td class="toggleable-col hidden" data-col="retrans">{{if .Retrans}}{{.Retrans}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="ooo">{{if .OOO}}{{.OOO}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="loss">{{.Loss}}</td>
+        <td class="toggleable-col hidden" data-col="jitter">{{.Jitter}}</td>
+        <td class="toggleable-col hidden" data-col="mos">{{if ne .MOS "—"}}<span class="mos-{{.MOSClass}}">{{.MOS}}</span>{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="duration">{{.Duration}}</td>
+        <td class="toggleable-col" data-col="age">{{.TimeAgo}}</td>
+      </tr>
+      {{end}}
+    </tbody>
   </table>
   </div>
 </div>
@@ -160,7 +228,6 @@
   {{if .HasPrev}}
   <a href="/flows?page={{sub .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">&#171; Prev</a>
   {{end}}
-
   {{range pageWindow $.Page $.TotalPages}}
     {{if eq . $.Page}}
       <span class="page-current">{{.}}</span>
@@ -168,7 +235,6 @@
       <a href="/flows?page={{.}}{{if $.FilterIP}}&amp;ip={{urlquery $.FilterIP}}{{end}}{{if $.FilterSrcIP}}&amp;src_ip={{urlquery $.FilterSrcIP}}{{end}}{{if $.FilterDstIP}}&amp;dst_ip={{urlquery $.FilterDstIP}}{{end}}{{if $.FilterPort}}&amp;port={{urlquery $.FilterPort}}{{end}}{{if $.FilterProtocol}}&amp;protocol={{urlquery $.FilterProtocol}}{{end}}">{{.}}</a>
     {{end}}
   {{end}}
-
   {{if .HasNext}}
   <a href="/flows?page={{add .Page 1}}{{if .FilterIP}}&amp;ip={{urlquery .FilterIP}}{{end}}{{if .FilterSrcIP}}&amp;src_ip={{urlquery .FilterSrcIP}}{{end}}{{if .FilterDstIP}}&amp;dst_ip={{urlquery .FilterDstIP}}{{end}}{{if .FilterPort}}&amp;port={{urlquery .FilterPort}}{{end}}{{if .FilterProtocol}}&amp;protocol={{urlquery .FilterProtocol}}{{end}}">Next &#187;</a>
   {{end}}
@@ -176,4 +242,28 @@
 {{else}}
 <p class="empty">No flows match the current filters.</p>
 {{end}}
+
+<script>
+function toggleCol(col) {
+  var cb = document.getElementById('col-' + col);
+  var cells = document.querySelectorAll('[data-col="' + col + '"]');
+  cells.forEach(function(el) {
+    el.classList.toggle('hidden', !cb.checked);
+  });
+  localStorage.setItem('flowlens-col-' + col, cb.checked);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('input[id^="col-"]').forEach(function(cb) {
+    var col = cb.id.substring(4);
+    var saved = localStorage.getItem('flowlens-col-' + col);
+    if (saved !== null) {
+      cb.checked = saved === 'true';
+      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+        el.classList.toggle('hidden', !cb.checked);
+      });
+    }
+  });
+});
+</script>
 {{end}}
