@@ -544,6 +544,31 @@ body.dark select {
   border-color: var(--border);
 }
 
+/* Sortable tables */
+.sortable th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable th:hover {
+  opacity: 0.8;
+}
+
+.sortable th[data-sort-dir] {
+  background: var(--accent-light);
+}
+
+.sort-indicator {
+  margin-left: 0.25em;
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+/* Dark mode sort indicators */
+body.dark .sort-indicator {
+  opacity: 0.8;
+}
+
 @media (max-width: 768px) {
   .nav-toggle { display: block; }
   .topnav {
