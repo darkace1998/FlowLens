@@ -130,6 +130,25 @@ type APIProtocolEntry struct {
 	Pct     float64 `json:"pct"`
 }
 
+// APIExportersResponse is the JSON response for GET /api/exporters.
+type APIExportersResponse struct {
+	TotalExporters int           `json:"total_exporters"`
+	TotalBytes     uint64        `json:"total_bytes"`
+	Exporters      []APIExporter `json:"exporters"`
+}
+
+// APIExporter is a single exporter record in the JSON API.
+type APIExporter struct {
+	IP        string    `json:"ip"`
+	Bytes     uint64    `json:"bytes"`
+	Packets   uint64    `json:"packets"`
+	FlowCount int       `json:"flow_count"`
+	Pct       float64   `json:"pct"`
+	TopProto  string    `json:"top_proto"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+}
+
 // --- JSON helper ---
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -552,5 +571,87 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 		TopSrc:       topSrc,
 		TopDst:       topDst,
 		Protocols:    protocols,
+	})
+}
+
+func (s *Server) handleAPIExporters(w http.ResponseWriter, r *http.Request) {
+	window := s.fullCfg.Storage.RingBufferDuration
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+	flows, err := s.flowSvc.RecentFlows(window, 0)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
+		logging.Default().Error("API exporters query error: %v", err)
+		return
+	}
+
+	type exporterAgg struct {
+		bytes, packets uint64
+		flowCount      int
+		protoCount     map[uint8]int
+		first, last    time.Time
+	}
+
+	aggMap := make(map[string]*exporterAgg)
+	var totalBytes uint64
+
+	for _, f := range flows {
+		totalBytes += f.Bytes
+		ip := model.SafeIPString(f.ExporterIP)
+		if ip == "" || ip == "<nil>" {
+			ip = "unknown"
+		}
+		if a, ok := aggMap[ip]; ok {
+			a.bytes += f.Bytes
+			a.packets += f.Packets
+			a.flowCount++
+			a.protoCount[f.Protocol]++
+			if f.Timestamp.Before(a.first) {
+				a.first = f.Timestamp
+			}
+			if f.Timestamp.After(a.last) {
+				a.last = f.Timestamp
+			}
+		} else {
+			aggMap[ip] = &exporterAgg{
+				bytes:      f.Bytes,
+				packets:    f.Packets,
+				flowCount:  1,
+				protoCount: map[uint8]int{f.Protocol: 1},
+				first:      f.Timestamp,
+				last:       f.Timestamp,
+			}
+		}
+	}
+
+	exporters := make([]APIExporter, 0, len(aggMap))
+	for ip, a := range aggMap {
+		var topProto uint8
+		var maxCount int
+		for proto, count := range a.protoCount {
+			if count > maxCount {
+				topProto = proto
+				maxCount = count
+			}
+		}
+		exporters = append(exporters, APIExporter{
+			IP:        ip,
+			Bytes:     a.bytes,
+			Packets:   a.packets,
+			FlowCount: a.flowCount,
+			Pct:       pctOf(a.bytes, totalBytes),
+			TopProto:  model.ProtocolName(topProto),
+			FirstSeen: a.first,
+			LastSeen:  a.last,
+		})
+	}
+
+	sortByBytes(exporters, func(e APIExporter) uint64 { return e.Bytes })
+
+	writeJSON(w, http.StatusOK, APIExportersResponse{
+		TotalExporters: len(exporters),
+		TotalBytes:     totalBytes,
+		Exporters:      exporters,
 	})
 }

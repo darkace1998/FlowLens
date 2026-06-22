@@ -184,6 +184,33 @@ This endpoint does not accept any query parameters.
 }
 ```
 
+### `GET /api/exporters`
+
+Aggregated exporter-level traffic statistics.
+
+This endpoint does not accept any query parameters.
+
+**Example Response:**
+
+```json
+{
+  "total_exporters": 1,
+  "total_bytes": 1024000,
+  "exporters": [
+    {
+      "ip": "10.0.0.1",
+      "bytes": 1024000,
+      "packets": 1500,
+      "flow_count": 45,
+      "pct": 100.0,
+      "top_proto": "TCP",
+      "first_seen": "2023-10-25T09:50:00Z",
+      "last_seen": "2023-10-25T10:00:00Z"
+    }
+  ]
+}
+```
+
 ### `GET /healthz`
 
 Liveness endpoint used by health checks and orchestration.
