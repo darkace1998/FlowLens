@@ -3,6 +3,9 @@
 <style>
   .toggleable-col { display: table-cell; }
   .toggleable-col.hidden { display: none; }
+  .column-toggle-container { margin: 0.5em 0; padding: 0.5em; background: var(--card); border-radius: 4px; border: 1px solid var(--border); }
+  .column-toggle-container label { color: var(--text); margin-right: 0.5em; }
+  .column-toggle-container strong { color: var(--text); }
 </style>
 {{end}}
 {{define "content"}}
@@ -24,7 +27,7 @@
 </div>
 
 <!-- Column Toggle Controls -->
-<div style="margin: 0.5em 0; padding: 0.5em; background: #f5f5f5; border-radius: 4px;">
+<div class="column-toggle-container">
   <strong>Show/Hide Columns:</strong>
   <label><input type="checkbox" id="col-ip" checked onchange="toggleCol('ip')"> IP</label>
   <label><input type="checkbox" id="col-country" checked onchange="toggleCol('country')"> Country</label>
