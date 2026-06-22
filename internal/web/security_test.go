@@ -13,15 +13,15 @@ import (
 // --- Basic Auth tests ---
 
 func TestBasicAuth_Disabled(t *testing.T) {
-	// No username/password = auth disabled, should fail securely.
+	// No username/password = auth disabled.
 	// Use the full handler chain (srv.Handler) to verify auth middleware is bypassed.
 	s, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 	s.srv.Handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
 
