@@ -50,6 +50,9 @@ type nfv5Record struct {
 	SrcMask  uint8
 	DstMask  uint8
 	_        uint16 // pad2
+	// Note: NetFlow v5 has a fixed 48-byte record format and doesn't include
+	// NAT, IPv6 flow label, or other extended fields. These are only available
+	// in NetFlow v9 and IPFIX.
 }
 
 // DecodeNetFlowV5 decodes a raw NetFlow v5 UDP payload into a slice of Flow records.
@@ -96,6 +99,12 @@ func DecodeNetFlowV5(data []byte, exporterIP net.IP) ([]model.Flow, error) {
 			flowTimestamp = baseTime.Add(-offset)
 		}
 
+		// Use NextHop as Gateway for NetFlow v5
+		gateway := net.IP(nil)
+		if rec.NextHop != 0 {
+			gateway = uint32ToIP(rec.NextHop)
+		}
+		
 		flows = append(flows, model.Flow{
 			Timestamp:   flowTimestamp,
 			SrcAddr:     uint32ToIP(rec.SrcAddr),
@@ -111,6 +120,9 @@ func DecodeNetFlowV5(data []byte, exporterIP net.IP) ([]model.Flow, error) {
 			OutputIface: uint32(rec.Output),
 			SrcAS:       uint32(rec.SrcAS),
 			DstAS:       uint32(rec.DstAS),
+			SrcMask:     rec.SrcMask,
+			DstMask:     rec.DstMask,
+			Gateway:     gateway,
 			Duration:    duration,
 			ExporterIP:  exporterIP,
 		})

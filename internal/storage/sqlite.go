@@ -81,7 +81,27 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		src_mac         TEXT NOT NULL DEFAULT '',
 		dst_mac         TEXT NOT NULL DEFAULT '',
 		vlan_id         INTEGER NOT NULL DEFAULT 0,
-		ether_type      INTEGER NOT NULL DEFAULT 0
+		ether_type      INTEGER NOT NULL DEFAULT 0,
+		nat_src_addr TEXT NOT NULL DEFAULT '',
+		nat_dst_addr TEXT NOT NULL DEFAULT '',
+		nat_src_port INTEGER NOT NULL DEFAULT 0,
+		nat_dst_port INTEGER NOT NULL DEFAULT 0,
+		nat_events   INTEGER NOT NULL DEFAULT 0,
+		ipv6_flow_label INTEGER NOT NULL DEFAULT 0,
+		src_mask INTEGER NOT NULL DEFAULT 0,
+		dst_mask INTEGER NOT NULL DEFAULT 0,
+		is_multicast INTEGER NOT NULL DEFAULT 0,
+		icmp_type INTEGER NOT NULL DEFAULT 0,
+		icmp_code INTEGER NOT NULL DEFAULT 0,
+		ip_total_length INTEGER NOT NULL DEFAULT 0,
+		ip_header_length INTEGER NOT NULL DEFAULT 0,
+		ttl INTEGER NOT NULL DEFAULT 0,
+		udp_length INTEGER NOT NULL DEFAULT 0,
+		igmp_type INTEGER NOT NULL DEFAULT 0,
+		gateway TEXT NOT NULL DEFAULT '',
+		sys_init_time DATETIME NOT NULL DEFAULT '1970-01-01T00:00:00Z',
+		tcp_ack_num INTEGER NOT NULL DEFAULT 0,
+		tcp_window_size INTEGER NOT NULL DEFAULT 0
 	)`
 	if _, err := db.Exec(createSQL); err != nil {
 		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
@@ -141,6 +161,83 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 			}
 		}
 	}
+	// NAT fields migration
+	for _, col := range []string{"nat_src_addr", "nat_dst_addr"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	for _, col := range []string{"nat_src_port", "nat_dst_port", "nat_events"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	// IPv6 fields migration
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN ipv6_flow_label INTEGER NOT NULL DEFAULT 0"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration ipv6_flow_label: %v", err)
+		}
+	}
+	// Network addressing fields migration
+	for _, col := range []string{"src_mask", "dst_mask", "is_multicast"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	// ICMP fields migration
+	for _, col := range []string{"icmp_type", "icmp_code"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	// IP header fields migration
+	for _, col := range []string{"ip_total_length", "ip_header_length", "ttl"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
+	// UDP fields migration
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN udp_length INTEGER NOT NULL DEFAULT 0"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration udp_length: %v", err)
+		}
+	}
+	// IGMP fields migration
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN igmp_type INTEGER NOT NULL DEFAULT 0"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration igmp_type: %v", err)
+		}
+	}
+	// Routing fields migration
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN gateway TEXT NOT NULL DEFAULT ''"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration gateway: %v", err)
+		}
+	}
+	// Timing fields migration
+	if _, err := db.Exec("ALTER TABLE flows ADD COLUMN sys_init_time DATETIME NOT NULL DEFAULT '1970-01-01T00:00:00Z'"); err != nil {
+		if !isColumnExistsError(err) {
+			logging.Default().Warn("Migration sys_init_time: %v", err)
+		}
+	}
+	// TCP details migration
+	for _, col := range []string{"tcp_ack_num", "tcp_window_size"} {
+		if _, err := db.Exec("ALTER TABLE flows ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT 0"); err != nil {
+			if !isColumnExistsError(err) {
+				logging.Default().Warn("Migration %s: %v", col, err)
+			}
+		}
+	}
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {
@@ -174,12 +271,8 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO flows
-		(timestamp, src_addr, dst_addr, src_port, dst_port, protocol,
-		 bytes, packets, tcp_flags, tos, input_iface, output_iface,
-		 src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category,
-		 rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss,
-		 jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		(timestamp, src_addr, dst_addr, src_port, dst_port, protocol, bytes, packets, tcp_flags, tos, input_iface, output_iface, src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category, rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss, jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type, nat_src_addr, nat_dst_addr, nat_src_port, nat_dst_port, nat_events, ipv6_flow_label, src_mask, dst_mask, is_multicast, icmp_type, icmp_code, ip_total_length, ip_header_length, ttl, udp_length, igmp_type, gateway, sys_init_time, tcp_ack_num, tcp_window_size)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("prepare insert: %w", err)
@@ -188,7 +281,7 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 
 	// Reusing an argument slice over dynamic bulk inserts is faster for modernc.org/sqlite
 	// and minimizes garbage collection overhead in the loop.
-	args := make([]interface{}, 29)
+	args := make([]interface{}, 49)
 	for i := range flows {
 		f := &flows[i]
 		args[0] = f.Timestamp.UTC()
@@ -220,6 +313,36 @@ func (s *SQLiteStore) Insert(flows []model.Flow) error {
 		args[26] = model.FormatMAC(f.DstMAC)
 		args[27] = f.VLAN
 		args[28] = f.EtherType
+		// NAT fields
+		args[29] = model.SafeIPString(f.NatSrcAddr)
+		args[30] = model.SafeIPString(f.NatDstAddr)
+		args[31] = f.NatSrcPort
+		args[32] = f.NatDstPort
+		args[33] = f.NatEvents
+		// IPv6 fields
+		args[34] = f.IPv6FlowLabel
+		// Network addressing fields
+		args[35] = f.SrcMask
+		args[36] = f.DstMask
+		args[37] = f.IsMulticast
+		// ICMP fields
+		args[38] = f.ICMPType
+		args[39] = f.ICMPCode
+		// IP header fields
+		args[40] = f.IPTotalLength
+		args[41] = f.IPHeaderLength
+		args[42] = f.TTL
+		// UDP fields
+		args[43] = f.UDPLength
+		// IGMP fields
+		args[44] = f.IGMPType
+		// Routing fields
+		args[45] = model.SafeIPString(f.Gateway)
+		// Timing fields
+		args[46] = f.SysInitTime.UTC()
+		// TCP details
+		args[47] = f.TCPAckNum
+		args[48] = f.TCPWindowSize
 
 		if _, err := stmt.Exec(args...); err != nil {
 			_ = tx.Rollback()
@@ -239,7 +362,11 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		"bytes, packets, tcp_flags, tos, input_iface, output_iface, " +
 		"src_as, dst_as, duration_ns, exporter_ip, app_proto, app_category, " +
 		"rtt_us, throughput_bps, retransmissions, out_of_order, packet_loss, " +
-		"jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type " +
+		"jitter_us, mos, src_mac, dst_mac, vlan_id, ether_type, " +
+		"nat_src_addr, nat_dst_addr, nat_src_port, nat_dst_port, nat_events, " +
+		"ipv6_flow_label, src_mask, dst_mask, is_multicast, " +
+		"icmp_type, icmp_code, ip_total_length, ip_header_length, ttl, " +
+		"udp_length, igmp_type, gateway, sys_init_time, tcp_ack_num, tcp_window_size " +
 		"FROM flows WHERE timestamp >= ? ORDER BY timestamp DESC"
 
 	var rows *sql.Rows
@@ -262,6 +389,9 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		var srcAddr, dstAddr, exporterIP string
 		var srcMAC, dstMAC string
 		var durationNs int64
+		// NAT fields
+		var natSrcAddr, natDstAddr, gateway string
+		var isMulticastBit uint8
 
 		err := rows.Scan(
 			&ts,
@@ -278,6 +408,27 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 			&f.JitterMicros, &f.MOS,
 			&srcMAC, &dstMAC,
 			&f.VLAN, &f.EtherType,
+			// NAT fields
+			&natSrcAddr, &natDstAddr,
+			&f.NatSrcPort, &f.NatDstPort, &f.NatEvents,
+			// IPv6 fields
+			&f.IPv6FlowLabel,
+			// Network addressing fields
+			&f.SrcMask, &f.DstMask, &isMulticastBit,
+			// ICMP fields
+			&f.ICMPType, &f.ICMPCode,
+			// IP header fields
+			&f.IPTotalLength, &f.IPHeaderLength, &f.TTL,
+			// UDP fields
+			&f.UDPLength,
+			// IGMP fields
+			&f.IGMPType,
+			// Routing fields
+			&gateway,
+			// Timing fields
+			&f.SysInitTime,
+			// TCP details
+			&f.TCPAckNum, &f.TCPWindowSize,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
@@ -294,6 +445,13 @@ func (s *SQLiteStore) Recent(d time.Duration, limit int) ([]model.Flow, error) {
 		if dstMAC != "" && dstMAC != "—" {
 			f.DstMAC, _ = net.ParseMAC(dstMAC)
 		}
+		// NAT fields
+		f.NatSrcAddr = net.ParseIP(natSrcAddr)
+		f.NatDstAddr = net.ParseIP(natDstAddr)
+		// Network addressing fields
+		f.IsMulticast = isMulticastBit != 0
+		// Routing fields
+		f.Gateway = net.ParseIP(gateway)
 		flows = append(flows, f)
 	}
 

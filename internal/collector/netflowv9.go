@@ -42,6 +42,33 @@ const (
 	// is firewallEvent, not packet loss. These were removed to prevent false
 	// OOO/loss reports. OOO and loss are now detected via the heuristic analyzer.
 	nfv9FieldRTPJitter = 387
+	// ICMP fields
+	nfv9FieldICMPType = 32 // icmpType (IPFIX IE 32)
+	nfv9FieldICMPCode = 33 // icmpCode (IPFIX IE 33)
+	// IP header fields
+	nfv9FieldIPTotalLength = 34 // ipTotalLength (IPFIX IE 34)
+	nfv9FieldIPHeaderLength = 35 // ipHeaderLength (IPFIX IE 35)
+	nfv9FieldTTL = 63 // ipTimeToLive (IPFIX IE 63)
+	// UDP fields
+	nfv9FieldUDPLength = 36 // udpLength (IPFIX IE 36)
+	// IGMP fields
+	nfv9FieldIGMPType = 37 // igmpType (IPFIX IE 37)
+	// Multicast indicator
+	nfv9FieldIsMulticast = 58 // isMulticast (IPFIX IE 58)
+	// Gateway (using next hop field)
+	// nfv9FieldGateway = 15 // ipv4NextHop is used as gateway - removed to avoid duplicate
+	// System initialization time
+	nfv9FieldSysInitTime = 160 // systemInitTimeMilliseconds (IPFIX IE 160)
+	// TCP details
+	nfv9FieldTCPAckNum = 323 // tcpAckNumber (IPFIX IE 323)
+	nfv9FieldTCPWindowSize = 324 // tcpWindowSize (IPFIX IE 324)
+	// NAT fields (RFC 8158 - IPFIX Information Elements for NAT Events)
+	// Note: These may also appear as Cisco enterprise-specific fields
+	nfv9FieldNatSrcAddr   = 225 // postNATSourceIPv4Address (IPFIX IE 225)
+	nfv9FieldNatDstAddr   = 226 // postNATDestinationIPv4Address (IPFIX IE 226)
+	nfv9FieldNatSrcPort   = 227 // postNAPTSourceTransportPort (IPFIX IE 227)
+	nfv9FieldNatDstPort   = 228 // postNAPTDestinationTransportPort (IPFIX IE 228)
+	nfv9FieldNatEvents    = 230 // natEvent (IPFIX IE 230)
 )
 
 // nfv9HeaderSize is the size of the NetFlow v9 packet header in bytes.
@@ -295,6 +322,101 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 		f.Retransmissions = uint32(readUintN(data))
 	case nfv9FieldRTPJitter:
 		f.JitterMicros = int64(readUintN(data))
+	// IPv6 Flow Label
+	case nfv9FieldIPv6FlowLabel:
+		if len(data) == 4 {
+			f.IPv6FlowLabel = binary.BigEndian.Uint32(data)
+		}
+	// Source and Destination masks
+	case nfv9FieldSrcMask:
+		if len(data) >= 1 {
+			f.SrcMask = data[0]
+		}
+	case nfv9FieldDstMask:
+		if len(data) >= 1 {
+			f.DstMask = data[0]
+		}
+	// Multicast indicator
+	case nfv9FieldIsMulticast:
+		if len(data) >= 1 {
+			f.IsMulticast = data[0] != 0
+		}
+	// ICMP fields
+	case nfv9FieldICMPType:
+		if len(data) >= 1 {
+			f.ICMPType = data[0]
+		}
+	case nfv9FieldICMPCode:
+		if len(data) >= 1 {
+			f.ICMPCode = data[0]
+		}
+	// IP header fields
+	case nfv9FieldIPTotalLength:
+		if len(data) == 2 {
+			f.IPTotalLength = binary.BigEndian.Uint16(data)
+		}
+	case nfv9FieldIPHeaderLength:
+		if len(data) >= 1 {
+			f.IPHeaderLength = data[0]
+		}
+	case nfv9FieldTTL:
+		if len(data) >= 1 {
+			f.TTL = data[0]
+		}
+	// UDP fields
+	case nfv9FieldUDPLength:
+		if len(data) == 2 {
+			f.UDPLength = binary.BigEndian.Uint16(data)
+		}
+	// IGMP fields
+	case nfv9FieldIGMPType:
+		if len(data) >= 1 {
+			f.IGMPType = data[0]
+		}
+	// Gateway (Next Hop) - using nfv9FieldIPv4NextHop which is already defined
+	case nfv9FieldIPv4NextHop:
+		if len(data) == 4 {
+			f.Gateway = net.IP(make([]byte, 4))
+			copy(f.Gateway, data)
+		}
+	// System initialization time
+	case nfv9FieldSysInitTime:
+		if len(data) == 8 {
+			ms := binary.BigEndian.Uint64(data)
+			f.SysInitTime = time.UnixMilli(int64(ms))
+		}
+	// TCP details
+	case nfv9FieldTCPAckNum:
+		if len(data) == 4 {
+			f.TCPAckNum = binary.BigEndian.Uint32(data)
+		}
+	case nfv9FieldTCPWindowSize:
+		if len(data) == 2 {
+			f.TCPWindowSize = binary.BigEndian.Uint16(data)
+		}
+	// NAT fields (RFC 8158)
+	case nfv9FieldNatSrcAddr:
+		if len(data) == 4 {
+			f.NatSrcAddr = net.IP(make([]byte, 4))
+			copy(f.NatSrcAddr, data)
+		}
+	case nfv9FieldNatDstAddr:
+		if len(data) == 4 {
+			f.NatDstAddr = net.IP(make([]byte, 4))
+			copy(f.NatDstAddr, data)
+		}
+	case nfv9FieldNatSrcPort:
+		if len(data) == 2 {
+			f.NatSrcPort = binary.BigEndian.Uint16(data)
+		}
+	case nfv9FieldNatDstPort:
+		if len(data) == 2 {
+			f.NatDstPort = binary.BigEndian.Uint16(data)
+		}
+	case nfv9FieldNatEvents:
+		if len(data) == 4 {
+			f.NatEvents = binary.BigEndian.Uint32(data)
+		}
 	}
 }
 

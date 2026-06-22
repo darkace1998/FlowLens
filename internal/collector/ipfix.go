@@ -69,6 +69,19 @@ const (
 	ipfixFieldSourceMacAddress = 56 // sourceMacAddress — 6 bytes
 	ipfixFieldVlanId           = 58 // vlanId — 2 bytes
 	ipfixFieldDestMacAddress   = 80 // destinationMacAddress — 6 bytes
+	// Additional fields from the issue request
+	ipfixFieldIsMulticast       = 213 // isMulticast (IANA IE 213)
+	ipfixFieldICMPType          = 32 // icmpType (IANA IE 32)
+	ipfixFieldICMPCode          = 33 // icmpCode (IANA IE 33)
+	ipfixFieldIPTotalLength     = 34 // ipTotalLength (IANA IE 34)
+	ipfixFieldIPHeaderLength    = 35 // ipHeaderLength (IANA IE 35)
+	ipfixFieldTTL              = 63 // ipTimeToLive (IANA IE 63)
+	ipfixFieldUDPTotalLength    = 36 // udpLength (IANA IE 36)
+	ipfixFieldIGMPType          = 37 // igmpType (IANA IE 37)
+	ipfixFieldSystemInitTime    = 160 // systemInitTimeMilliseconds (IANA IE 160)
+	ipfixFieldTCPAckNum         = 18 // tcpAckNumber (IANA IE 18)
+	ipfixFieldTCPWindowSize     = 19 // tcpWindowSize (IANA IE 19)
+	ipfixFieldIPv6FlowLabel     = 31 // ipv6FlowLabel (IANA IE 31)
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).
@@ -460,6 +473,101 @@ func applyIPFIXField(f *model.Flow, fieldID uint16, data []byte, ctx *ipfixRecor
 	case ipfixFieldVlanId:
 		if len(data) == 2 {
 			f.VLAN = binary.BigEndian.Uint16(data)
+		}
+	// IPv6 Flow Label
+	case ipfixFieldIPv6FlowLabel:
+		if len(data) == 4 {
+			f.IPv6FlowLabel = binary.BigEndian.Uint32(data)
+		}
+	// Source and Destination prefix lengths (masks)
+	case ipfixFieldSourcePrefixLen:
+		if len(data) >= 1 {
+			f.SrcMask = data[0]
+		}
+	case ipfixFieldDestPrefixLen:
+		if len(data) >= 1 {
+			f.DstMask = data[0]
+		}
+	// Multicast indicator
+	case ipfixFieldIsMulticast:
+		if len(data) >= 1 {
+			f.IsMulticast = data[0] != 0
+		}
+	// ICMP fields
+	case ipfixFieldICMPType:
+		if len(data) >= 1 {
+			f.ICMPType = data[0]
+		}
+	case ipfixFieldICMPCode:
+		if len(data) >= 1 {
+			f.ICMPCode = data[0]
+		}
+	// IP header fields
+	case ipfixFieldIPTotalLength:
+		if len(data) == 2 {
+			f.IPTotalLength = binary.BigEndian.Uint16(data)
+		}
+	case ipfixFieldIPHeaderLength:
+		if len(data) >= 1 {
+			f.IPHeaderLength = data[0]
+		}
+	case ipfixFieldTTL:
+		if len(data) >= 1 {
+			f.TTL = data[0]
+		}
+	// UDP fields
+	case ipfixFieldUDPTotalLength:
+		if len(data) == 2 {
+			f.UDPLength = binary.BigEndian.Uint16(data)
+		}
+	// IGMP fields
+	case ipfixFieldIGMPType:
+		if len(data) >= 1 {
+			f.IGMPType = data[0]
+		}
+	// Gateway (Next Hop)
+	case ipfixFieldIPNextHopIPv4Addr:
+		if len(data) == 4 {
+			f.Gateway = net.IP(make([]byte, 4))
+			copy(f.Gateway, data)
+		}
+	// System initialization time
+	case ipfixFieldSystemInitTime:
+		if len(data) == 8 {
+			ms := binary.BigEndian.Uint64(data)
+			f.SysInitTime = time.UnixMilli(int64(ms))
+		}
+	// TCP details
+	case ipfixFieldTCPAckNum:
+		if len(data) == 4 {
+			f.TCPAckNum = binary.BigEndian.Uint32(data)
+		}
+	case ipfixFieldTCPWindowSize:
+		if len(data) == 2 {
+			f.TCPWindowSize = binary.BigEndian.Uint16(data)
+		}
+	// NAT fields (RFC 8158)
+	case ipfixFieldPostNATSourceIPv4:
+		if len(data) == 4 {
+			f.NatSrcAddr = net.IP(make([]byte, 4))
+			copy(f.NatSrcAddr, data)
+		}
+	case ipfixFieldPostNATDestIPv4:
+		if len(data) == 4 {
+			f.NatDstAddr = net.IP(make([]byte, 4))
+			copy(f.NatDstAddr, data)
+		}
+	case ipfixFieldPostNAPTSourcePort:
+		if len(data) == 2 {
+			f.NatSrcPort = binary.BigEndian.Uint16(data)
+		}
+	case ipfixFieldPostNAPTDestPort:
+		if len(data) == 2 {
+			f.NatDstPort = binary.BigEndian.Uint16(data)
+		}
+	case ipfixFieldNatEvent:
+		if len(data) == 4 {
+			f.NatEvents = binary.BigEndian.Uint32(data)
 		}
 	}
 }

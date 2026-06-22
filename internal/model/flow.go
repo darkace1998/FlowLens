@@ -66,6 +66,46 @@ type Flow struct {
 
 	// TCP sequence tracking (populated by PCAP decoder, zero for NetFlow/IPFIX)
 	TCPSeqNum uint32 // TCP sequence number (used for retransmission detection)
+
+	// NAT fields (RFC 8158 for IPFIX, vendor-specific for NetFlow v9)
+	NatSrcAddr   net.IP    // Translated source IP address by NAT
+	NatDstAddr   net.IP    // Translated destination IP address by NAT
+	NatSrcPort   uint16    // Translated source port number by NAT
+	NatDstPort   uint16    // Translated destination port number by NAT
+	NatEvents    uint32    // Events related to Network Address Translation
+
+	// IPv6-specific fields
+	IPv6FlowLabel uint32 // Label field from IPv6 header, used to classify flows
+
+	// Network addressing fields
+	SrcMask      uint8 // Network mask for source address (useful for summarization)
+	DstMask      uint8 // Network mask for destination address (useful for summarization)
+	IsMulticast  bool  // Indicates whether the flow is multicast
+
+	// ICMP protocol fields
+	ICMPType uint8 // Type of ICMP message (e.g., Echo Request, Echo Reply, Destination Unreachable)
+	ICMPCode uint8 // ICMP code for error messaging and operational information
+
+	// IP header details
+	IPTotalLength uint16 // Length of the IP packet in bytes
+	IPHeaderLength uint8 // Length of the IP header
+	TTL          uint8 // Time To Live for the packet
+
+	// UDP-specific fields
+	UDPLength uint16 // Length of the UDP payload
+
+	// IGMP protocol fields
+	IGMPType uint8 // Type of IGMP operation
+
+	// Routing fields
+	Gateway net.IP // IP address of the gateway through which the flow was routed
+
+	// Timing fields
+	SysInitTime time.Time // System initialization time, can be used for timing analysis
+
+	// TCP details
+	TCPAckNum    uint32 // Acknowledgment number in a TCP connection
+	TCPWindowSize uint16 // Window size in a TCP connection, indicating the scale of received data buffering
 }
 
 // CalcThroughput computes and stores ThroughputBPS from Bytes and Duration.
@@ -602,5 +642,133 @@ func FormatEtherType(et uint16) string {
 		return "—"
 	default:
 		return fmt.Sprintf("0x%04X", et)
+	}
+}
+
+// FormatNATEvents returns a human-readable representation of NAT events.
+func FormatNATEvents(events uint32) string {
+	if events == 0 {
+		return "—"
+	}
+	
+	var parts []string
+	// Common NAT event types (based on RFC 8158 and common implementations)
+	if events&0x01 != 0 {
+		parts = append(parts, "Create")
+	}
+	if events&0x02 != 0 {
+		parts = append(parts, "Delete")
+	}
+	if events&0x04 != 0 {
+		parts = append(parts, "Update")
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("0x%08X", events)
+	}
+	return strings.Join(parts, ",")
+}
+
+// FormatICMPType returns a human-readable name for ICMP type.
+func FormatICMPType(t uint8) string {
+	switch t {
+	case 0:
+		return "Echo Reply"
+	case 3:
+		return "Destination Unreachable"
+	case 4:
+		return "Source Quench"
+	case 5:
+		return "Redirect"
+	case 8:
+		return "Echo Request"
+	case 11:
+		return "Time Exceeded"
+	case 12:
+		return "Parameter Problem"
+	case 13:
+		return "Timestamp Request"
+	case 14:
+		return "Timestamp Reply"
+	case 15:
+		return "Information Request"
+	case 16:
+		return "Information Reply"
+	default:
+		if t == 0 {
+			return "—"
+		}
+		return fmt.Sprintf("Type(%d)", t)
+	}
+}
+
+// FormatICMPCode returns a human-readable name for ICMP code given its type.
+func FormatICMPCode(t, code uint8) string {
+	if code == 0 {
+		return "—"
+	}
+	
+	switch t {
+	case 3: // Destination Unreachable
+		switch code {
+		case 0:
+			return "Net Unreachable"
+		case 1:
+			return "Host Unreachable"
+		case 2:
+			return "Protocol Unreachable"
+		case 3:
+			return "Port Unreachable"
+		case 4:
+			return "Fragmentation Needed"
+		case 5:
+			return "Source Route Failed"
+		default:
+			return fmt.Sprintf("Code(%d)", code)
+		}
+	case 5: // Redirect
+		switch code {
+		case 0:
+			return "Net Redirect"
+		case 1:
+			return "Host Redirect"
+		case 2:
+			return "ToS and Net Redirect"
+		case 3:
+			return "ToS and Host Redirect"
+		default:
+			return fmt.Sprintf("Code(%d)", code)
+		}
+	case 11: // Time Exceeded
+		switch code {
+		case 0:
+			return "TTL Expired in Transit"
+		case 1:
+			return "Fragment Reassembly Time Exceeded"
+		default:
+			return fmt.Sprintf("Code(%d)", code)
+		}
+	default:
+		return fmt.Sprintf("Code(%d)", code)
+	}
+}
+
+// FormatIGMPType returns a human-readable name for IGMP type.
+func FormatIGMPType(t uint8) string {
+	switch t {
+	case 0x11:
+		return "Membership Query"
+	case 0x12:
+		return "Version 1 Membership Report"
+	case 0x16:
+		return "Version 2 Membership Report"
+	case 0x17:
+		return "Leave Group"
+	case 0x22:
+		return "Version 3 Membership Report"
+	default:
+		if t == 0 {
+			return "—"
+		}
+		return fmt.Sprintf("Type(0x%02X)", t)
 	}
 }
