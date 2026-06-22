@@ -1,5 +1,13 @@
 {{define "title"}}Active Hosts{{end}}
-{{define "head"}}<meta http-equiv="refresh" content="30" />{{end}}
+{{define "head"}}<meta http-equiv="refresh" content="30" />
+<style>
+  .toggleable-col { display: table-cell; }
+  .toggleable-col.hidden { display: none; }
+  .column-toggle-container { margin: 0.5em 0; padding: 0.5em; background: var(--card); border-radius: 4px; border: 1px solid var(--border); }
+  .column-toggle-container label { color: var(--text); margin-right: 0.5em; }
+  .column-toggle-container strong { color: var(--text); }
+</style>
+{{end}}
 {{define "content"}}
 <h1>Active Hosts</h1>
 
@@ -18,6 +26,19 @@
   </div>
 </div>
 
+<!-- Column Toggle Controls -->
+<div class="column-toggle-container">
+  <strong>Show/Hide Columns:</strong>
+  <label><input type="checkbox" id="col-ip" checked onchange="toggleCol('ip')"> IP</label>
+  <label><input type="checkbox" id="col-country" checked onchange="toggleCol('country')"> Country</label>
+  <label><input type="checkbox" id="col-bytes" checked onchange="toggleCol('bytes')"> Bytes</label>
+  <label><input type="checkbox" id="col-packets" checked onchange="toggleCol('packets')"> Packets</label>
+  <label><input type="checkbox" id="col-flows" checked onchange="toggleCol('flows')"> Flows</label>
+  <label><input type="checkbox" id="col-firstseen" checked onchange="toggleCol('firstseen')"> First Seen</label>
+  <label><input type="checkbox" id="col-lastseen" checked onchange="toggleCol('lastseen')"> Last Seen</label>
+  <label><input type="checkbox" id="col-pct" checked onchange="toggleCol('pct')"> %</label>
+</div>
+
 {{if .Hosts}}
 <div class="panel">
   <p class="flow-summary">Showing {{.TotalHosts}} active hosts in the last {{formatDuration .Window}}.</p>
@@ -25,27 +46,27 @@
   <table class="flows-table">
     <thead>
       <tr>
-        <th>IP Address</th>
-        <th>Country</th>
-        <th>Bytes</th>
-        <th>Packets</th>
-        <th>Flows</th>
-        <th>First Seen</th>
-        <th>Last Seen</th>
-        <th>Bandwidth %</th>
+        <th class="toggleable-col" data-col="ip">IP Address</th>
+        <th class="toggleable-col" data-col="country">Country</th>
+        <th class="toggleable-col" data-col="bytes">Bytes</th>
+        <th class="toggleable-col" data-col="packets">Packets</th>
+        <th class="toggleable-col" data-col="flows">Flows</th>
+        <th class="toggleable-col" data-col="firstseen">First Seen</th>
+        <th class="toggleable-col" data-col="lastseen">Last Seen</th>
+        <th class="toggleable-col" data-col="pct">Bandwidth %</th>
       </tr>
     </thead>
     <tbody>
       {{range .Hosts}}
       <tr>
-        <td><a href="/flows?ip={{urlquery .IP}}">{{.IP}}</a></td>
-        <td>{{if .Country}}{{.Country}}{{if .City}} ({{.City}}){{end}}{{else}}—{{end}}</td>
-        <td>{{formatBytes .Bytes}}</td>
-        <td>{{formatPkts .Packets}}</td>
-        <td>{{.FlowCount}}</td>
-        <td>{{formatTime .FirstSeen}}</td>
-        <td>{{formatTime .LastSeen}}</td>
-        <td>
+        <td class="toggleable-col" data-col="ip"><a href="/flows?ip={{urlquery .IP}}">{{.IP}}</a></td>
+        <td class="toggleable-col" data-col="country">{{if .Country}}{{.Country}}{{if .City}} ({{.City}}){{end}}{{else}}—{{end}}</td>
+        <td class="toggleable-col" data-col="bytes">{{formatBytes .Bytes}}</td>
+        <td class="toggleable-col" data-col="packets">{{formatPkts .Packets}}</td>
+        <td class="toggleable-col" data-col="flows">{{.FlowCount}}</td>
+        <td class="toggleable-col" data-col="firstseen">{{formatTime .FirstSeen}}</td>
+        <td class="toggleable-col" data-col="lastseen">{{formatTime .LastSeen}}</td>
+        <td class="toggleable-col" data-col="pct">
           <div class="bar-bg"><div class="bar-fill" style="width:{{.Pct}}%"></div></div>
           {{.Pct}}%
         </td>
@@ -58,4 +79,28 @@
 {{else}}
 <p class="empty">No active hosts detected.</p>
 {{end}}
+
+<script>
+function toggleCol(col) {
+  var cb = document.getElementById('col-' + col);
+  var cells = document.querySelectorAll('[data-col="' + col + '"]');
+  cells.forEach(function(el) {
+    el.classList.toggle('hidden', !cb.checked);
+  });
+  localStorage.setItem('flowlens-hosts-col-' + col, cb.checked);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('input[id^="col-"]').forEach(function(cb) {
+    var col = cb.id.substring(4);
+    var saved = localStorage.getItem('flowlens-hosts-col-' + col);
+    if (saved !== null) {
+      cb.checked = saved === 'true';
+      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+        el.classList.toggle('hidden', !cb.checked);
+      });
+    }
+  });
+});
+</script>
 {{end}}
