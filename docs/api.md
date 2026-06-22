@@ -184,60 +184,6 @@ This endpoint does not accept any query parameters.
 }
 ```
 
-
-### `GET /flows/export`
-
-Export filtered flow data in CSV or JSON format.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Output format: `csv` or `json` (default: `csv`) |
-| `src_ip` | string | Source IP filter |
-| `dst_ip` | string | Destination IP filter |
-| `port` | string | Source-or-destination port filter |
-| `protocol` | string | Protocol filter (for example `TCP`, `UDP`) |
-| `ip` | string | Source-or-destination IP filter |
-| `app_proto` | string | Application protocol filter (for example `HTTP`, `DNS`) |
-| `app_cat` | string | Application category filter |
-| `start` | string | Start time filter (RFC3339) |
-| `end` | string | End time filter (RFC3339) |
-| `bytes_min` | uint64 | Minimum bytes filter |
-| `bytes_max` | uint64 | Maximum bytes filter |
-| `tcp_flags` | string | TCP flags filter (for example `S,A`) |
-| `tos` | uint8 | Type of Service (ToS) filter |
-| `in_iface` | string | Ingress interface filter |
-| `out_iface` | string | Egress interface filter |
-| `src_as` | uint32 | Source AS number filter |
-| `dst_as` | uint32 | Destination AS number filter |
-| `src_mac` | string | Source MAC address filter |
-| `dst_mac` | string | Destination MAC address filter |
-| `vlan` | uint16 | VLAN ID filter |
-| `ether_type` | string | EtherType filter (hex or decimal) |
-| `exporter` | string | Exporter IP filter |
-| `rtt_min` | int64 | Minimum RTT (microseconds) filter |
-| `rtt_max` | int64 | Maximum RTT (microseconds) filter |
-| `retrans_min` | uint32 | Minimum retransmissions filter |
-| `ooo_min` | uint32 | Minimum out-of-order packets filter |
-| `loss_min` | uint32 | Minimum packet loss filter |
-| `jitter_min` | int64 | Minimum jitter (microseconds) filter |
-| `jitter_max` | int64 | Maximum jitter (microseconds) filter |
-| `mos_min` | float32 | Minimum MOS filter |
-
-### `GET /reports/export`
-
-Export historical reporting data from SQLite in CSV or JSON format.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Output format: `csv` or `json` (default: `csv`) |
-| `start` | string | Start time filter (`YYYY-MM-DDTHH:MM`) (required) |
-| `end` | string | End time filter (`YYYY-MM-DDTHH:MM`) (required) |
-| `group_by` | string | Dimension to group by (default: `app_proto`) |
-
 ### `GET /healthz`
 
 Liveness endpoint used by health checks and orchestration.

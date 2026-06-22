@@ -21,10 +21,6 @@ import (
 // subtle.ConstantTimeCompare operates on fixed-length (32-byte)
 // digests, preventing length-based timing side-channels.
 func basicAuth(next http.Handler, username, password string) http.Handler {
-	if username == "" && password == "" {
-		// No authentication configured, allow all requests through
-		return next
-	}
 	if username == "" || password == "" {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Authentication not configured", http.StatusInternalServerError)
