@@ -485,11 +485,7 @@ a:hover { text-decoration: underline; }
   line-height: 1;
 }
 
-/* Responsive table wrapper */
-.table-responsive {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+
 
 /* Chart containers */
 .chart-container {
@@ -600,6 +596,303 @@ body.dark select {
   /* Ensure panel doesn't add extra padding on small screens */
   .panel {
     padding: 0.75rem 1rem;
+  }
+}
+
+/* High-DPI screens (Retina, 4K) - Scale up for better readability */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body {
+    font-size: 15px;
+  }
+  th, td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  th {
+    font-size: 0.8rem;
+  }
+  .flows-table th,
+  .flows-table td {
+    font-size: 0.85rem;
+  }
+  .stat-value {
+    font-size: 1.6rem;
+  }
+  .filter-bar input {
+    font-size: 0.9rem;
+  }
+  .btn, .btn-sm {
+    font-size: 0.9rem;
+  }
+}
+
+/* Large screens (QHD/4K) - Expand container and scale content */
+@media (min-width: 2560px) {
+  main {
+    max-width: 90vw;
+    padding: 0 2rem;
+  }
+  
+  body {
+    font-size: 16px;
+  }
+  
+  h1 {
+    font-size: 1.75rem;
+  }
+  
+  h2 {
+    font-size: 1.25rem;
+  }
+  
+  /* Scale up table content */
+  table {
+    font-size: 0.95rem;
+  }
+  
+  th, td {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.95rem;
+    max-width: 300px;
+  }
+  
+  th {
+    font-size: 0.85rem;
+  }
+  
+  .flows-table {
+    font-size: 0.9rem;
+  }
+  
+  .flows-table th,
+  .flows-table td {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
+    max-width: 300px;
+  }
+  
+  /* Scale up stat cards */
+  .stat-card {
+    padding: 1.25rem 1.5rem;
+  }
+  
+  .stat-value {
+    font-size: 1.75rem;
+  }
+  
+  .stat-label {
+    font-size: 0.9rem;
+  }
+  
+  .stat-sub {
+    font-size: 0.95rem;
+  }
+  
+  /* Scale up filter bar */
+  .filter-bar {
+    padding: 1rem 1.5rem;
+    gap: 1rem;
+  }
+  
+  .filter-bar input {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.95rem;
+    width: 160px;
+  }
+  
+  .filter-bar button {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.95rem;
+  }
+  
+  /* Scale up pagination */
+  .pagination a,
+  .pagination .page-current {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.95rem;
+  }
+  
+  /* Scale up buttons */
+  .btn {
+    padding: 0.4em 0.9em;
+    font-size: 0.95rem;
+  }
+  
+  .btn-sm {
+    padding: 0.3em 0.7em;
+    font-size: 0.9rem;
+  }
+  
+  /* Scale up panels */
+  .panel {
+    padding: 1.25rem 1.5rem;
+  }
+  
+  /* Scale up chart containers */
+  .chart-container {
+    height: clamp(220px, 35vw, 400px);
+  }
+  
+  .chart-container-sm {
+    height: clamp(200px, 30vw, 320px);
+  }
+  
+  /* Scale up trend chart */
+  .trend-bars {
+    height: 140px;
+  }
+  
+  /* Scale up advisory cards */
+  .advisory-card {
+    padding: 1.25rem 1.5rem;
+  }
+  
+  .advisory-title {
+    font-size: 1.1rem;
+  }
+  
+  .advisory-desc {
+    font-size: 0.95rem;
+  }
+  
+  /* Scale up navigation */
+  .topnav {
+    padding: 0 2rem;
+    height: 56px;
+  }
+  
+  .topnav a {
+    font-size: 15px;
+  }
+  
+  .topnav .brand {
+    font-size: 18px;
+  }
+  
+  /* Ensure tables take full width */
+  .table-responsive {
+    max-width: 100%;
+  }
+  
+  /* Increase max-width for bar charts */
+  .bar-bg {
+    width: 100px;
+    height: 12px;
+  }
+}
+
+/* 4K and ultra-wide screens */
+@media (min-width: 3840px) {
+  main {
+    max-width: 95vw;
+    padding: 0 3rem;
+  }
+  
+  body {
+    font-size: 18px;
+  }
+  
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h2 {
+    font-size: 1.4rem;
+  }
+  
+  table {
+    font-size: 1rem;
+  }
+  
+  th, td {
+    padding: 0.6rem 1rem;
+    font-size: 1rem;
+    max-width: 350px;
+  }
+  
+  th {
+    font-size: 0.9rem;
+  }
+  
+  .flows-table {
+    font-size: 0.95rem;
+  }
+  
+  .flows-table th,
+  .flows-table td {
+    padding: 0.6rem 1rem;
+    font-size: 0.95rem;
+    max-width: 350px;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+  }
+  
+  .stat-card {
+    padding: 1.5rem 2rem;
+  }
+  
+  .filter-bar {
+    padding: 1.25rem 2rem;
+    gap: 1.25rem;
+  }
+  
+  .filter-bar input {
+    padding: 0.5rem 0.8rem;
+    font-size: 1rem;
+    width: 180px;
+  }
+  
+  .filter-bar button {
+    padding: 0.6rem 1.5rem;
+    font-size: 1rem;
+  }
+  
+  .btn {
+    padding: 0.45em 1em;
+    font-size: 1rem;
+  }
+  
+  .pagination a,
+  .pagination .page-current {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+  }
+  
+  .panel {
+    padding: 1.5rem 2rem;
+  }
+  
+  .advisory-card {
+    padding: 1.5rem 2rem;
+  }
+  
+  .advisory-title {
+    font-size: 1.2rem;
+  }
+  
+  .topnav {
+    padding: 0 3rem;
+    height: 64px;
+  }
+  
+  .topnav a {
+    font-size: 16px;
+  }
+  
+  .topnav .brand {
+    font-size: 20px;
+  }
+  
+  .bar-bg {
+    width: 120px;
+    height: 14px;
+  }
+  
+  /* Ensure filter bar wraps nicely */
+  .filter-bar {
+    flex-wrap: wrap;
   }
 }
 
