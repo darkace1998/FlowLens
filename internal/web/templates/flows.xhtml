@@ -62,6 +62,36 @@
   <label><input type="checkbox" id="col-loss" onchange="toggleCol('loss')"> Loss</label>
   <label><input type="checkbox" id="col-jitter" onchange="toggleCol('jitter')"> Jitter</label>
   <label><input type="checkbox" id="col-mos" onchange="toggleCol('mos')"> MOS</label>
+  <!-- NAT fields -->
+  <label><input type="checkbox" id="col-natsrc" onchange="toggleCol('natsrc')"> NAT Src Addr</label>
+  <label><input type="checkbox" id="col-natdst" onchange="toggleCol('natdst')"> NAT Dst Addr</label>
+  <label><input type="checkbox" id="col-natsrcport" onchange="toggleCol('natsrcport')"> NAT Src Port</label>
+  <label><input type="checkbox" id="col-natdstport" onchange="toggleCol('natdstport')"> NAT Dst Port</label>
+  <label><input type="checkbox" id="col-natevents" onchange="toggleCol('natevents')"> NAT Events</label>
+  <!-- IPv6 fields -->
+  <label><input type="checkbox" id="col-ipv6flowlabel" onchange="toggleCol('ipv6flowlabel')"> IPv6 Flow Label</label>
+  <!-- Network addressing fields -->
+  <label><input type="checkbox" id="col-srcmask" onchange="toggleCol('srcmask')"> Src Mask</label>
+  <label><input type="checkbox" id="col-dstmask" onchange="toggleCol('dstmask')"> Dst Mask</label>
+  <label><input type="checkbox" id="col-multicast" onchange="toggleCol('multicast')"> Multicast</label>
+  <!-- ICMP fields -->
+  <label><input type="checkbox" id="col-icmptype" onchange="toggleCol('icmptype')"> ICMP Type</label>
+  <label><input type="checkbox" id="col-icmpcode" onchange="toggleCol('icmpcode')"> ICMP Code</label>
+  <!-- IP header fields -->
+  <label><input type="checkbox" id="col-iptotallength" onchange="toggleCol('iptotallength')"> IP Total Length</label>
+  <label><input type="checkbox" id="col-ipheaderlength" onchange="toggleCol('ipheaderlength')"> IP Header Length</label>
+  <label><input type="checkbox" id="col-ttl" onchange="toggleCol('ttl')"> TTL</label>
+  <!-- UDP fields -->
+  <label><input type="checkbox" id="col-udplength" onchange="toggleCol('udplength')"> UDP Length</label>
+  <!-- IGMP fields -->
+  <label><input type="checkbox" id="col-igmptype" onchange="toggleCol('igmptype')"> IGMP Type</label>
+  <!-- Routing fields -->
+  <label><input type="checkbox" id="col-gateway" onchange="toggleCol('gateway')"> Gateway</label>
+  <!-- Timing fields -->
+  <label><input type="checkbox" id="col-sysinittime" onchange="toggleCol('sysinittime')"> Sys Init Time</label>
+  <!-- TCP details -->
+  <label><input type="checkbox" id="col-tcpacknum" onchange="toggleCol('tcpacknum')"> TCP Ack Num</label>
+  <label><input type="checkbox" id="col-tcpwindowsize" onchange="toggleCol('tcpwindowsize')"> TCP Window Size</label>
 </div>
 
 <form class="filter-bar" method="get" action="/flows">
@@ -198,6 +228,36 @@
         <th class="toggleable-col hidden" data-col="loss" title="Loss">Loss</th>
         <th class="toggleable-col hidden" data-col="jitter" title="Jitter">Jitter</th>
         <th class="toggleable-col hidden" data-col="mos" title="MOS">MOS</th>
+        <!-- NAT fields -->
+        <th class="toggleable-col hidden" data-col="natsrc" title="NAT Source Address">NAT Src Addr</th>
+        <th class="toggleable-col hidden" data-col="natdst" title="NAT Destination Address">NAT Dst Addr</th>
+        <th class="toggleable-col hidden" data-col="natsrcport" title="NAT Source Port">NAT Src Port</th>
+        <th class="toggleable-col hidden" data-col="natdstport" title="NAT Destination Port">NAT Dst Port</th>
+        <th class="toggleable-col hidden" data-col="natevents" title="NAT Events">NAT Events</th>
+        <!-- IPv6 fields -->
+        <th class="toggleable-col hidden" data-col="ipv6flowlabel" title="IPv6 Flow Label">IPv6 Flow Label</th>
+        <!-- Network addressing fields -->
+        <th class="toggleable-col hidden" data-col="srcmask" title="Source Mask">Src Mask</th>
+        <th class="toggleable-col hidden" data-col="dstmask" title="Destination Mask">Dst Mask</th>
+        <th class="toggleable-col hidden" data-col="multicast" title="Multicast">Multicast</th>
+        <!-- ICMP fields -->
+        <th class="toggleable-col hidden" data-col="icmptype" title="ICMP Type">ICMP Type</th>
+        <th class="toggleable-col hidden" data-col="icmpcode" title="ICMP Code">ICMP Code</th>
+        <!-- IP header fields -->
+        <th class="toggleable-col hidden" data-col="iptotallength" title="IP Total Length">IP Total Length</th>
+        <th class="toggleable-col hidden" data-col="ipheaderlength" title="IP Header Length">IP Header Length</th>
+        <th class="toggleable-col hidden" data-col="ttl" title="Time To Live">TTL</th>
+        <!-- UDP fields -->
+        <th class="toggleable-col hidden" data-col="udplength" title="UDP Length">UDP Length</th>
+        <!-- IGMP fields -->
+        <th class="toggleable-col hidden" data-col="igmptype" title="IGMP Type">IGMP Type</th>
+        <!-- Routing fields -->
+        <th class="toggleable-col hidden" data-col="gateway" title="Gateway">Gateway</th>
+        <!-- Timing fields -->
+        <th class="toggleable-col hidden" data-col="sysinittime" title="System Init Time">Sys Init Time</th>
+        <!-- TCP details -->
+        <th class="toggleable-col hidden" data-col="tcpacknum" title="TCP Ack Num">TCP Ack Num</th>
+        <th class="toggleable-col hidden" data-col="tcpwindowsize" title="TCP Window Size">TCP Window Size</th>
         <th class="toggleable-col" data-col="duration">Duration</th>
         <th class="toggleable-col" data-col="age">Age</th>
       </tr>
@@ -232,6 +292,36 @@
         <td class="toggleable-col hidden" data-col="loss">{{.Loss}}</td>
         <td class="toggleable-col hidden" data-col="jitter">{{.Jitter}}</td>
         <td class="toggleable-col hidden" data-col="mos">{{if ne .MOS "—"}}<span class="mos-{{.MOSClass}}">{{.MOS}}</span>{{else}}—{{end}}</td>
+        <!-- NAT fields -->
+        <td class="toggleable-col hidden" data-col="natsrc">{{if ne .NatSrcAddr "—"}}{{.NatSrcAddr}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="natdst">{{if ne .NatDstAddr "—"}}{{.NatDstAddr}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="natsrcport">{{if .NatSrcPort}}{{.NatSrcPort}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="natdstport">{{if .NatDstPort}}{{.NatDstPort}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="natevents">{{.NatEvents}}</td>
+        <!-- IPv6 fields -->
+        <td class="toggleable-col hidden" data-col="ipv6flowlabel">{{.IPv6FlowLabel}}</td>
+        <!-- Network addressing fields -->
+        <td class="toggleable-col hidden" data-col="srcmask">{{if .SrcMask}}{{.SrcMask}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="dstmask">{{if .DstMask}}{{.DstMask}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="multicast">{{.IsMulticast}}</td>
+        <!-- ICMP fields -->
+        <td class="toggleable-col hidden" data-col="icmptype">{{.ICMPType}}</td>
+        <td class="toggleable-col hidden" data-col="icmpcode">{{.ICMPCode}}</td>
+        <!-- IP header fields -->
+        <td class="toggleable-col hidden" data-col="iptotallength">{{if .IPTotalLength}}{{.IPTotalLength}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="ipheaderlength">{{if .IPHeaderLength}}{{.IPHeaderLength}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="ttl">{{if .TTL}}{{.TTL}}{{else}}—{{end}}</td>
+        <!-- UDP fields -->
+        <td class="toggleable-col hidden" data-col="udplength">{{if .UDPLength}}{{.UDPLength}}{{else}}—{{end}}</td>
+        <!-- IGMP fields -->
+        <td class="toggleable-col hidden" data-col="igmptype">{{.IGMPType}}</td>
+        <!-- Routing fields -->
+        <td class="toggleable-col hidden" data-col="gateway">{{if ne .Gateway "—"}}{{.Gateway}}{{else}}—{{end}}</td>
+        <!-- Timing fields -->
+        <td class="toggleable-col hidden" data-col="sysinittime">{{.SysInitTime}}</td>
+        <!-- TCP details -->
+        <td class="toggleable-col hidden" data-col="tcpacknum">{{if .TCPAckNum}}{{.TCPAckNum}}{{else}}—{{end}}</td>
+        <td class="toggleable-col hidden" data-col="tcpwindowsize">{{if .TCPWindowSize}}{{.TCPWindowSize}}{{else}}—{{end}}</td>
         <td class="toggleable-col" data-col="duration">{{.Duration}}</td>
         <td class="toggleable-col" data-col="age">{{.TimeAgo}}</td>
       </tr>
