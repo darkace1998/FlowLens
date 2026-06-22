@@ -36,7 +36,7 @@
   <div class="panel">
     <h2>Active Sessions</h2>
     {{if .Sessions}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>ID</th><th>Device</th><th>BPF</th><th>Packets</th><th>Started</th><th>Status</th><th>Action</th></tr>
       </thead>
@@ -79,7 +79,7 @@
 <div class="panel">
   <h2>PCAP Files</h2>
   {{if .Files}}
-  <table>
+  <table class="sortable">
     <thead>
       <tr><th>Filename</th><th>Size</th><th>Modified</th><th>Download</th></tr>
     </thead>

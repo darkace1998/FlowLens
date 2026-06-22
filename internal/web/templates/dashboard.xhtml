@@ -49,7 +49,7 @@
   {{if .Latency.FlowsWithThru}}
   <div class="panel">
     <h2>Throughput Percentiles</h2>
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Metric</th><th>Value</th></tr>
       </thead>
@@ -67,7 +67,7 @@
   {{if .Latency.FlowsWithRTT}}
   <div class="panel">
     <h2>RTT Latency Percentiles</h2>
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Metric</th><th>Value</th></tr>
       </thead>
@@ -88,7 +88,7 @@
 <div class="two-col">
   <div class="panel">
     <h2>TCP Health Summary</h2>
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Metric</th><th>Count</th><th>Rate</th></tr>
       </thead>
@@ -121,7 +121,7 @@
   <div class="panel">
     <h2>Top Affected TCP Flows</h2>
     {{if .TCPHealth.TopRetransFlows}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Flow</th><th>Retrans</th><th>OOO</th><th>Loss</th><th>Rate</th></tr>
       </thead>
@@ -148,7 +148,7 @@
 <div class="two-col">
   <div class="panel">
     <h2>VoIP Quality Summary</h2>
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Metric</th><th>Value</th></tr>
       </thead>
@@ -172,7 +172,7 @@
   <div class="panel">
     <h2>Top VoIP Flows</h2>
     {{if .VoIP.TopVoIPFlows}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Flow</th><th>Jitter</th><th>MOS</th><th>Loss</th><th>Packets</th></tr>
       </thead>
@@ -199,7 +199,7 @@
   <div class="panel">
     <h2>Top Sources</h2>
     {{if .TopSrc}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Source IP</th><th>Bytes</th><th>Packets</th><th>%</th></tr>
       </thead>
@@ -225,7 +225,7 @@
   <div class="panel">
     <h2>Top Destinations</h2>
     {{if .TopDst}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Destination IP</th><th>Bytes</th><th>Packets</th><th>%</th></tr>
       </thead>
@@ -253,7 +253,7 @@
   <div class="panel">
     <h2>L7 Application Protocols</h2>
     {{if .AppProtocols}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Application</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
       </thead>
@@ -279,7 +279,7 @@
   <div class="panel">
     <h2>Traffic Categories</h2>
     {{if .Categories}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Category</th><th>Bytes</th><th>Flows</th><th>Share</th></tr>
       </thead>
@@ -306,7 +306,7 @@
 {{if .Interfaces}}
 <div class="panel">
   <h2>Traffic by Interface{{if .IfaceFilter}} <span class="filter-badge">Filtered: if{{.IfaceFilter}}</span>{{end}}</h2>
-  <table>
+  <table class="sortable">
     <thead>
       <tr><th>Interface</th><th>Index</th><th>Bytes</th><th>Packets</th><th>Flows</th><th>Share</th><th>Filter</th></tr>
     </thead>
@@ -335,7 +335,7 @@
   <div class="panel">
     <h2>Protocol Breakdown</h2>
     {{if .Protocols}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>Protocol</th><th>Bytes</th><th>Packets</th><th>Share</th></tr>
       </thead>
@@ -361,7 +361,7 @@
   <div class="panel">
     <h2>Top Autonomous Systems</h2>
     {{if .TopAS}}
-    <table>
+    <table class="sortable">
       <thead>
         <tr><th>AS</th><th>Organisation</th><th>Bytes</th><th>Share</th></tr>
       </thead>
