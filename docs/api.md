@@ -211,6 +211,73 @@ This endpoint does not accept any query parameters.
 }
 ```
 
+
+
+### `GET /api/vlans`
+
+Aggregated VLAN traffic statistics.
+
+This endpoint does not accept any query parameters.
+
+**Example Response:**
+
+```json
+{
+  "total_vlans": 1,
+  "vlans": [
+    {
+      "id": 100,
+      "bytes": 5000,
+      "packets": 50,
+      "flows": 1,
+      "top_hosts": [
+        {
+          "addr": "10.0.1.1",
+          "bytes": 5000
+        },
+        {
+          "addr": "192.168.1.1",
+          "bytes": 5000
+        }
+      ]
+    }
+  ]
+}
+```
+
+### `GET /api/macs`
+
+Aggregated MAC address traffic statistics.
+
+This endpoint does not accept any query parameters.
+
+**Example Response:**
+
+```json
+{
+  "total_macs": 2,
+  "macs": [
+    {
+      "mac": "00:11:22:33:44:55",
+      "ips": [
+        "10.0.1.1"
+      ],
+      "vlan": 100,
+      "bytes": 5000,
+      "packets": 50
+    },
+    {
+      "mac": "66:77:88:99:aa:bb",
+      "ips": [
+        "192.168.1.1"
+      ],
+      "vlan": 100,
+      "bytes": 5000,
+      "packets": 50
+    }
+  ]
+}
+```
 ### `GET /healthz`
 
 Liveness endpoint used by health checks and orchestration.

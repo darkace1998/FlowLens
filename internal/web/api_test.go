@@ -501,3 +501,110 @@ func TestAPIExporters_WithData(t *testing.T) {
 		t.Errorf("expected top proto ICMP for 192.168.1.1, got %s", resp.Exporters[1].TopProto)
 	}
 }
+
+func TestAPIVLANs(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	f := model.Flow{
+		Timestamp: time.Now(),
+		SrcAddr:   net.ParseIP("10.0.1.1"),
+		DstAddr:   net.ParseIP("192.168.1.1"),
+		SrcPort:   1234,
+		DstPort:   80,
+		Protocol:  6,
+		Bytes:     5000,
+		Packets:   50,
+		VLAN:      100,
+	}
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/api/vlans", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIVLANsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalVLANs != 1 {
+		t.Errorf("TotalVLANs = %d, want 1", resp.TotalVLANs)
+	}
+	if len(resp.VLANs) != 1 {
+		t.Fatalf("len(VLANs) = %d, want 1", len(resp.VLANs))
+	}
+
+	vlan := resp.VLANs[0]
+	if vlan.ID != 100 {
+		t.Errorf("VLAN.ID = %d, want 100", vlan.ID)
+	}
+	if vlan.Bytes != 5000 {
+		t.Errorf("VLAN.Bytes = %d, want 5000", vlan.Bytes)
+	}
+	if vlan.Packets != 50 {
+		t.Errorf("VLAN.Packets = %d, want 50", vlan.Packets)
+	}
+	if len(vlan.TopHosts) == 0 {
+		t.Errorf("VLAN.TopHosts is empty")
+	}
+}
+
+func TestAPIMACs(t *testing.T) {
+	s, rb := newTestServer(t)
+
+	f := model.Flow{
+		Timestamp: time.Now(),
+		SrcAddr:   net.ParseIP("10.0.1.1"),
+		DstAddr:   net.ParseIP("192.168.1.1"),
+		SrcMAC:    net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+		DstMAC:    net.HardwareAddr{0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb},
+		SrcPort:   1234,
+		DstPort:   80,
+		Protocol:  6,
+		Bytes:     5000,
+		Packets:   50,
+		VLAN:      100,
+	}
+	rb.Insert([]model.Flow{f})
+
+	req := httptest.NewRequest("GET", "/api/macs", nil)
+	w := httptest.NewRecorder()
+	s.Mux().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp APIMACsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if resp.TotalMACs != 2 { // One for SrcMAC, one for DstMAC
+		t.Errorf("TotalMACs = %d, want 2", resp.TotalMACs)
+	}
+	if len(resp.MACs) != 2 {
+		t.Fatalf("len(MACs) = %d, want 2", len(resp.MACs))
+	}
+
+	foundSrc := false
+	for _, mac := range resp.MACs {
+		if mac.MAC == "00:11:22:33:44:55" {
+			foundSrc = true
+			if mac.Bytes != 5000 {
+				t.Errorf("MAC.Bytes = %d, want 5000", mac.Bytes)
+			}
+			if mac.VLAN != 100 {
+				t.Errorf("MAC.VLAN = %d, want 100", mac.VLAN)
+			}
+		}
+	}
+
+	if !foundSrc {
+		t.Errorf("Did not find expected SrcMAC in response")
+	}
+}

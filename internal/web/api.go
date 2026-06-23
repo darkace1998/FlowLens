@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -147,6 +148,42 @@ type APIExporter struct {
 	TopProto  string    `json:"top_proto"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
+}
+
+// APIVLANsResponse is the JSON response for GET /api/vlans.
+type APIVLANsResponse struct {
+	TotalVLANs int       `json:"total_vlans"`
+	VLANs      []APIVLAN `json:"vlans"`
+}
+
+// APIVLAN is a single VLAN record in the JSON API.
+type APIVLAN struct {
+	ID       uint16        `json:"id"`
+	Bytes    uint64        `json:"bytes"`
+	Packets  uint64        `json:"packets"`
+	Flows    int           `json:"flows"`
+	TopHosts []APIVLANHost `json:"top_hosts"`
+}
+
+// APIVLANHost is a top host in a VLAN.
+type APIVLANHost struct {
+	Addr  string `json:"addr"`
+	Bytes uint64 `json:"bytes"`
+}
+
+// APIMACsResponse is the JSON response for GET /api/macs.
+type APIMACsResponse struct {
+	TotalMACs int      `json:"total_macs"`
+	MACs      []APIMAC `json:"macs"`
+}
+
+// APIMAC is a single MAC address record in the JSON API.
+type APIMAC struct {
+	MAC     string   `json:"mac"`
+	IPs     []string `json:"ips"`
+	VLAN    uint16   `json:"vlan"`
+	Bytes   uint64   `json:"bytes"`
+	Packets uint64   `json:"packets"`
 }
 
 // --- JSON helper ---
@@ -653,5 +690,145 @@ func (s *Server) handleAPIExporters(w http.ResponseWriter, r *http.Request) {
 		TotalExporters: len(exporters),
 		TotalBytes:     totalBytes,
 		Exporters:      exporters,
+	})
+}
+
+func (s *Server) handleAPIVLANs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
+		logging.Default().Error("API VLANs query error: %v", err)
+		return
+	}
+
+	type vlanAgg struct {
+		bytes   uint64
+		packets uint64
+		flows   int
+		hosts   map[string]uint64
+	}
+	vlans := make(map[uint16]*vlanAgg)
+
+	for _, f := range allFlows {
+		vid := f.VLAN
+		agg, ok := vlans[vid]
+		if !ok {
+			agg = &vlanAgg{hosts: make(map[string]uint64)}
+			vlans[vid] = agg
+		}
+		agg.bytes += f.Bytes
+		agg.packets += f.Packets
+		agg.flows++
+		src := model.SafeIPString(f.SrcAddr)
+		dst := model.SafeIPString(f.DstAddr)
+		agg.hosts[src] += f.Bytes
+		agg.hosts[dst] += f.Bytes
+	}
+
+	entries := make([]APIVLAN, 0, len(vlans))
+	for vid, agg := range vlans {
+		e := APIVLAN{
+			ID:      vid,
+			Bytes:   agg.bytes,
+			Packets: agg.packets,
+			Flows:   agg.flows,
+		}
+		var hosts []APIVLANHost
+		for addr, b := range agg.hosts {
+			hosts = append(hosts, APIVLANHost{Addr: addr, Bytes: b})
+		}
+		sortByBytes(hosts, func(e APIVLANHost) uint64 { return e.Bytes })
+		if len(hosts) > 5 {
+			hosts = hosts[:5]
+		}
+		e.TopHosts = hosts
+		entries = append(entries, e)
+	}
+
+	sortByBytes(entries, func(e APIVLAN) uint64 { return e.Bytes })
+
+	writeJSON(w, http.StatusOK, APIVLANsResponse{
+		TotalVLANs: len(entries),
+		VLANs:      entries,
+	})
+}
+
+func (s *Server) handleAPIMACs(w http.ResponseWriter, r *http.Request) {
+	recentWindow := s.fullCfg.Storage.RingBufferDuration
+	if recentWindow <= 0 {
+		recentWindow = 10 * time.Minute
+	}
+	allFlows, err := s.flowSvc.RecentFlows(recentWindow, 0)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to query flows"})
+		logging.Default().Error("API MACs query error: %v", err)
+		return
+	}
+
+	type macAgg struct {
+		ips     map[string]bool
+		vlan    uint16
+		bytes   uint64
+		packets uint64
+	}
+	macs := make(map[string]*macAgg)
+
+	for _, f := range allFlows {
+		srcMAC := model.FormatMAC(f.SrcMAC)
+		dstMAC := model.FormatMAC(f.DstMAC)
+		srcIP := model.SafeIPString(f.SrcAddr)
+		dstIP := model.SafeIPString(f.DstAddr)
+
+		if srcMAC != "—" {
+			agg, ok := macs[srcMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[srcMAC] = agg
+			}
+			agg.ips[srcIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+		if dstMAC != "—" {
+			agg, ok := macs[dstMAC]
+			if !ok {
+				agg = &macAgg{ips: make(map[string]bool)}
+				macs[dstMAC] = agg
+			}
+			agg.ips[dstIP] = true
+			agg.vlan = f.VLAN
+			agg.bytes += f.Bytes
+			agg.packets += f.Packets
+		}
+	}
+
+	entries := make([]APIMAC, 0, len(macs))
+	for mac, agg := range macs {
+		var ipList []string
+		for ip := range agg.ips {
+			if ip != "0.0.0.0" {
+				ipList = append(ipList, ip)
+			}
+		}
+		sort.Strings(ipList)
+		entries = append(entries, APIMAC{
+			MAC:     mac,
+			IPs:     ipList,
+			VLAN:    agg.vlan,
+			Bytes:   agg.bytes,
+			Packets: agg.packets,
+		})
+	}
+
+	sortByBytes(entries, func(e APIMAC) uint64 { return e.Bytes })
+
+	writeJSON(w, http.StatusOK, APIMACsResponse{
+		TotalMACs: len(entries),
+		MACs:      entries,
 	})
 }
