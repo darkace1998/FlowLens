@@ -20,6 +20,31 @@ Query params:
 | `ip` | string | Source-or-destination IP filter |
 | `port` | string | Source-or-destination port filter |
 | `protocol` | string | Protocol filter (for example `TCP`, `UDP`) |
+| `app_proto` | string | Application protocol filter (e.g., `HTTP`, `DNS`) |
+| `app_cat` | string | Application category filter (e.g., `Web`, `Network Services`) |
+| `start` | string | Start timestamp filter |
+| `end` | string | End timestamp filter |
+| `bytes_min` | string | Minimum bytes filter |
+| `bytes_max` | string | Maximum bytes filter |
+| `tcp_flags` | string | TCP flags filter |
+| `tos` | string | Type of Service (ToS) filter |
+| `in_iface` | string | Input interface filter |
+| `out_iface` | string | Output interface filter |
+| `src_as` | string | Source AS number filter |
+| `dst_as` | string | Destination AS number filter |
+| `src_mac` | string | Source MAC address filter |
+| `dst_mac` | string | Destination MAC address filter |
+| `vlan` | string | VLAN ID filter |
+| `ether_type` | string | Ethernet type filter |
+| `exporter` | string | Exporter IP filter |
+| `rtt_min` | string | Minimum RTT filter |
+| `rtt_max` | string | Maximum RTT filter |
+| `retrans_min` | string | Minimum retransmissions filter |
+| `ooo_min` | string | Minimum out-of-order packets filter |
+| `loss_min` | string | Minimum packet loss filter |
+| `jitter_min` | string | Minimum jitter filter |
+| `jitter_max` | string | Maximum jitter filter |
+| `mos_min` | string | Minimum MOS score filter |
 
 **Example Response:**
 
@@ -45,6 +70,28 @@ Query params:
   ]
 }
 ```
+
+### `GET /flows/export`
+
+Exports filtered flows in CSV or JSON format.
+
+Query params:
+
+Supports all filter query parameters available for `GET /api/flows`, plus:
+
+| Param | Type | Description |
+|---|---|---|
+| `format` | string | Output format: `csv` or `json` (default: `csv`) |
+
+### `GET /reports/export`
+
+Exports filtered reports in CSV or JSON format.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `format` | string | Output format: `csv` or `json` (default: `csv`) |
 
 ### `GET /api/hosts`
 
