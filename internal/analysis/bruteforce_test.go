@@ -30,7 +30,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "Normal login traffic (below threshold)",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 10)
 				for i := 0; i < 10; i++ {
 					// 10 attempts to SSH (port 22)
 					flows = append(flows, makeFlow("1.2.3.4", "10.0.0.1", uint16(10000+i), 22, 6, 100, 1))
@@ -42,7 +42,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "Non-login ports (above threshold)",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 150)
 				for i := 0; i < 150; i++ {
 					// 150 connections to HTTP (port 80)
 					flows = append(flows, makeFlow("1.2.3.4", "10.0.0.1", uint16(10000+i), 80, 6, 100, 1))
@@ -54,7 +54,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "UDP traffic on login port (ignored)",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 150)
 				for i := 0; i < 150; i++ {
 					// 150 UDP flows to port 22
 					flows = append(flows, makeFlow("1.2.3.4", "10.0.0.1", uint16(10000+i), 22, 17, 100, 1))
@@ -66,7 +66,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "Brute force attack (warning threshold)",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 150)
 				for i := 0; i < 150; i++ {
 					// 150 TCP flows to SSH (port 22) from same source IP, different source ports
 					flows = append(flows, makeFlow("1.2.3.4", "10.0.0.1", uint16(10000+i), 22, 6, 100, 1))
@@ -80,7 +80,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "Brute force attack (critical threshold)",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 600)
 				for i := 0; i < 600; i++ {
 					// 600 TCP flows to RDP (port 3389) from same source IP, different source ports
 					flows = append(flows, makeFlow("2.3.4.5", "10.0.0.2", uint16(10000+i), 3389, 6, 100, 1))
@@ -94,7 +94,7 @@ func TestBruteForceDetector(t *testing.T) {
 		{
 			name: "Multiple targets brute forced",
 			setupFlows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 300)
 				for i := 0; i < 150; i++ {
 					// Target 1: 10.0.0.1 on SSH
 					flows = append(flows, makeFlow("1.2.3.4", "10.0.0.1", uint16(10000+i), 22, 6, 100, 1))
@@ -135,7 +135,7 @@ func TestBruteForceDetector(t *testing.T) {
 						}
 					}
 					if !found {
-						var titles []string
+						titles := make([]string, 0, len(advs))
 						for _, a := range advs {
 							titles = append(titles, a.Title)
 						}
