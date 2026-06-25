@@ -20,6 +20,22 @@ Query params:
 | `ip` | string | Source-or-destination IP filter |
 | `port` | string | Source-or-destination port filter |
 | `protocol` | string | Protocol filter (for example `TCP`, `UDP`) |
+| `app_proto` | string | Application protocol filter (e.g., `DNS`, `HTTPS`) |
+| `app_cat` | string | Application category filter (e.g., `Network Services`) |
+| `start` | string | Start timestamp filter (RFC3339) |
+| `end` | string | End timestamp filter (RFC3339) |
+| `bytes_min` | int | Minimum bytes filter |
+| `bytes_max` | int | Maximum bytes filter |
+| `tcp_flags` | string | TCP flags filter |
+| `tos` | int | Type of Service (ToS) / DSCP filter |
+| `in_iface` | int | Input interface index filter |
+| `out_iface` | int | Output interface index filter |
+| `src_as` | int | Source ASN filter |
+| `dst_as` | int | Destination ASN filter |
+| `src_mac` | string | Source MAC address filter |
+| `dst_mac` | string | Destination MAC address filter |
+| `vlan` | int | VLAN ID filter |
+| `ether_type` | string | EtherType filter (e.g., `IPv4`, `IPv6`) |
 | `app_proto` | string | Application protocol filter (e.g., `HTTP`, `DNS`) |
 | `app_cat` | string | Application category filter (e.g., `Web`, `Network Services`) |
 | `start` | string | Start timestamp filter |
@@ -349,6 +365,34 @@ Example response:
 Simple ping endpoint to check if the server is running. Returns `pong`.
 
 *Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+
+
+### `GET /flows/export`
+
+Export filtered flows from the in-memory ring buffer.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `format` | string | Export format: `csv` or `json` (required) |
+
+*Note: This endpoint also accepts all the flow filtering parameters available on `GET /api/flows` (e.g., `src_ip`, `dst_ip`, `protocol`, `bytes_min`, etc.).*
+
+### `GET /reports/export`
+
+Export aggregated historical flow reports from SQLite.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `format` | string | Export format: `csv` or `json` (required) |
+| `start` | string | Start timestamp (RFC3339) |
+| `end` | string | End timestamp (RFC3339) |
+| `src_ip` | string | Source IP filter |
+| `dst_ip` | string | Destination IP filter |
+| `protocol` | string | Protocol filter |
 
 ## Webhooks
 
