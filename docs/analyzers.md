@@ -11,6 +11,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Network Sweep Detector | Detects hosts connecting to many unique destination IPs |
 | ICMP Flood Detector | Detects hosts receiving a large number of ICMP packets |
 | SYN Flood Detector | Detects targets receiving excessive TCP SYN packets (potential SYN flood) |
+| UDP Flood Detector | Detects targets receiving excessive UDP packets (potential UDP flood) |
 | Brute Force Detector | Detects potential login brute-force attempts based on many distinct connections to common login ports |
 | Anomaly Detector | Detects spikes/drops against historical baseline |
 | DNS Volume | Flags unusual DNS rates and ratios |
