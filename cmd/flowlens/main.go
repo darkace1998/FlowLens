@@ -154,6 +154,7 @@ func main() {
 		analysis.NetworkSweepDetector{},
 		analysis.ICMPFloodDetector{},
 		analysis.SYNFloodDetector{},
+		analysis.BruteForceDetector{},
 	)
 	engine.Start()
 

@@ -45,6 +45,31 @@ Query params:
 | `jitter_min` | string | Minimum jitter filter |
 | `jitter_max` | string | Maximum jitter filter |
 | `mos_min` | string | Minimum MOS score filter |
+| `app_proto` | string | Application protocol filter (for example `HTTP`, `DNS`) |
+| `app_cat` | string | Application category filter (for example `Web`, `Network Services`) |
+| `start` | string | Start time filter (RFC3339) |
+| `end` | string | End time filter (RFC3339) |
+| `bytes_min` | int | Minimum bytes filter |
+| `bytes_max` | int | Maximum bytes filter |
+| `tcp_flags` | string | TCP flags filter (for example `S,A`) |
+| `tos` | int | Type of Service (ToS) filter |
+| `in_iface` | string | Input interface filter |
+| `out_iface` | string | Output interface filter |
+| `src_as` | int | Source Autonomous System (AS) filter |
+| `dst_as` | int | Destination Autonomous System (AS) filter |
+| `src_mac` | string | Source MAC address filter |
+| `dst_mac` | string | Destination MAC address filter |
+| `vlan` | int | VLAN ID filter |
+| `ether_type` | string | EtherType filter (hex like `0x0800` or decimal) |
+| `exporter` | string | Exporter IP filter |
+| `rtt_min` | int | Minimum RTT filter (microseconds) |
+| `rtt_max` | int | Maximum RTT filter (microseconds) |
+| `retrans_min` | int | Minimum retransmissions filter |
+| `ooo_min` | int | Minimum out-of-order packets filter |
+| `loss_min` | int | Minimum packet loss filter |
+| `jitter_min` | int | Minimum jitter filter (microseconds) |
+| `jitter_max` | int | Maximum jitter filter (microseconds) |
+| `mos_min` | float | Minimum MOS (Mean Opinion Score) filter |
 
 **Example Response:**
 
@@ -253,6 +278,52 @@ This endpoint does not accept any query parameters.
       "top_proto": "TCP",
       "first_seen": "2023-10-25T09:50:00Z",
       "last_seen": "2023-10-25T10:00:00Z"
+    }
+  ]
+}
+```
+
+### `GET /api/vlans`
+
+Aggregated VLAN-level traffic statistics.
+
+This endpoint does not accept any query parameters.
+
+**Example Response:**
+
+```json
+{
+  "total_vlans": 2,
+  "total_bytes": 1024000,
+  "vlans": [
+    {
+      "id": 100,
+      "bytes": 1024000,
+      "packets": 1500,
+      "flows": 45
+    }
+  ]
+}
+```
+
+### `GET /api/macs`
+
+Aggregated MAC-level traffic statistics.
+
+This endpoint does not accept any query parameters.
+
+**Example Response:**
+
+```json
+{
+  "total_macs": 2,
+  "total_bytes": 1024000,
+  "macs": [
+    {
+      "mac": "aa:bb:cc:dd:ee:ff",
+      "bytes": 512000,
+      "packets": 750,
+      "vlan": 100
     }
   ]
 }
