@@ -47,7 +47,6 @@ type activeSession struct {
 	session  Session
 	source   *Source
 	writer   *PcapWriter
-	stopCh   chan struct{}
 	stopOnce sync.Once
 }
 
@@ -89,8 +88,6 @@ func (m *Manager) Start(device, bpf string) (string, error) {
 		SnapLen: snapLen,
 	}
 
-	stopCh := make(chan struct{})
-
 	// The handler writes each packet to the PCAP file.
 	// We wrap the source's ProcessPacket to also write raw data to PCAP.
 	src := NewSource(ifCfg, nil)
@@ -107,7 +104,6 @@ func (m *Manager) Start(device, bpf string) (string, error) {
 		},
 		source: src,
 		writer: writer,
-		stopCh: stopCh,
 	}
 
 	m.sessions[id] = as
@@ -128,11 +124,6 @@ func (m *Manager) runCapture(as *activeSession) error {
 	pcapWriter := as.writer
 
 	handler := func(data []byte, ts time.Time) {
-		select {
-		case <-as.stopCh:
-			return
-		default:
-		}
 		if err := pcapWriter.WritePacket(data, ts); err != nil {
 			if errors.Is(err, ErrPcapWriterClosed) {
 				return
@@ -141,13 +132,8 @@ func (m *Manager) runCapture(as *activeSession) error {
 		}
 	}
 
-	ifCfg := as.source.cfg
-	snapLen := ifCfg.SnapLen
-	if snapLen <= 0 {
-		snapLen = 65535
-	}
-
-	return runRawCapture(ifCfg.Device, snapLen, handler, as.stopCh)
+	as.source.SetRawHandler(handler)
+	return as.source.Start()
 }
 
 // Stop stops a capture session.
@@ -162,7 +148,7 @@ func (m *Manager) Stop(id string) error {
 
 	// Signal stop and close writer exactly once.
 	as.stopOnce.Do(func() {
-		close(as.stopCh)
+		as.source.Stop()
 		_ = as.writer.Close()
 	})
 

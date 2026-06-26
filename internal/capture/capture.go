@@ -24,8 +24,9 @@ type FlowHandler func(flows []model.Flow)
 
 // Source represents a single packet capture source (mirror port or TAP interface).
 type Source struct {
-	cfg     config.InterfaceConfig
-	handler FlowHandler
+	cfg        config.InterfaceConfig
+	handler    FlowHandler
+	rawHandler func(data []byte, ts time.Time)
 	stopCh  chan struct{}
 	wg      sync.WaitGroup
 }
@@ -37,6 +38,12 @@ func NewSource(cfg config.InterfaceConfig, handler FlowHandler) *Source {
 		handler: handler,
 		stopCh:  make(chan struct{}),
 	}
+}
+
+
+// SetRawHandler sets a callback for raw packet data.
+func (s *Source) SetRawHandler(handler func(data []byte, ts time.Time)) {
+	s.rawHandler = handler
 }
 
 // Start begins capturing packets on the configured interface.
@@ -203,14 +210,16 @@ func decodeIPv6(data []byte, timestamp time.Time) (model.Flow, bool) {
 // ProcessPacket decodes a raw Ethernet frame and sends the resulting flow to the handler.
 // This is exported for testing and for platform-specific capture implementations.
 func (s *Source) ProcessPacket(data []byte, timestamp time.Time) {
+	if s.handler == nil {
+		return
+	}
+
 	f, ok := decodeEthernet(data, timestamp)
 	if !ok {
 		return
 	}
 
-	if s.handler != nil {
-		s.handler([]model.Flow{f})
-	}
+	s.handler([]model.Flow{f})
 }
 
 // DeviceName returns the name of the configured capture device.

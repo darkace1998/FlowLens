@@ -69,7 +69,11 @@ func (s *Source) startCapture(device string, snapLen int) error {
 		if n > 0 {
 			pkt := make([]byte, n)
 			copy(pkt, buf[:n])
-			s.ProcessPacket(pkt, time.Now())
+			now := time.Now()
+			if s.rawHandler != nil {
+				s.rawHandler(pkt, now)
+			}
+			s.ProcessPacket(pkt, now)
 		}
 	}
 }
