@@ -939,29 +939,29 @@ type FlowsPageData struct {
 	FilterBytesMin uint64 // filter by minimum bytes
 	FilterBytesMax uint64 // filter by maximum bytes
 	// Phase 2 filters
-	FilterTCPFlags    string // filter by TCP flags (SYN, ACK, etc.)
-	FilterToS        uint8  // filter by ToS/DSCP value
-	FilterInIface    string // filter by input interface
-	FilterOutIface   string // filter by output interface
-	FilterSrcAS      uint32 // filter by source AS number
-	FilterDstAS      uint32 // filter by destination AS number
-	FilterSrcMAC     string // filter by source MAC address
-	FilterDstMAC     string // filter by destination MAC address
-	FilterVLAN       uint16 // filter by VLAN ID
-	FilterEtherType  uint16 // filter by ethernet type
-	FilterExporter   string // filter by exporter IP address
+	FilterTCPFlags  string // filter by TCP flags (SYN, ACK, etc.)
+	FilterToS       uint8  // filter by ToS/DSCP value
+	FilterInIface   string // filter by input interface
+	FilterOutIface  string // filter by output interface
+	FilterSrcAS     uint32 // filter by source AS number
+	FilterDstAS     uint32 // filter by destination AS number
+	FilterSrcMAC    string // filter by source MAC address
+	FilterDstMAC    string // filter by destination MAC address
+	FilterVLAN      uint16 // filter by VLAN ID
+	FilterEtherType uint16 // filter by ethernet type
+	FilterExporter  string // filter by exporter IP address
 	// TCP Quality filters
-	FilterRTTMin     int64  // filter by minimum RTT (microseconds)
-	FilterRTTMax     int64  // filter by maximum RTT (microseconds)
-	FilterRetransMin uint32 // filter by minimum retransmissions
-	FilterOOOMin     uint32 // filter by minimum out-of-order packets
-	FilterLossMin    uint32 // filter by minimum packet loss
-	FilterJitterMin  int64  // filter by minimum jitter (microseconds)
-	FilterJitterMax  int64  // filter by maximum jitter (microseconds)
+	FilterRTTMin     int64   // filter by minimum RTT (microseconds)
+	FilterRTTMax     int64   // filter by maximum RTT (microseconds)
+	FilterRetransMin uint32  // filter by minimum retransmissions
+	FilterOOOMin     uint32  // filter by minimum out-of-order packets
+	FilterLossMin    uint32  // filter by minimum packet loss
+	FilterJitterMin  int64   // filter by minimum jitter (microseconds)
+	FilterJitterMax  int64   // filter by maximum jitter (microseconds)
 	FilterMOSMin     float32 // filter by minimum MOS score
 	// Phase 3: Filter presets
 	FilterPresets   []FilterPreset // list of saved filter presets
-	FilterPresetErr string          // error message for preset operations
+	FilterPresetErr string         // error message for preset operations
 }
 
 // --- Flow Explorer handler ---
@@ -1217,7 +1217,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		FilterBytesMin: filterBytesMin,
 		FilterBytesMax: filterBytesMax,
 		// Phase 2 filters
-		FilterTCPFlags:   filterTCPFlags,
+		FilterTCPFlags:  filterTCPFlags,
 		FilterToS:       filterToS,
 		FilterInIface:   filterInIface,
 		FilterOutIface:  filterOutIface,
@@ -2969,8 +2969,8 @@ func (s *Server) handlePcapImport(w http.ResponseWriter, r *http.Request) {
 	// Use MultipartReader for streaming instead of ParseMultipartForm.
 	// ParseMultipartForm buffers the file to a temp file for uploads
 	// larger than maxMemory, and reading it back can produce corrupt data
-	// for large (100+ MB) files. Streaming reads directly from the
-	// request body, avoiding temp files entirely.
+	// when processing large (100+ MB) files. Streaming reads directly
+	// from the request body, avoiding temp files entirely.
 	mr, err := r.MultipartReader()
 	if err != nil {
 		http.Error(w, "Invalid multipart form", http.StatusBadRequest)
