@@ -70,7 +70,7 @@ func TestSuspiciousFlagsDetector_NormalTraffic(t *testing.T) {
 func TestSuspiciousFlagsDetector_SynFin(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 
-	flows := make([]model.Flow, 0)
+	flows := make([]model.Flow, 0, 10)
 	// Create flows hitting 10 targets
 	for i := 0; i < 10; i++ {
 		dst := fmt.Sprintf("192.168.1.%d", i+1)
@@ -100,7 +100,7 @@ func TestSuspiciousFlagsDetector_SynFin(t *testing.T) {
 func TestSuspiciousFlagsDetector_XmasCritical(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 
-	flows := make([]model.Flow, 0)
+	flows := make([]model.Flow, 0, 60)
 	// Create flows hitting 60 targets (above 50 threshold for CRITICAL)
 	for i := 0; i < 60; i++ {
 		dst := fmt.Sprintf("192.168.1.%d", i+1)
@@ -130,7 +130,7 @@ func TestSuspiciousFlagsDetector_XmasCritical(t *testing.T) {
 func TestSuspiciousFlagsDetector_FinOnly(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 
-	flows := make([]model.Flow, 0)
+	flows := make([]model.Flow, 0, 5)
 	// Create flows hitting 5 targets
 	for i := 0; i < 5; i++ {
 		dst := fmt.Sprintf("192.168.1.%d", i+1)
@@ -156,7 +156,7 @@ func TestSuspiciousFlagsDetector_FinOnly(t *testing.T) {
 func TestSuspiciousFlagsDetector_SynRst(t *testing.T) {
 	rb := storage.NewRingBuffer(1000)
 
-	flows := make([]model.Flow, 0)
+	flows := make([]model.Flow, 0, 5)
 	// Create flows hitting 5 targets
 	for i := 0; i < 5; i++ {
 		dst := fmt.Sprintf("192.168.1.%d", i+1)

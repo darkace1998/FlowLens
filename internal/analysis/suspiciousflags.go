@@ -33,7 +33,6 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 	const (
 		synFin scanType = "SYN-FIN"
 		synRst scanType = "SYN-RST"
-		null   scanType = "NULL"
 		xmas   scanType = "XMAS"
 		fin    scanType = "FIN"
 	)
@@ -114,7 +113,7 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 	var results []result
 
 	for key, s := range scans {
-		if s.targets == nil || len(s.targets) == 0 {
+		if len(s.targets) == 0 {
 			continue
 		}
 
