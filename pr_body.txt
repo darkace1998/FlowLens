@@ -1,0 +1,7 @@
+🎯 **What:** Extracted the large `CREATE TABLE` SQL string and the subsequent schema setup/migration logic out of `NewSQLiteStore` into a package-level constant (`schemaSQL`) and a dedicated helper function (`setupSQLiteSchema`).
+
+💡 **Why:** This refactoring reduces the length and complexity of `NewSQLiteStore`, improving the maintainability and readability of the code without altering its behavior.
+
+✅ **Verification:** Ran `go build ./...` and the full test suite (`go test ./...`), which passed successfully. Confirmed there are no compilation errors or broken functionality.
+
+✨ **Result:** The `NewSQLiteStore` function is now much more concise and easier to read, focusing solely on opening the DB connection, setting the journal mode, and starting background tasks.
