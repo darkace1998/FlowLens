@@ -13,9 +13,9 @@ import (
 	"github.com/darkace1998/FlowLens/internal/util"
 )
 
-// LongConnectionDetector identifies TCP/UDP connections that have been active
-// for an unusually long time, which could indicate persistent backdoors,
-// large downloads, or stale connections.
+// LongConnectionDetector identifies TCP/UDP connections that have been
+// active for an unusually long time, which could indicate persistent
+// backdoors, large downloads, or stale connections.
 type LongConnectionDetector struct{}
 
 func (LongConnectionDetector) Name() string { return "Long Connection Detector" }
