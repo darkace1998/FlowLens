@@ -35,23 +35,7 @@ type SQLiteStore struct {
 	pruneWg       sync.WaitGroup
 }
 
-// NewSQLiteStore opens (or creates) a SQLite database at the given path,
-// enables WAL mode, creates the flows table, and starts a background
-// pruning goroutine based on the configured retention and prune interval.
-func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLiteStore, error) {
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		return nil, fmt.Errorf("opening sqlite: %w", err)
-	}
-
-	// Enable WAL mode for concurrent reads during writes.
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
-		return nil, fmt.Errorf("setting WAL mode: %w", err)
-	}
-
-	// Create the flows table if it doesn't exist.
-	createSQL := `CREATE TABLE IF NOT EXISTS flows (
+const schemaSQL = `CREATE TABLE IF NOT EXISTS flows (
 		id          INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp   DATETIME NOT NULL,
 		src_addr    TEXT NOT NULL,
@@ -83,9 +67,11 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 		vlan_id         INTEGER NOT NULL DEFAULT 0,
 		ether_type      INTEGER NOT NULL DEFAULT 0
 	)`
-	if _, err := db.Exec(createSQL); err != nil {
-		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
-		return nil, fmt.Errorf("creating flows table: %w", err)
+
+func setupSQLiteSchema(db *sql.DB) error {
+	// Create the flows table if it doesn't exist.
+	if _, err := db.Exec(schemaSQL); err != nil {
+		return fmt.Errorf("creating flows table: %w", err)
 	}
 
 	// Migrate existing databases: add app_proto and app_category columns if missing.
@@ -144,8 +130,29 @@ func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLit
 
 	// Create index on timestamp for efficient time-range queries and pruning.
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_flows_timestamp ON flows(timestamp)"); err != nil {
+		return fmt.Errorf("creating timestamp index: %w", err)
+	}
+	return nil
+}
+
+// NewSQLiteStore opens (or creates) a SQLite database at the given path,
+// enables WAL mode, creates the flows table, and starts a background
+// pruning goroutine based on the configured retention and prune interval.
+func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLiteStore, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("opening sqlite: %w", err)
+	}
+
+	// Enable WAL mode for concurrent reads during writes.
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
-		return nil, fmt.Errorf("creating timestamp index: %w", err)
+		return nil, fmt.Errorf("setting WAL mode: %w", err)
+	}
+
+	if err := setupSQLiteSchema(db); err != nil {
+		_ = db.Close() // nolint:errcheck // error ignored in cleanup path
+		return nil, err
 	}
 
 	// SQLite uses file-level locking; limit to one open connection to avoid
