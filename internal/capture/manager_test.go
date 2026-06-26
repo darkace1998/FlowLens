@@ -118,7 +118,7 @@ func TestManager_StopConcurrentNoPanic(t *testing.T) {
 	m.sessions["cap-1"] = &activeSession{
 		session: Session{ID: "cap-1", State: StateRunning},
 		writer:  pw,
-		stopCh:  make(chan struct{}),
+		source:  NewSource(config.InterfaceConfig{}, nil),
 	}
 
 	const callers = 16
