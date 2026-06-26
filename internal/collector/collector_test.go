@@ -10,15 +10,29 @@ import (
 	"github.com/darkace1998/FlowLens/internal/model"
 )
 
-func TestCollector_ReceivesFlows(t *testing.T) {
-	var mu sync.Mutex
-	var received []model.Flow
+type testEnv struct {
+	mu              sync.Mutex
+	received        []model.Flow
+	counterReceived []SFlowCounterSample
+}
 
-	handler := func(flows []model.Flow) {
-		mu.Lock()
-		received = append(received, flows...)
-		mu.Unlock()
+func setupCollectorTest() (*testEnv, func([]model.Flow), func([]SFlowCounterSample)) {
+	env := &testEnv{}
+	flowHandler := func(flows []model.Flow) {
+		env.mu.Lock()
+		env.received = append(env.received, flows...)
+		env.mu.Unlock()
 	}
+	counterHandler := func(counters []SFlowCounterSample) {
+		env.mu.Lock()
+		env.counterReceived = append(env.counterReceived, counters...)
+		env.mu.Unlock()
+	}
+	return env, flowHandler, counterHandler
+}
+
+func TestCollector_ReceivesFlows(t *testing.T) {
+	env, handler, _ := setupCollectorTest()
 
 	cfg := config.CollectorConfig{
 		NetFlowPort: 0, // OS-assigned port
@@ -62,9 +76,9 @@ func TestCollector_ReceivesFlows(t *testing.T) {
 	// Wait for the flows to be processed.
 	deadline := time.After(2 * time.Second)
 	for {
-		mu.Lock()
-		count := len(received)
-		mu.Unlock()
+		env.mu.Lock()
+		count := len(env.received)
+		env.mu.Unlock()
 		if count >= 3 {
 			break
 		}
@@ -75,15 +89,15 @@ func TestCollector_ReceivesFlows(t *testing.T) {
 		}
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	env.mu.Lock()
+	defer env.mu.Unlock()
 
-	if len(received) != 3 {
-		t.Fatalf("expected 3 flows, got %d", len(received))
+	if len(env.received) != 3 {
+		t.Fatalf("expected 3 flows, got %d", len(env.received))
 	}
 
 	// Verify first flow
-	f := received[0]
+	f := env.received[0]
 	if f.Protocol != 6 {
 		t.Errorf("flow[0].Protocol = %d, want 6", f.Protocol)
 	}
@@ -93,14 +107,7 @@ func TestCollector_ReceivesFlows(t *testing.T) {
 }
 
 func TestCollector_DualPort_IPFIXOnSeparatePort(t *testing.T) {
-	var mu sync.Mutex
-	var received []model.Flow
-
-	handler := func(flows []model.Flow) {
-		mu.Lock()
-		received = append(received, flows...)
-		mu.Unlock()
-	}
+	env, handler, _ := setupCollectorTest()
 
 	// Find two free ports by briefly listening on port 0.
 	l1, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -193,38 +200,31 @@ func TestCollector_DualPort_IPFIXOnSeparatePort(t *testing.T) {
 	// Wait for both flows to be received.
 	deadline := time.After(3 * time.Second)
 	for {
-		mu.Lock()
-		count := len(received)
-		mu.Unlock()
+		env.mu.Lock()
+		count := len(env.received)
+		env.mu.Unlock()
 		if count >= 2 {
 			break
 		}
 		select {
 		case <-deadline:
-			mu.Lock()
-			t.Fatalf("timed out waiting for flows; received %d, want 2", len(received))
-			mu.Unlock()
+			env.mu.Lock()
+			t.Fatalf("timed out waiting for flows; received %d, want 2", len(env.received))
+			env.mu.Unlock()
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	env.mu.Lock()
+	defer env.mu.Unlock()
 
-	if len(received) != 2 {
-		t.Fatalf("expected 2 flows (v9 on netflow port + IPFIX on ipfix port), got %d", len(received))
+	if len(env.received) != 2 {
+		t.Fatalf("expected 2 flows (v9 on netflow port + IPFIX on ipfix port), got %d", len(env.received))
 	}
 }
 
 func TestCollector_MixedV5V9IPFIX(t *testing.T) {
-	var mu sync.Mutex
-	var received []model.Flow
-
-	handler := func(flows []model.Flow) {
-		mu.Lock()
-		received = append(received, flows...)
-		mu.Unlock()
-	}
+	env, handler, _ := setupCollectorTest()
 
 	cfg := config.CollectorConfig{
 		NetFlowPort: 0,
@@ -293,65 +293,52 @@ func TestCollector_MixedV5V9IPFIX(t *testing.T) {
 	// Wait for all 3 flows to be received
 	deadline := time.After(3 * time.Second)
 	for {
-		mu.Lock()
-		count := len(received)
-		mu.Unlock()
+		env.mu.Lock()
+		count := len(env.received)
+		env.mu.Unlock()
 		if count >= 3 {
 			break
 		}
 		select {
 		case <-deadline:
-			mu.Lock()
-			t.Fatalf("timed out waiting for flows; received %d, want 3", len(received))
-			mu.Unlock()
+			env.mu.Lock()
+			t.Fatalf("timed out waiting for flows; received %d, want 3", len(env.received))
+			env.mu.Unlock()
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	env.mu.Lock()
+	defer env.mu.Unlock()
 
-	if len(received) != 3 {
-		t.Fatalf("expected 3 flows (v5+v9+IPFIX), got %d", len(received))
+	if len(env.received) != 3 {
+		t.Fatalf("expected 3 flows (v5+v9+IPFIX), got %d", len(env.received))
 	}
 
 	// Verify v5 flow
-	if received[0].DstPort != 443 {
-		t.Errorf("v5 flow DstPort = %d, want 443", received[0].DstPort)
+	if env.received[0].DstPort != 443 {
+		t.Errorf("v5 flow DstPort = %d, want 443", env.received[0].DstPort)
 	}
 
 	// Verify v9 flow
-	if !received[1].SrcAddr.Equal(net.ParseIP("10.1.0.1")) {
-		t.Errorf("v9 flow SrcAddr = %s, want 10.1.0.1", received[1].SrcAddr)
+	if !env.received[1].SrcAddr.Equal(net.ParseIP("10.1.0.1")) {
+		t.Errorf("v9 flow SrcAddr = %s, want 10.1.0.1", env.received[1].SrcAddr)
 	}
-	if received[1].Protocol != 17 {
-		t.Errorf("v9 flow Protocol = %d, want 17 (UDP)", received[1].Protocol)
+	if env.received[1].Protocol != 17 {
+		t.Errorf("v9 flow Protocol = %d, want 17 (UDP)", env.received[1].Protocol)
 	}
 
 	// Verify IPFIX flow
-	if !received[2].SrcAddr.Equal(net.ParseIP("10.3.0.1")) {
-		t.Errorf("IPFIX flow SrcAddr = %s, want 10.3.0.1", received[2].SrcAddr)
+	if !env.received[2].SrcAddr.Equal(net.ParseIP("10.3.0.1")) {
+		t.Errorf("IPFIX flow SrcAddr = %s, want 10.3.0.1", env.received[2].SrcAddr)
 	}
-	if received[2].Bytes != 25000 {
-		t.Errorf("IPFIX flow Bytes = %d, want 25000", received[2].Bytes)
+	if env.received[2].Bytes != 25000 {
+		t.Errorf("IPFIX flow Bytes = %d, want 25000", env.received[2].Bytes)
 	}
 }
 
 func TestCollector_SFlowOnDedicatedPort(t *testing.T) {
-	var mu sync.Mutex
-	var received []model.Flow
-	var counterReceived []SFlowCounterSample
-
-	handler := func(flows []model.Flow) {
-		mu.Lock()
-		received = append(received, flows...)
-		mu.Unlock()
-	}
-	counterHandler := func(counters []SFlowCounterSample) {
-		mu.Lock()
-		counterReceived = append(counterReceived, counters...)
-		mu.Unlock()
-	}
+	env, handler, counterHandler := setupCollectorTest()
 
 	// Find a free port for sFlow.
 	l, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -407,26 +394,26 @@ func TestCollector_SFlowOnDedicatedPort(t *testing.T) {
 	// Wait for flows and counters.
 	deadline := time.After(3 * time.Second)
 	for {
-		mu.Lock()
-		gotFlows := len(received) >= 1
-		gotCounters := len(counterReceived) >= 1
-		mu.Unlock()
+		env.mu.Lock()
+		gotFlows := len(env.received) >= 1
+		gotCounters := len(env.counterReceived) >= 1
+		env.mu.Unlock()
 		if gotFlows && gotCounters {
 			break
 		}
 		select {
 		case <-deadline:
-			mu.Lock()
-			t.Fatalf("timed out: flows=%d counters=%d, want 1 each", len(received), len(counterReceived))
-			mu.Unlock()
+			env.mu.Lock()
+			t.Fatalf("timed out: flows=%d counters=%d, want 1 each", len(env.received), len(env.counterReceived))
+			env.mu.Unlock()
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	env.mu.Lock()
+	defer env.mu.Unlock()
 
-	f := received[0]
+	f := env.received[0]
 	if f.DstPort != 443 {
 		t.Errorf("sFlow flow DstPort = %d, want 443", f.DstPort)
 	}
@@ -437,7 +424,7 @@ func TestCollector_SFlowOnDedicatedPort(t *testing.T) {
 		t.Errorf("sFlow flow ExporterIP = %s, want 127.0.0.1", f.ExporterIP)
 	}
 
-	cs := counterReceived[0]
+	cs := env.counterReceived[0]
 	if cs.IfIndex != 5 {
 		t.Errorf("sFlow counter IfIndex = %d, want 5", cs.IfIndex)
 	}
