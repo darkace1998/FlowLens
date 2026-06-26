@@ -13,6 +13,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | SYN Flood Detector | Detects targets receiving excessive TCP SYN packets (potential SYN flood) |
 | UDP Flood Detector | Detects targets receiving excessive UDP packets (potential UDP flood) |
 | Brute Force Detector | Detects potential login brute-force attempts based on many distinct connections to common login ports |
+| Suspicious TCP Flags Detector | Detects potential stealth port scanning or OS fingerprinting by identifying abnormal TCP flag combinations (e.g. SYN-FIN, XMAS) |
 | Anomaly Detector | Detects spikes/drops against historical baseline |
 | DNS Volume | Flags unusual DNS rates and ratios |
 | Flow Asymmetry | Detects directional imbalances between peers |
