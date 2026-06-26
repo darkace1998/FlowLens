@@ -1,6 +1,9 @@
 package logging
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -67,4 +70,19 @@ func TestSetLevel(t *testing.T) {
 	l.Info("suppressed")
 	l.Warn("suppressed")
 	l.Error("visible")
+}
+
+func TestSetOutput(t *testing.T) {
+	l := Default()
+	var buf bytes.Buffer
+	l.SetOutput(&buf)
+	defer l.SetOutput(os.Stderr)
+
+	l.SetLevel(INFO)
+	l.Info("test output %s", "message")
+
+	output := buf.String()
+	if !strings.Contains(output, "[INFO] test output message") {
+		t.Errorf("expected log output to contain %q, got %q", "[INFO] test output message", output)
+	}
 }
