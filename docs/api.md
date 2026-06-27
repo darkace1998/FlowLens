@@ -118,11 +118,11 @@ Exports filtered flows in CSV or JSON format.
 
 Query params:
 
-Supports all filter query parameters available for `GET /api/flows`, plus:
-
 | Param | Type | Description |
 |---|---|---|
 | `format` | string | Output format: `csv` or `json` (default: `csv`) |
+
+*Note: This endpoint also accepts all the flow filtering parameters available on `GET /api/flows` (e.g., `src_ip`, `dst_ip`, `protocol`, `bytes_min`, etc.).*
 
 ### `GET /reports/export`
 
@@ -133,6 +133,12 @@ Query params:
 | Param | Type | Description |
 |---|---|---|
 | `format` | string | Output format: `csv` or `json` (default: `csv`) |
+| `start` | string | Start timestamp (RFC3339) |
+| `end` | string | End timestamp (RFC3339) |
+| `src_ip` | string | Source IP filter |
+| `dst_ip` | string | Destination IP filter |
+| `protocol` | string | Protocol filter |
+| `group_by` | string | Grouping field (e.g. `app_proto`, `src_ip`) (default: `app_proto`) |
 
 ### `GET /api/hosts`
 
@@ -366,33 +372,6 @@ Simple ping endpoint to check if the server is running. Returns `pong`.
 
 *Note: This endpoint does not require authentication even if Basic Auth is enabled.*
 
-
-### `GET /flows/export`
-
-Export filtered flows from the in-memory ring buffer.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Export format: `csv` or `json` (required) |
-
-*Note: This endpoint also accepts all the flow filtering parameters available on `GET /api/flows` (e.g., `src_ip`, `dst_ip`, `protocol`, `bytes_min`, etc.).*
-
-### `GET /reports/export`
-
-Export aggregated historical flow reports from SQLite.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Export format: `csv` or `json` (required) |
-| `start` | string | Start timestamp (RFC3339) |
-| `end` | string | End timestamp (RFC3339) |
-| `src_ip` | string | Source IP filter |
-| `dst_ip` | string | Destination IP filter |
-| `protocol` | string | Protocol filter |
 
 ## Webhooks
 
