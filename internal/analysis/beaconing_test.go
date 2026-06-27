@@ -25,7 +25,7 @@ func TestBeaconingDetector_Analyze(t *testing.T) {
 	})
 
 	t.Run("Highly periodic beaconing", func(t *testing.T) {
-		var flows []model.Flow
+		flows := make([]model.Flow, 0, 20)
 		for i := 0; i < 20; i++ {
 			flows = append(flows, model.Flow{
 				Timestamp: now.Add(time.Duration(i*30) * time.Second),
@@ -52,8 +52,8 @@ func TestBeaconingDetector_Analyze(t *testing.T) {
 	})
 
 	t.Run("Random/Jittery non-beaconing traffic", func(t *testing.T) {
-		var flows []model.Flow
 		intervals := []int{10, 50, 10, 80, 20, 60, 5, 45, 90, 15, 75, 20, 100, 30}
+		flows := make([]model.Flow, 0, len(intervals))
 		current := now
 		for i, interval := range intervals {
 			current = current.Add(time.Duration(interval) * time.Second)
@@ -77,7 +77,7 @@ func TestBeaconingDetector_Analyze(t *testing.T) {
 	})
 
 	t.Run("Burst handling", func(t *testing.T) {
-		var flows []model.Flow
+		flows := make([]model.Flow, 0, 45)
 		current := now
 		for i := 0; i < 15; i++ {
 			for j := 0; j < 3; j++ {
@@ -103,7 +103,7 @@ func TestBeaconingDetector_Analyze(t *testing.T) {
 	})
 
 	t.Run("Short interval traffic (not beaconing)", func(t *testing.T) {
-		var flows []model.Flow
+		flows := make([]model.Flow, 0, 50)
 		for i := 0; i < 50; i++ {
 			flows = append(flows, model.Flow{
 				Timestamp: now.Add(time.Duration(i*2) * time.Second),
