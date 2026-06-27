@@ -156,6 +156,7 @@ func main() {
 		analysis.SYNFloodDetector{},
 		analysis.UDPFloodDetector{},
 		analysis.BruteForceDetector{},
+		analysis.SuspiciousFlagsDetector{},
 	)
 	engine.Start()
 
