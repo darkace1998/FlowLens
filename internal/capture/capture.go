@@ -27,8 +27,8 @@ type Source struct {
 	cfg        config.InterfaceConfig
 	handler    FlowHandler
 	rawHandler func(data []byte, ts time.Time)
-	stopCh  chan struct{}
-	wg      sync.WaitGroup
+	stopCh     chan struct{}
+	wg         sync.WaitGroup
 }
 
 // NewSource creates a new packet capture source.
@@ -39,7 +39,6 @@ func NewSource(cfg config.InterfaceConfig, handler FlowHandler) *Source {
 		stopCh:  make(chan struct{}),
 	}
 }
-
 
 // SetRawHandler sets a callback for raw packet data.
 func (s *Source) SetRawHandler(handler func(data []byte, ts time.Time)) {
