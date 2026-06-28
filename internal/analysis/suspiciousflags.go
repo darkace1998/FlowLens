@@ -80,7 +80,7 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 		synfin := flags&0x03 == 0x03
 		synrst := flags&0x06 == 0x06
 		xmasFlag := flags&0x39 == 0x29 // FIN, PSH, URG, without ACK
-		finonly := flags&0x13 == 0x01 // FIN without SYN and ACK
+		finonly := flags&0x13 == 0x01  // FIN without SYN and ACK
 
 		if synfin {
 			st = synFin

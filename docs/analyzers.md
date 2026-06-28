@@ -23,5 +23,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Port Concentration | Flags many sources converging on one destination port |
 | VoIP Quality | Estimates MOS-like quality for voice/video sessions |
 | Long Connection Detector | Flags TCP/UDP connections exceeding a configured duration |
+| Beaconing Detector | Detects periodic connection attempts typical of malware C2 beaconing or automated telemetry |
 
 Use `analysis.webhook_url` to forward advisories to external systems.

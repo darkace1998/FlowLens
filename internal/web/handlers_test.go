@@ -694,9 +694,9 @@ func TestFilterOperators(t *testing.T) {
 
 	// Test ParseNumericFilter
 	filterTests := []struct {
-		input         string
-		expectedValue float64
-		expectedOp    FilterOperator
+		input          string
+		expectedValue  float64
+		expectedOp     FilterOperator
 		expectedActive bool
 	}{
 		{">100", 100, FilterOpGreaterThan, true},
