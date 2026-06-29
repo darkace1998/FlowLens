@@ -25,5 +25,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | VoIP Quality | Estimates MOS-like quality for voice/video sessions |
 | Long Connection Detector | Flags TCP/UDP connections exceeding a configured duration |
 | Beaconing Detector | Detects periodic connection attempts typical of malware C2 beaconing or automated telemetry |
+| Broadcast Storm Detector | Detects abnormally high volumes of broadcast or multicast traffic originating from a single source |
 
 Use `analysis.webhook_url` to forward advisories to external systems.
