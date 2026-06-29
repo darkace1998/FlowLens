@@ -155,6 +155,7 @@ func main() {
 		analysis.ICMPFloodDetector{},
 		analysis.SYNFloodDetector{},
 		analysis.UDPFloodDetector{},
+		analysis.RSTFloodDetector{},
 		analysis.BruteForceDetector{},
 		analysis.SuspiciousFlagsDetector{},
 		analysis.BeaconingDetector{},
