@@ -21,6 +21,12 @@ go build -o flowlens ./cmd/flowlens/
 ./flowlens
 ```
 
+Run with a custom config file:
+
+```bash
+./flowlens configs/flowlens.yaml
+```
+
 ### Run with Docker
 
 ```bash
