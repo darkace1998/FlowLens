@@ -34,7 +34,7 @@ If you encounter issues while running FlowLens, check the common problems and so
 
 **Solutions:**
 1. **Built-in Ranges:** FlowLens includes a small set of well-known IP ranges built-in. If you rely on this, most traffic will not be geolocated.
-2. **Download a GeoIP Database:** For full geolocation, download a compatible CSV database (like IP2Location LITE DB5).
+2. **Download a GeoIP Database:** For full geolocation, download a compatible CSV database (like IP2Location LITE DB5). Make sure to extract the downloaded ZIP file to get the underlying CSV file.
 3. **Configure the Path:** Set `storage.geoip_path` in `flowlens.yaml` to point to the CSV file.
 4. **Docker Mount:** If using Docker, ensure you mount the CSV file into the container and update `geoip_path` accordingly (e.g., `-v /path/to/db.csv:/app/db.csv` and set `geoip_path: "/app/db.csv"`).
 

@@ -70,6 +70,8 @@ Make sure `storage.geoip_path` in `flowlens.yaml` points to `/app/db.csv`.
 docker compose up -d
 ```
 
+To use a custom configuration file, uncomment the relevant volume line in `docker-compose.yml` before starting.
+
 ## Run with Helm
 
 ```bash
