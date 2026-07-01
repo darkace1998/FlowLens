@@ -160,6 +160,7 @@ func main() {
 		analysis.SuspiciousFlagsDetector{},
 		analysis.BeaconingDetector{},
 		analysis.DNSTunnelingDetector{},
+		analysis.BroadcastStormDetector{},
 	)
 	engine.Start()
 
