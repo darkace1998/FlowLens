@@ -175,7 +175,7 @@ This endpoint does not accept any query parameters.
 {
   "advisories": [
     {
-      "severity": "high",
+      "severity": "WARNING",
       "timestamp": "2023-10-25T09:58:00Z",
       "title": "Port Scan Detected",
       "description": "Host 192.168.1.100 is scanning multiple ports on 10.0.0.5.",
@@ -343,7 +343,7 @@ When `analysis.webhook_url` is configured, FlowLens will send new advisories to 
   "timestamp": "2023-10-25T10:00:00Z",
   "advisories": [
     {
-      "severity": "high",
+      "severity": "WARNING",
       "title": "Port Scan Detected",
       "description": "Host 192.168.1.100 is scanning multiple ports on 10.0.0.5.",
       "action": "Investigate host 192.168.1.100 for compromise."
