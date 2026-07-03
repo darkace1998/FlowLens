@@ -161,6 +161,7 @@ func main() {
 		analysis.BeaconingDetector{},
 		analysis.DNSTunnelingDetector{},
 		analysis.BroadcastStormDetector{},
+		analysis.ICMPTunnelingDetector{},
 	)
 	engine.Start()
 
