@@ -16,3 +16,4 @@ This directory contains detailed project documentation. The top-level `README.md
 | [`development.md`](development.md) | Build, test, lint, and CI workflows |
 | [`reverse-proxy.md`](reverse-proxy.md) | nginx and Caddy reverse proxy examples |
 | [`troubleshooting.md`](troubleshooting.md) | Common issues and solutions |
+| [`capture.md`](capture.md) | Packet capture and PCAP import guidance |
