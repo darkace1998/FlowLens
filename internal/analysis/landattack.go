@@ -85,9 +85,7 @@ func (LandAttackDetector) Analyze(store storage.Storage, cfg config.AnalysisConf
 					"This is highly indicative of a spoofed LAND attack.",
 				stats.Packets, stats.Bytes, ip,
 			),
-			Action: fmt.Sprintf(
-				"Investigate the network segment for IP spoofing. Ensure anti-spoofing (BCP38) and drop rules for same-source-destination traffic are in place.",
-			),
+			Action: "Investigate the network segment for IP spoofing. Ensure anti-spoofing (BCP38) and drop rules for same-source-destination traffic are in place.",
 		})
 	}
 
