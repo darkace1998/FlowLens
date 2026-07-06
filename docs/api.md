@@ -332,6 +332,46 @@ Simple ping endpoint to check if the server is running. Returns `pong`.
 *Note: This endpoint does not require authentication even if Basic Auth is enabled.*
 
 
+
+### `POST /flows/filter-preset/save`
+
+Saves a new filter preset or overwrites an existing one. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset. |
+| `description` | string | Optional description of the preset. |
+
+*Note: All query parameters present in the request URL (except `preset_err`, `save_preset`, `load_preset`, and `delete_preset`) are saved as the filter string for the preset.*
+
+Returns a redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
+
+### `GET /flows/filter-preset/load`
+
+Loads a saved filter preset and redirects to the flows explorer with the preset's filters applied.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset to load. |
+
+Returns an HTTP 303 See Other redirect to `/flows?{preset_filters}`. If the preset is not found or an error occurs, it redirects to `/flows` with a `preset_err` query parameter.
+
+### `POST /flows/filter-preset/delete`
+
+Deletes a saved filter preset. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset to delete. |
+
+Returns an HTTP 303 See Other redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
+
 ## Webhooks
 
 When `analysis.webhook_url` is configured, FlowLens will send new advisories to the configured URL via HTTP POST. The payload is sent as `application/json`.
