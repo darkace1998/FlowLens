@@ -112,6 +112,7 @@ type APIDashboardResponse struct {
 	TopSrc       []APITalkerEntry   `json:"top_src"`
 	TopDst       []APITalkerEntry   `json:"top_dst"`
 	Protocols    []APIProtocolEntry `json:"protocols"`
+	TopAS        []APIAS            `json:"top_as"`
 }
 
 // APITalkerEntry is a top-talker entry in the dashboard API.
@@ -124,6 +125,15 @@ type APITalkerEntry struct {
 
 // APIProtocolEntry is a protocol breakdown entry in the dashboard API.
 type APIProtocolEntry struct {
+	Name    string  `json:"name"`
+	Bytes   uint64  `json:"bytes"`
+	Packets uint64  `json:"packets"`
+	Pct     float64 `json:"pct"`
+}
+
+// APIAS is an Autonomous System entry in the dashboard API.
+type APIAS struct {
+	ASN     uint32  `json:"asn"`
 	Name    string  `json:"name"`
 	Bytes   uint64  `json:"bytes"`
 	Packets uint64  `json:"packets"`
@@ -589,6 +599,11 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 		protocols[i] = APIProtocolEntry{Name: p.Name, Bytes: p.Bytes, Packets: p.Packets, Pct: p.Pct}
 	}
 
+	topAS := make([]APIAS, len(data.TopAS))
+	for i, a := range data.TopAS {
+		topAS[i] = APIAS(a)
+	}
+
 	writeJSON(w, http.StatusOK, APIDashboardResponse{
 		TotalBytes:   data.TotalBytes,
 		TotalPackets: data.TotalPackets,
@@ -601,6 +616,7 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 		TopSrc:       topSrc,
 		TopDst:       topDst,
 		Protocols:    protocols,
+		TopAS:        topAS,
 	})
 }
 
