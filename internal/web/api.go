@@ -601,7 +601,7 @@ func (s *Server) handleAPIDashboard(w http.ResponseWriter, r *http.Request) {
 
 	topAS := make([]APIAS, len(data.TopAS))
 	for i, a := range data.TopAS {
-		topAS[i] = APIAS{ASN: a.ASN, Name: a.Name, Bytes: a.Bytes, Packets: a.Packets, Pct: a.Pct}
+		topAS[i] = APIAS(a)
 	}
 
 	writeJSON(w, http.StatusOK, APIDashboardResponse{
