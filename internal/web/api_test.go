@@ -204,8 +204,11 @@ func TestAPIDashboard_Empty(t *testing.T) {
 
 func TestAPIDashboard_WithData(t *testing.T) {
 	s, rb := newTestServer(t)
+	f1 := makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50)
+	f1.DstAS = 15169 // Google
+	f1.SrcAS = 13335 // Cloudflare
 	flows := []model.Flow{
-		makeTestFlow("10.0.1.1", "192.168.1.1", 12345, 80, 6, 5000, 50),
+		f1,
 	}
 	rb.Insert(flows)
 
@@ -220,6 +223,23 @@ func TestAPIDashboard_WithData(t *testing.T) {
 	}
 	if resp.TotalBytes != 5000 {
 		t.Errorf("TotalBytes = %d, want 5000", resp.TotalBytes)
+	}
+	if len(resp.TopAS) == 0 {
+		t.Errorf("TopAS is empty")
+	} else {
+		found := false
+		for _, a := range resp.TopAS {
+			if a.ASN == 15169 {
+				found = true
+				if a.Bytes != 5000 {
+					t.Errorf("TopAS Bytes for 15169 = %d, want 5000", a.Bytes)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("TopAS did not contain expected ASN 15169")
+		}
 	}
 }
 

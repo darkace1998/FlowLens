@@ -233,6 +233,15 @@ This endpoint does not accept any query parameters.
       "packets": 14000,
       "pct": 90.0
     }
+  ],
+  "top_as": [
+    {
+      "asn": 15169,
+      "name": "Google",
+      "bytes": 2500000,
+      "packets": 7000,
+      "pct": 50.0
+    }
   ]
 }
 ```
