@@ -29,5 +29,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Beaconing Detector | Detects periodic connection attempts typical of malware C2 beaconing or automated telemetry |
 | Broadcast Storm Detector | Detects abnormally high volumes of broadcast or multicast traffic originating from a single source |
 | LAND Attack Detector | Identifies spoofed traffic where the source and destination IP addresses are identical |
+| Lateral Movement Detector | Identifies hosts connecting to many distinct destination IPs on common administrative and lateral movement ports (e.g. SMB, RDP) |
 
 Use `analysis.webhook_url` to forward advisories to external systems.
