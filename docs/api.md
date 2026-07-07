@@ -372,6 +372,55 @@ Form values:
 
 Returns an HTTP 303 See Other redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
 
+### `POST /capture/start`
+
+Starts a new packet capture session on the specified interface. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `device` | string | **Required**. The network device to capture from. |
+| `bpf` | string | Optional BPF filter. |
+
+Returns a redirect to `/capture` or an HTTP error on failure.
+
+### `POST /capture/stop`
+
+Stops an active packet capture session. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `id` | string | **Required**. The session ID to stop. |
+
+Returns a redirect to `/capture` or an HTTP error on failure.
+
+### `GET /capture/download`
+
+Downloads a generated PCAP file.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `file` | string | **Required**. The filename of the PCAP to download. |
+
+Returns the requested PCAP file or an HTTP error if the file is not found.
+
+### `POST /pcap/import`
+
+Uploads and imports a PCAP file for analysis. This endpoint is meant to be called from the web UI and accepts `multipart/form-data`.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `pcap` | file | **Required**. The PCAP file to import. |
+
+Returns a redirect to `/sessions` or an HTTP error on failure.
+
 ## Webhooks
 
 When `analysis.webhook_url` is configured, FlowLens will send new advisories to the configured URL via HTTP POST. The payload is sent as `application/json`.
