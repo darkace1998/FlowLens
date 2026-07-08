@@ -352,6 +352,7 @@ Form values:
 |---|---|---|
 | `name` | string | **Required**. The name of the preset. |
 | `description` | string | Optional description of the preset. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 *Note: All query parameters present in the request URL (except `preset_err`, `save_preset`, `load_preset`, and `delete_preset`) are saved as the filter string for the preset.*
 
@@ -378,6 +379,7 @@ Form values:
 | Param | Type | Description |
 |---|---|---|
 | `name` | string | **Required**. The name of the preset to delete. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 Returns an HTTP 303 See Other redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
 
@@ -391,6 +393,7 @@ Form values:
 |---|---|---|
 | `device` | string | **Required**. The network device to capture from. |
 | `bpf` | string | Optional BPF filter. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 Returns a redirect to `/capture` or an HTTP error on failure.
 
@@ -403,6 +406,7 @@ Form values:
 | Param | Type | Description |
 |---|---|---|
 | `id` | string | **Required**. The session ID to stop. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 Returns a redirect to `/capture` or an HTTP error on failure.
 
@@ -427,6 +431,7 @@ Form values:
 | Param | Type | Description |
 |---|---|---|
 | `pcap` | file | **Required**. The PCAP file to import. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 Returns a redirect to `/sessions` or an HTTP error on failure.
 
