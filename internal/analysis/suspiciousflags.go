@@ -110,7 +110,7 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 		targets int
 		packets uint64
 	}
-	var results []result
+	results := make([]result, 0, len(scans))
 
 	for key, s := range scans {
 		if len(s.targets) == 0 {

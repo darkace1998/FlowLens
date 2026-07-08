@@ -86,7 +86,7 @@ func (LongConnectionDetector) Analyze(store storage.Storage, cfg config.Analysis
 		fk    flowKey
 		stats *flowStats
 	}
-	var results []result
+	results := make([]result, 0, len(longest))
 	for k, v := range longest {
 		results = append(results, result{fk: k, stats: v})
 	}

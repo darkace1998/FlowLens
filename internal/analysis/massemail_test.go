@@ -40,7 +40,7 @@ func TestMassEmailDetector(t *testing.T) {
 		{
 			name: "Below threshold (19 distinct targets)",
 			flows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 19)
 				for i := 1; i <= 19; i++ {
 					flows = append(flows, model.Flow{
 						Timestamp: now,
@@ -59,7 +59,7 @@ func TestMassEmailDetector(t *testing.T) {
 		{
 			name: "Warning threshold (20 distinct targets)",
 			flows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 20)
 				for i := 1; i <= 20; i++ {
 					flows = append(flows, model.Flow{
 						Timestamp: now,
@@ -79,7 +79,7 @@ func TestMassEmailDetector(t *testing.T) {
 		{
 			name: "Critical threshold (60 distinct targets)",
 			flows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 60)
 				for i := 1; i <= 60; i++ {
 					flows = append(flows, model.Flow{
 						Timestamp: now,
@@ -99,7 +99,7 @@ func TestMassEmailDetector(t *testing.T) {
 		{
 			name: "Non-TCP traffic ignored",
 			flows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 25)
 				for i := 1; i <= 25; i++ {
 					flows = append(flows, model.Flow{
 						Timestamp: now,
@@ -118,7 +118,7 @@ func TestMassEmailDetector(t *testing.T) {
 		{
 			name: "Non-SMTP ports ignored",
 			flows: func() []model.Flow {
-				var flows []model.Flow
+				flows := make([]model.Flow, 0, 25)
 				for i := 1; i <= 25; i++ {
 					flows = append(flows, model.Flow{
 						Timestamp: now,
