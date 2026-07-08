@@ -164,6 +164,7 @@ func main() {
 		analysis.ICMPTunnelingDetector{},
 		analysis.LandAttackDetector{},
 		analysis.LateralMovementDetector{},
+		analysis.MassEmailDetector{},
 	)
 	engine.Start()
 
