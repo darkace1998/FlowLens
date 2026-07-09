@@ -31,10 +31,11 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 
 	type scanType string
 	const (
-		synFin scanType = "SYN-FIN"
-		synRst scanType = "SYN-RST"
-		xmas   scanType = "XMAS"
-		fin    scanType = "FIN"
+		synFin   scanType = "SYN-FIN"
+		synRst   scanType = "SYN-RST"
+		xmas     scanType = "XMAS"
+		fin      scanType = "FIN"
+		nullScan scanType = "NULL"
 	)
 
 	type scanKey struct {
@@ -67,31 +68,33 @@ func (SuspiciousFlagsDetector) Analyze(store storage.Storage, cfg config.Analysi
 		}
 
 		flags := f.TCPFlags
-		if flags == 0 {
-			// Some exporters might not send flags, we only consider explicit NULL if we know it's a 1 packet flow or something?
-			// A pure NULL scan has flags == 0, but this might be noisy if exporter strips flags.
-			// Let's only alert on NULL if we want to, but actually NULL scan is specifically flags=0 on a probe.
-			// Let's skip NULL for now to avoid false positives from exporters that don't support flags.
-			continue
-		}
-
 		var st scanType
 
-		synfin := flags&0x03 == 0x03
-		synrst := flags&0x06 == 0x06
-		xmasFlag := flags&0x39 == 0x29 // FIN, PSH, URG, without ACK
-		finonly := flags&0x13 == 0x01  // FIN without SYN and ACK
-
-		if synfin {
-			st = synFin
-		} else if synrst {
-			st = synRst
-		} else if xmasFlag {
-			st = xmas
-		} else if finonly {
-			st = fin
+		if flags == 0 {
+			// To reduce false positives from exporters that don't send flags,
+			// we only consider it a NULL scan probe if it's a single packet flow.
+			if f.Packets == 1 {
+				st = nullScan
+			} else {
+				continue
+			}
 		} else {
-			continue
+			synfin := flags&0x03 == 0x03
+			synrst := flags&0x06 == 0x06
+			xmasFlag := flags&0x39 == 0x29 // FIN, PSH, URG, without ACK
+			finonly := flags&0x13 == 0x01  // FIN without SYN and ACK
+
+			if synfin {
+				st = synFin
+			} else if synrst {
+				st = synRst
+			} else if xmasFlag {
+				st = xmas
+			} else if finonly {
+				st = fin
+			} else {
+				continue
+			}
 		}
 
 		key := scanKey{srcIP: to16(f.SrcAddr), sType: st}
