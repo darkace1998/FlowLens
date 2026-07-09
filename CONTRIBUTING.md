@@ -121,6 +121,20 @@ internal/
 
 All application code lives under `internal/` — it is not importable by external packages.
 
+## Common Development Tasks
+
+### Adding a New Analyzer
+
+When adding a new analysis module (detector) to FlowLens, it must be registered by adding its struct (e.g., `analysis.NewDetector{}`) to the `analysis.NewEngine(...)` initialization list in `cmd/flowlens/main.go` and its description must be added to the reference table in `docs/analyzers.md`.
+
+### Adding a New API Endpoint
+
+When adding new API endpoints to FlowLens, define the handler and response structs in `internal/web/api.go`, register the route using `s.mux.HandleFunc` in `internal/web/server.go`, add unit tests in `internal/web/api_test.go`, and update the JSON response documentation in `docs/api.md`.
+
+### Adding a New HTML Page
+
+When adding a new HTML template page to the FlowLens web UI, register the parsed template as a field on the `Server` struct in `internal/web/server.go` (e.g., initialized via `template.Must(...)` including `layout.xhtml`) and add a corresponding navigation link to `internal/web/templates/layout.xhtml`.
+
 ## Pull Request Process
 
 1. **One concern per PR** — keep changes focused and reviewable.
