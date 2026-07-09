@@ -54,8 +54,8 @@ func TestSuspiciousFlagsDetector_NormalTraffic(t *testing.T) {
 	f5 := makeFlow("10.0.0.1", "192.168.1.1", 12345, 53, 17, 100, 1)
 	rb.Insert([]model.Flow{f5})
 
-	// Missing Flags (0x00)
-	f6 := makeFlow("10.0.0.1", "192.168.1.1", 12345, 80, 6, 100, 1)
+	// Missing Flags (0x00) with Packets > 1 should be ignored
+	f6 := makeFlow("10.0.0.1", "192.168.1.1", 12345, 80, 6, 1000, 10)
 	f6.TCPFlags = 0x00
 	rb.Insert([]model.Flow{f6})
 
@@ -122,6 +122,32 @@ func TestSuspiciousFlagsDetector_XmasCritical(t *testing.T) {
 	}
 
 	expectedTitle := "Suspicious TCP Flags (XMAS): 10.0.0.2"
+	if advisories[0].Title != expectedTitle {
+		t.Errorf("expected title %q, got %q", expectedTitle, advisories[0].Title)
+	}
+}
+
+func TestSuspiciousFlagsDetector_Null(t *testing.T) {
+	rb := storage.NewRingBuffer(1000)
+
+	flows := make([]model.Flow, 0, 5)
+	// Create flows hitting 5 targets
+	for i := 0; i < 5; i++ {
+		dst := fmt.Sprintf("192.168.1.%d", i+1)
+		f := makeFlow("10.0.0.5", dst, 12345, 80, 6, 100, 1)
+		f.TCPFlags = 0x00 // NULL scan (flags=0, packets=1)
+		flows = append(flows, f)
+	}
+	rb.Insert(flows)
+
+	detector := SuspiciousFlagsDetector{}
+	advisories := detector.Analyze(rb, defaultCfg())
+
+	if len(advisories) != 1 {
+		t.Fatalf("expected 1 advisory, got %d", len(advisories))
+	}
+
+	expectedTitle := "Suspicious TCP Flags (NULL): 10.0.0.5"
 	if advisories[0].Title != expectedTitle {
 		t.Errorf("expected title %q, got %q", expectedTitle, advisories[0].Title)
 	}
