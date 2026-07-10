@@ -10,7 +10,7 @@ FlowLens is configured through YAML. Start from `configs/flowlens.yaml`.
 | `collector` | `ipfix_port` | `4739` | UDP port for IPFIX |
 | `collector` | `sflow_port` | `6343` | UDP port for sFlow v5 |
 | `collector` | `buffer_size` | `65535` | UDP read buffer size (bytes) |
-| `collector` | `rate_limit` | `0` | Max packets/sec per exporter IP (`0` = unlimited) |
+| `collector` | `rate_limit` | `0` | Max packets/sec per source IP (`0` = unlimited) |
 | `collector` | `interface_names` | `{}` | Map of ifIndex to human-readable name (e.g. `{"1": "eth0"}`) |
 | `collector` | `interfaces` | `[]` | List of multiple collector instances bound to different addresses (see Interface Options) |
 | `storage` | `ring_buffer_duration` | `10m` | In-memory retention window |
