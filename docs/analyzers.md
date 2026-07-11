@@ -32,4 +32,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Lateral Movement Detector | Identifies hosts connecting to many distinct destination IPs on common administrative and lateral movement ports (e.g. SMB, RDP) |
 | Mass Email Detector | Identifies a single source IP connecting to many distinct destination IPs on SMTP ports (potential spam botnet) |
 
+| Exposed Service Detector | Identifies potentially dangerous exposure of internal management or database services (e.g., RDP, SMB, Telnet, Databases) to the public internet |
+
 Use `analysis.webhook_url` to forward advisories to external systems.
