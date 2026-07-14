@@ -165,7 +165,7 @@ This endpoint does not accept any query parameters.
 
 ### `GET /api/advisories`
 
-Active and resolved advisories with severity, context, and action guidance.
+Active and resolved advisories with severity (`INFO`, `WARNING`, or `CRITICAL`), context, and action guidance.
 
 This endpoint does not accept any query parameters.
 
@@ -189,6 +189,9 @@ This endpoint does not accept any query parameters.
 ### `GET /api/dashboard`
 
 Dashboard summary payload:
+
+*Note: When aggregating Autonomous System (AS) statistics (`top_as`), FlowLens prioritizes the destination ASN (`dst_as`). If `dst_as` is 0, it falls back to the source ASN (`src_as`).*
+
 
 - totals (`bytes`, `packets`, `flow_count`)
 - live rates (`bps`, `pps`)
@@ -437,7 +440,7 @@ Returns a redirect to `/sessions` or an HTTP error on failure.
 
 ## Webhooks
 
-When `analysis.webhook_url` is configured, FlowLens will send new advisories to the configured URL via HTTP POST. The payload is sent as `application/json`.
+When `analysis.webhook_url` is configured, FlowLens will send new advisories to the configured URL via HTTP POST. The payload is sent as `application/json`. The `severity` field uses exact uppercase strings: `"INFO"`, `"WARNING"`, or `"CRITICAL"`.
 
 **Example Payload:**
 

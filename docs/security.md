@@ -12,6 +12,8 @@ web:
 
 If both values are empty, auth is disabled.
 
+*Note: The `/healthz` and `/ping` endpoints always bypass authentication and do not require credentials, even when Basic Auth is enabled.*
+
 ## TLS
 
 Built-in TLS is enabled when both `web.tls_cert` and `web.tls_key` are set:
