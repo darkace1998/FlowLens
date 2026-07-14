@@ -33,3 +33,4 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Mass Email Detector | Identifies a single source IP connecting to many distinct destination IPs on SMTP ports (potential spam botnet) |
 
 Use `analysis.webhook_url` to forward advisories to external systems.
+| Elephant Flow Detector | Identifies single network connections that consume a massive amount of bandwidth, which can cause network congestion and degrade the performance of other flows |
