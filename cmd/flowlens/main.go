@@ -158,6 +158,7 @@ func main() {
 		analysis.RSTFloodDetector{},
 		analysis.BruteForceDetector{},
 		analysis.SuspiciousFlagsDetector{},
+		analysis.ExposedServiceDetector{},
 		analysis.BeaconingDetector{},
 		analysis.DNSTunnelingDetector{},
 		analysis.BroadcastStormDetector{},

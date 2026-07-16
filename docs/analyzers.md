@@ -15,6 +15,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | TCP RST Flood Detector | Detects targets receiving excessive TCP RST packets (potential RST flood or backscatter) |
 | Brute Force Detector | Detects potential login brute-force attempts based on many distinct connections to common login ports |
 | Suspicious TCP Flags Detector | Detects potential stealth port scanning or OS fingerprinting by identifying abnormal TCP flag combinations (e.g. SYN-FIN, XMAS) |
+| Exposed Service Detector | Detects connections from public IP addresses to internal hosts on sensitive ports (e.g., SSH, RDP, databases), highlighting unintended exposure |
 | DNS Tunneling Detector | Detects data exfiltration or malware C2 over DNS by identifying unusually large outbound DNS queries from a single host |
 | ICMP Tunneling Detector | Detects data exfiltration or malware C2 over ICMP by identifying unusually large outbound ICMP/ICMPv6 packets from a single host |
 | Anomaly Detection | Detects spikes/drops against historical baseline |
