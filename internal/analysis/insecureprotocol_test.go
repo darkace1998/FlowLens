@@ -93,11 +93,12 @@ func TestInsecureProtocolDetector_Warning(t *testing.T) {
 		if a.Severity != WARNING {
 			t.Errorf("expected WARNING severity, got %v", a.Severity)
 		}
-		if a.Title == "Insecure Protocol Usage: 192.168.1.1 (FTP)" {
+		switch a.Title {
+		case "Insecure Protocol Usage: 192.168.1.1 (FTP)":
 			foundFTP = true
-		} else if a.Title == "Insecure Protocol Usage: 192.168.1.2 (Telnet)" {
+		case "Insecure Protocol Usage: 192.168.1.2 (Telnet)":
 			foundTelnet = true
-		} else {
+		default:
 			t.Errorf("unexpected title: %s", a.Title)
 		}
 	}
