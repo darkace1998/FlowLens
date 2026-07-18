@@ -10,6 +10,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Port Scan Detector | Detects reconnaissance patterns by unique-port fanout |
 | Network Sweep Detector | Detects hosts connecting to many unique destination IPs |
 | ICMP Flood Detector | Detects hosts receiving a large number of ICMP packets |
+| HTTP Flood Detector | Detects targets receiving a large number of HTTP/HTTPS requests (potential layer 7 DoS/DDoS) |
 | SYN Flood Detector | Detects targets receiving excessive TCP SYN packets (potential SYN flood) |
 | UDP Flood Detector | Detects targets receiving excessive UDP packets (potential UDP flood) |
 | TCP RST Flood Detector | Detects targets receiving excessive TCP RST packets (potential RST flood or backscatter) |
