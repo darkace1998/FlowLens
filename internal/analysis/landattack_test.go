@@ -19,18 +19,18 @@ func TestLandAttackDetector(t *testing.T) {
 		wantSev Severity
 	}{
 		{
-			name: "No Flows",
+			name:  "No Flows",
 			flows: []model.Flow{},
-			want: 0,
+			want:  0,
 		},
 		{
 			name: "Normal Flow",
 			flows: []model.Flow{
 				{
-					SrcAddr: net.ParseIP("192.168.1.5"),
-					DstAddr: net.ParseIP("192.168.1.10"),
+					SrcAddr:   net.ParseIP("192.168.1.5"),
+					DstAddr:   net.ParseIP("192.168.1.10"),
 					Timestamp: time.Now(), Packets: 10,
-					Bytes:   1000,
+					Bytes: 1000,
 				},
 			},
 			want: 0,
@@ -39,10 +39,10 @@ func TestLandAttackDetector(t *testing.T) {
 			name: "Loopback Flow",
 			flows: []model.Flow{
 				{
-					SrcAddr: net.ParseIP("127.0.0.1"),
-					DstAddr: net.ParseIP("127.0.0.1"),
+					SrcAddr:   net.ParseIP("127.0.0.1"),
+					DstAddr:   net.ParseIP("127.0.0.1"),
 					Timestamp: time.Now(), Packets: 50,
-					Bytes:   5000,
+					Bytes: 5000,
 				},
 			},
 			want: 0,
@@ -51,10 +51,10 @@ func TestLandAttackDetector(t *testing.T) {
 			name: "LAND Attack Flow",
 			flows: []model.Flow{
 				{
-					SrcAddr: net.ParseIP("10.0.0.5"),
-					DstAddr: net.ParseIP("10.0.0.5"),
+					SrcAddr:   net.ParseIP("10.0.0.5"),
+					DstAddr:   net.ParseIP("10.0.0.5"),
 					Timestamp: time.Now(), Packets: 100,
-					Bytes:   6000,
+					Bytes: 6000,
 				},
 			},
 			want:    1,
@@ -64,16 +64,16 @@ func TestLandAttackDetector(t *testing.T) {
 			name: "Multiple LAND Attack Packets",
 			flows: []model.Flow{
 				{
-					SrcAddr: net.ParseIP("192.168.1.50"),
-					DstAddr: net.ParseIP("192.168.1.50"),
+					SrcAddr:   net.ParseIP("192.168.1.50"),
+					DstAddr:   net.ParseIP("192.168.1.50"),
 					Timestamp: time.Now(), Packets: 10,
-					Bytes:   600,
+					Bytes: 600,
 				},
 				{
-					SrcAddr: net.ParseIP("192.168.1.50"),
-					DstAddr: net.ParseIP("192.168.1.50"),
+					SrcAddr:   net.ParseIP("192.168.1.50"),
+					DstAddr:   net.ParseIP("192.168.1.50"),
 					Timestamp: time.Now(), Packets: 20,
-					Bytes:   1200,
+					Bytes: 1200,
 				},
 			},
 			want:    1,
