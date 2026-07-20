@@ -23,7 +23,7 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | Retransmission Detector | Flags elevated TCP retransmission behavior |
 | Unreachable Host Detector | Detects repeated tiny flows to unavailable targets |
 | New Talker Detector | Identifies newly active hosts |
-| Port Concentration | Flags many sources converging on one destination port |
+| Port Concentration Detector | Flags many sources converging on one destination port |
 | VoIP Quality Detector | Estimates MOS-like quality for voice/video sessions |
 | Long Connection Detector | Flags TCP/UDP connections exceeding a configured duration |
 | Beaconing Detector | Detects periodic connection attempts typical of malware C2 beaconing or automated telemetry |
