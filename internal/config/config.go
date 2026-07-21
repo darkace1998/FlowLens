@@ -66,6 +66,7 @@ type AnalysisConfig struct {
 	MOSCriticalThreshold     float64       `yaml:"mos_critical_threshold"`     // MOS below this triggers critical (default: 3.0)
 	TopTalkerPercent         float64       `yaml:"top_talker_percent"`         // bandwidth % above which top talker triggers advisory (default: 25)
 	LongConnectionThreshold  time.Duration `yaml:"long_connection_threshold"`  // flow duration above this triggers advisory (default: 1h)
+	ExfiltrationThresholdMB  int           `yaml:"exfiltration_threshold_mb"`  // large outbound transfer size in MB to trigger advisory (default: 1024)
 	WebhookURL               string        `yaml:"webhook_url"`                // URL to POST advisories as JSON (optional, disabled when empty)
 }
 
@@ -119,6 +120,7 @@ func Defaults() Config {
 			MOSCriticalThreshold:     3.0,
 			TopTalkerPercent:         25,
 			LongConnectionThreshold:  1 * time.Hour,
+			ExfiltrationThresholdMB:  1024,
 		},
 		Web: WebConfig{
 			Listen:   ":8080",
