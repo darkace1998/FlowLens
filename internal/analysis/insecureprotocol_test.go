@@ -87,7 +87,7 @@ func TestInsecureProtocolDetector_SyslogIgnored(t *testing.T) {
 
 func TestInsecureProtocolDetector_MultipleClients(t *testing.T) {
 	rb := storage.NewRingBuffer(100)
-	flows := []model.Flow{}
+	flows := make([]model.Flow, 0, 5)
 	for i := 0; i < 5; i++ {
 		clientIP := fmt.Sprintf("10.0.0.%d", 100+i)
 		flows = append(flows, makeTestFlow(clientIP, "10.0.0.50", 12345, 23, 6, 100, 1)) // Telnet
