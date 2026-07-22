@@ -95,7 +95,7 @@ func TestRSTFloodDetector_Critical(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		src := fmt.Sprintf("10.0.0.%d", i+1)
 		f := makeFlow(src, "192.168.1.10", 12345, 80, 6, 40, 5000) // 10 * 5000 = 50,000
-		f.TCPFlags = 0x04 // RST
+		f.TCPFlags = 0x04                                          // RST
 		flows = append(flows, f)
 	}
 	rb.Insert(flows)
