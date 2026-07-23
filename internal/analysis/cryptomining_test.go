@@ -3,6 +3,7 @@ package analysis
 import (
 	"bytes"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func TestCryptoMiningDetector_StorageError(t *testing.T) {
 
 	var buf bytes.Buffer
 	logging.Default().SetOutput(&buf)
-	defer logging.Default().SetOutput(nil)
+	defer logging.Default().SetOutput(os.Stderr)
 
 	advisories := detector.Analyze(mockErrorStorage{}, defaultCfg())
 	if len(advisories) != 0 {
