@@ -6,163 +6,6 @@ When Basic Auth is enabled, include credentials in API requests.
 
 ## Endpoints
 
-### `GET /api/flows`
-
-Paginated flows from the in-memory ring buffer.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `page` | int | Page number (default: `1`) |
-| `src_ip` | string | Source IP filter |
-| `dst_ip` | string | Destination IP filter |
-| `ip` | string | Source-or-destination IP filter |
-| `port` | string | Source-or-destination port filter |
-| `protocol` | string | Protocol filter (for example `TCP`, `UDP`) |
-| `app_proto` | string | Application protocol filter (e.g., `DNS`, `HTTPS`) |
-| `app_cat` | string | Application category filter (e.g., `Network Services`) |
-| `start` | string | Start timestamp filter (RFC3339) |
-| `end` | string | End timestamp filter (RFC3339) |
-| `bytes_min` | int | Minimum bytes filter |
-| `bytes_max` | int | Maximum bytes filter |
-| `tcp_flags` | string | TCP flags filter |
-| `tos` | int | Type of Service (ToS) / DSCP filter |
-| `in_iface` | string | Input interface index filter |
-| `out_iface` | string | Output interface index filter |
-| `src_as` | int | Source ASN filter |
-| `dst_as` | int | Destination ASN filter |
-| `src_mac` | string | Source MAC address filter |
-| `dst_mac` | string | Destination MAC address filter |
-| `vlan` | int | VLAN ID filter |
-| `ether_type` | string | EtherType filter (e.g., `IPv4`, `IPv6`) |
-| `exporter` | string | Exporter IP filter |
-| `rtt_min` | int | Minimum RTT filter (microseconds) |
-| `rtt_max` | int | Maximum RTT filter (microseconds) |
-| `retrans_min` | int | Minimum retransmissions filter |
-| `ooo_min` | int | Minimum out-of-order packets filter |
-| `loss_min` | int | Minimum packet loss filter |
-| `jitter_min` | int | Minimum jitter filter (microseconds) |
-| `jitter_max` | int | Maximum jitter filter (microseconds) |
-| `mos_min` | float | Minimum MOS (Mean Opinion Score) filter |
-
-**Example Response:**
-
-```json
-{
-  "page": 1,
-  "total_pages": 1,
-  "total_flows": 12,
-  "flows": [
-    {
-      "timestamp": "2023-10-25T10:00:00Z",
-      "src_addr": "192.168.1.5",
-      "dst_addr": "8.8.8.8",
-      "src_port": 53535,
-      "dst_port": 53,
-      "protocol": "UDP",
-      "bytes": 512,
-      "packets": 4,
-      "duration": "15ms",
-      "app_proto": "DNS",
-      "app_category": "Network Services"
-    }
-  ]
-}
-```
-
-### `GET /flows/export`
-
-Exports filtered flows in CSV or JSON format.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Output format: `csv` or `json` (default: `csv`) |
-
-*Note: This endpoint also accepts all the flow filtering parameters available on `GET /api/flows` (e.g., `src_ip`, `dst_ip`, `protocol`, `bytes_min`, etc.).*
-
-### `GET /reports/export`
-
-Exports filtered reports in CSV or JSON format.
-
-Query params:
-
-| Param | Type | Description |
-|---|---|---|
-| `format` | string | Output format: `csv` or `json` (default: `csv`) |
-| `start` | string | Start timestamp (RFC3339) |
-| `end` | string | End timestamp (RFC3339) |
-| `src_ip` | string | Source IP filter |
-| `dst_ip` | string | Destination IP filter |
-| `protocol` | string | Protocol filter |
-| `group_by` | string | Grouping field (e.g. `app_proto`, `src_ip`) (default: `app_proto`) |
-
-### `GET /api/hosts`
-
-Aggregated host-level traffic statistics.
-
-This endpoint does not accept any query parameters.
-
-**Example Response:**
-
-```json
-{
-  "total_hosts": 3,
-  "total_bytes": 1024000,
-  "hosts": [
-    {
-      "ip": "192.168.1.5",
-      "bytes": 512000,
-      "packets": 1500,
-      "flow_count": 45,
-      "first_seen": "2023-10-25T09:50:00Z",
-      "last_seen": "2023-10-25T10:00:00Z",
-      "pct": 50.0,
-      "country": "Local"
-    }
-  ]
-}
-```
-
-### `GET /api/sessions`
-
-Bidirectional session aggregation with packet/byte stats and quality fields.
-
-This endpoint does not accept any query parameters.
-
-**Example Response:**
-
-```json
-{
-  "total_sessions": 15,
-  "total_bytes": 2048000,
-  "total_packets": 3500,
-  "sessions": [
-    {
-      "src_addr": "192.168.1.10",
-      "dst_addr": "10.0.0.5",
-      "src_port": 44444,
-      "dst_port": 443,
-      "protocol": "TCP",
-      "bytes": 10240,
-      "packets": 50,
-      "flow_count": 2,
-      "first_seen": "2023-10-25T09:55:00Z",
-      "last_seen": "2023-10-25T10:00:00Z",
-      "duration": "5m0s",
-      "throughput": "34.13 bps",
-      "app_proto": "HTTPS",
-      "retrans": 1,
-      "ooo": 0,
-      "loss": 0,
-      "tcp_flags": "S,A,P,F"
-    }
-  ]
-}
-```
-
 ### `GET /api/advisories`
 
 Active and resolved advisories with severity (`INFO`, `WARNING`, or `CRITICAL`), context, and action guidance.
@@ -276,9 +119,74 @@ This endpoint does not accept any query parameters.
 }
 ```
 
-### `GET /api/vlans`
+### `GET /api/flows`
 
-Aggregated VLAN-level traffic statistics.
+Paginated flows from the in-memory ring buffer.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `page` | int | Page number (default: `1`) |
+| `src_ip` | string | Source IP filter |
+| `dst_ip` | string | Destination IP filter |
+| `ip` | string | Source-or-destination IP filter |
+| `port` | string | Source-or-destination port filter |
+| `protocol` | string | Protocol filter (for example `TCP`, `UDP`) |
+| `app_proto` | string | Application protocol filter (e.g., `DNS`, `HTTPS`) |
+| `app_cat` | string | Application category filter (e.g., `Network Services`) |
+| `start` | string | Start timestamp filter (RFC3339) |
+| `end` | string | End timestamp filter (RFC3339) |
+| `bytes_min` | int | Minimum bytes filter |
+| `bytes_max` | int | Maximum bytes filter |
+| `tcp_flags` | string | TCP flags filter |
+| `tos` | int | Type of Service (ToS) / DSCP filter |
+| `in_iface` | string | Input interface index filter |
+| `out_iface` | string | Output interface index filter |
+| `src_as` | int | Source ASN filter |
+| `dst_as` | int | Destination ASN filter |
+| `src_mac` | string | Source MAC address filter |
+| `dst_mac` | string | Destination MAC address filter |
+| `vlan` | int | VLAN ID filter |
+| `ether_type` | string | EtherType filter (e.g., `IPv4`, `IPv6`) |
+| `exporter` | string | Exporter IP filter |
+| `rtt_min` | int | Minimum RTT filter (microseconds) |
+| `rtt_max` | int | Maximum RTT filter (microseconds) |
+| `retrans_min` | int | Minimum retransmissions filter |
+| `ooo_min` | int | Minimum out-of-order packets filter |
+| `loss_min` | int | Minimum packet loss filter |
+| `jitter_min` | int | Minimum jitter filter (microseconds) |
+| `jitter_max` | int | Maximum jitter filter (microseconds) |
+| `mos_min` | float | Minimum MOS (Mean Opinion Score) filter |
+
+**Example Response:**
+
+```json
+{
+  "page": 1,
+  "total_pages": 1,
+  "total_flows": 12,
+  "flows": [
+    {
+      "timestamp": "2023-10-25T10:00:00Z",
+      "src_addr": "192.168.1.5",
+      "dst_addr": "8.8.8.8",
+      "src_port": 53535,
+      "dst_port": 53,
+      "protocol": "UDP",
+      "bytes": 512,
+      "packets": 4,
+      "duration": "15ms",
+      "app_proto": "DNS",
+      "app_category": "Network Services"
+    }
+  ]
+}
+```
+
+### `GET /api/hosts`
+
+Aggregated host-level traffic statistics.
 
 This endpoint does not accept any query parameters.
 
@@ -286,14 +194,18 @@ This endpoint does not accept any query parameters.
 
 ```json
 {
-  "total_vlans": 2,
+  "total_hosts": 3,
   "total_bytes": 1024000,
-  "vlans": [
+  "hosts": [
     {
-      "id": 100,
-      "bytes": 1024000,
+      "ip": "192.168.1.5",
+      "bytes": 512000,
       "packets": 1500,
-      "flows": 45
+      "flow_count": 45,
+      "first_seen": "2023-10-25T09:50:00Z",
+      "last_seen": "2023-10-25T10:00:00Z",
+      "pct": 50.0,
+      "country": "Local"
     }
   ]
 }
@@ -322,69 +234,77 @@ This endpoint does not accept any query parameters.
 }
 ```
 
-### `GET /healthz`
+### `GET /api/sessions`
 
-Liveness endpoint used by health checks and orchestration.
+Bidirectional session aggregation with packet/byte stats and quality fields.
 
-*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+This endpoint does not accept any query parameters.
 
-Example response:
+**Example Response:**
 
 ```json
 {
-  "status": "ok",
-  "uptime": "2h15m30s"
+  "total_sessions": 15,
+  "total_bytes": 2048000,
+  "total_packets": 3500,
+  "sessions": [
+    {
+      "src_addr": "192.168.1.10",
+      "dst_addr": "10.0.0.5",
+      "src_port": 44444,
+      "dst_port": 443,
+      "protocol": "TCP",
+      "bytes": 10240,
+      "packets": 50,
+      "flow_count": 2,
+      "first_seen": "2023-10-25T09:55:00Z",
+      "last_seen": "2023-10-25T10:00:00Z",
+      "duration": "5m0s",
+      "throughput": "34.13 bps",
+      "app_proto": "HTTPS",
+      "retrans": 1,
+      "ooo": 0,
+      "loss": 0,
+      "tcp_flags": "S,A,P,F"
+    }
+  ]
 }
 ```
 
-### `GET /ping`
+### `GET /api/vlans`
 
-Simple ping endpoint to check if the server is running. Returns `pong`.
+Aggregated VLAN-level traffic statistics.
 
-*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+This endpoint does not accept any query parameters.
 
+**Example Response:**
 
+```json
+{
+  "total_vlans": 2,
+  "total_bytes": 1024000,
+  "vlans": [
+    {
+      "id": 100,
+      "bytes": 1024000,
+      "packets": 1500,
+      "flows": 45
+    }
+  ]
+}
+```
 
-### `POST /flows/filter-preset/save`
+### `GET /capture/download`
 
-Saves a new filter preset or overwrites an existing one. This endpoint is meant to be called from the web UI and uses form submissions.
-
-Form values:
-
-| Param | Type | Description |
-|---|---|---|
-| `name` | string | **Required**. The name of the preset. |
-| `description` | string | Optional description of the preset. |
-| `csrf_token` | string | **Required**. Anti-CSRF token. |
-
-*Note: All query parameters present in the request URL (except `preset_err`, `save_preset`, `load_preset`, and `delete_preset`) are saved as the filter string for the preset.*
-
-Returns a redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
-
-### `GET /flows/filter-preset/load`
-
-Loads a saved filter preset and redirects to the flows explorer with the preset's filters applied.
+Downloads a generated PCAP file.
 
 Query params:
 
 | Param | Type | Description |
 |---|---|---|
-| `name` | string | **Required**. The name of the preset to load. |
+| `file` | string | **Required**. The filename of the PCAP to download. |
 
-Returns an HTTP 303 See Other redirect to `/flows?{preset_filters}`. If the preset is not found or an error occurs, it redirects to `/flows` with a `preset_err` query parameter.
-
-### `POST /flows/filter-preset/delete`
-
-Deletes a saved filter preset. This endpoint is meant to be called from the web UI and uses form submissions.
-
-Form values:
-
-| Param | Type | Description |
-|---|---|---|
-| `name` | string | **Required**. The name of the preset to delete. |
-| `csrf_token` | string | **Required**. Anti-CSRF token. |
-
-Returns an HTTP 303 See Other redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
+Returns the requested PCAP file or an HTTP error if the file is not found.
 
 ### `POST /capture/start`
 
@@ -413,17 +333,73 @@ Form values:
 
 Returns a redirect to `/capture` or an HTTP error on failure.
 
-### `GET /capture/download`
+### `GET /flows/export`
 
-Downloads a generated PCAP file.
+Exports filtered flows in CSV or JSON format.
 
 Query params:
 
 | Param | Type | Description |
 |---|---|---|
-| `file` | string | **Required**. The filename of the PCAP to download. |
+| `format` | string | Output format: `csv` or `json` (default: `csv`) |
 
-Returns the requested PCAP file or an HTTP error if the file is not found.
+*Note: This endpoint also accepts all the flow filtering parameters available on `GET /api/flows` (e.g., `src_ip`, `dst_ip`, `protocol`, `bytes_min`, etc.).*
+
+### `POST /flows/filter-preset/delete`
+
+Deletes a saved filter preset. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset to delete. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
+
+Returns an HTTP 303 See Other redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
+
+### `GET /flows/filter-preset/load`
+
+Loads a saved filter preset and redirects to the flows explorer with the preset's filters applied.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset to load. |
+
+Returns an HTTP 303 See Other redirect to `/flows?{preset_filters}`. If the preset is not found or an error occurs, it redirects to `/flows` with a `preset_err` query parameter.
+
+### `POST /flows/filter-preset/save`
+
+Saves a new filter preset or overwrites an existing one. This endpoint is meant to be called from the web UI and uses form submissions.
+
+Form values:
+
+| Param | Type | Description |
+|---|---|---|
+| `name` | string | **Required**. The name of the preset. |
+| `description` | string | Optional description of the preset. |
+| `csrf_token` | string | **Required**. Anti-CSRF token. |
+
+*Note: All query parameters present in the request URL (except `preset_err`, `save_preset`, `load_preset`, and `delete_preset`) are saved as the filter string for the preset.*
+
+Returns a redirect to `/flows` with an optional `preset_err` query parameter indicating success or failure.
+
+### `GET /healthz`
+
+Liveness endpoint used by health checks and orchestration.
+
+*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "uptime": "2h15m30s"
+}
+```
 
 ### `POST /pcap/import`
 
@@ -437,6 +413,28 @@ Form values:
 | `csrf_token` | string | **Required**. Anti-CSRF token. |
 
 Returns a redirect to `/sessions` or an HTTP error on failure.
+
+### `GET /ping`
+
+Simple ping endpoint to check if the server is running. Returns `pong`.
+
+*Note: This endpoint does not require authentication even if Basic Auth is enabled.*
+
+### `GET /reports/export`
+
+Exports filtered reports in CSV or JSON format.
+
+Query params:
+
+| Param | Type | Description |
+|---|---|---|
+| `format` | string | Output format: `csv` or `json` (default: `csv`) |
+| `start` | string | Start timestamp (RFC3339) |
+| `end` | string | End timestamp (RFC3339) |
+| `src_ip` | string | Source IP filter |
+| `dst_ip` | string | Destination IP filter |
+| `protocol` | string | Protocol filter |
+| `group_by` | string | Grouping field (e.g. `app_proto`, `src_ip`) (default: `app_proto`) |
 
 ## Webhooks
 
