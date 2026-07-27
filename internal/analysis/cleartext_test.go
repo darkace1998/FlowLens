@@ -92,9 +92,10 @@ func TestCleartextProtocolDetector_MultipleCleartext(t *testing.T) {
 	foundHTTP := false
 
 	for _, adv := range advisories {
-		if adv.Title == "Cleartext Protocol Detected: 10.0.0.1 → 192.168.1.1 (FTP)" {
+		switch adv.Title {
+		case "Cleartext Protocol Detected: 10.0.0.1 → 192.168.1.1 (FTP)":
 			foundFTP = true
-		} else if adv.Title == "Cleartext Protocol Detected: 10.0.0.2 → 192.168.1.2 (HTTP)" {
+		case "Cleartext Protocol Detected: 10.0.0.2 → 192.168.1.2 (HTTP)":
 			foundHTTP = true
 		}
 	}
