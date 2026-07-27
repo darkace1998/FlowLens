@@ -182,6 +182,14 @@ func formatMOS(mos float32) string {
 	return fmt.Sprintf("%.2f", mos)
 }
 
+// formatIPv6FlowLabel returns a formatted IPv6 flow label string or "—" if zero.
+func formatIPv6FlowLabel(label uint32) string {
+	if label == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("0x%08X", label)
+}
+
 func mosQuality(mos float32) string {
 	switch {
 	case mos >= 4.0:
