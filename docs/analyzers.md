@@ -31,5 +31,6 @@ FlowLens runs analyzers on a configurable interval (`analysis.interval`) and gen
 | LAND Attack Detector | Identifies spoofed traffic where the source and destination IP addresses are identical |
 | Lateral Movement Detector | Identifies hosts connecting to many distinct destination IPs on common administrative and lateral movement ports (e.g. SMB, RDP) |
 | Mass Email Detector | Identifies a single source IP connecting to many distinct destination IPs on SMTP ports (potential spam botnet) |
+| Cleartext Protocol Detector | Detects the usage of insecure, unencrypted cleartext protocols such as Telnet, FTP, POP3, IMAP, and HTTP. |
 
 Use `analysis.webhook_url` to forward advisories to external systems.
