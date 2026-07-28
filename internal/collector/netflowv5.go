@@ -104,7 +104,7 @@ func DecodeNetFlowV5(data []byte, exporterIP net.IP) ([]model.Flow, error) {
 		if rec.NextHop != 0 {
 			gateway = uint32ToIP(rec.NextHop)
 		}
-		
+
 		flows = append(flows, model.Flow{
 			Timestamp:   flowTimestamp,
 			SrcAddr:     uint32ToIP(rec.SrcAddr),
