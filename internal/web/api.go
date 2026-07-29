@@ -37,21 +37,21 @@ type APIFlow struct {
 	// NAT fields
 	NatSrcAddr string `json:"nat_src_addr,omitempty"`
 	NatDstAddr string `json:"nat_dst_addr,omitempty"`
-	NatSrcPort uint16  `json:"nat_src_port,omitempty"`
-	NatDstPort uint16  `json:"nat_dst_port,omitempty"`
+	NatSrcPort uint16 `json:"nat_src_port,omitempty"`
+	NatDstPort uint16 `json:"nat_dst_port,omitempty"`
 	// IPv6 fields
 	IPv6FlowLabel uint32 `json:"ipv6_flow_label,omitempty"`
 	// Network addressing fields
-	SrcMask    uint8 `json:"src_mask,omitempty"`
-	DstMask    uint8 `json:"dst_mask,omitempty"`
-	IsMulticast bool   `json:"is_multicast,omitempty"`
+	SrcMask     uint8 `json:"src_mask,omitempty"`
+	DstMask     uint8 `json:"dst_mask,omitempty"`
+	IsMulticast bool  `json:"is_multicast,omitempty"`
 	// ICMP fields
 	ICMPType uint8 `json:"icmp_type,omitempty"`
 	ICMPCode uint8 `json:"icmp_code,omitempty"`
 	// IP header fields
-	IPTotalLength uint16 `json:"ip_total_length,omitempty"`
-	IPHeaderLength uint8 `json:"ip_header_length,omitempty"`
-	TTL        uint8 `json:"ttl,omitempty"`
+	IPTotalLength  uint16 `json:"ip_total_length,omitempty"`
+	IPHeaderLength uint8  `json:"ip_header_length,omitempty"`
+	TTL            uint8  `json:"ttl,omitempty"`
 	// UDP fields
 	UDPLength uint16 `json:"udp_length,omitempty"`
 	// IGMP fields
@@ -61,7 +61,7 @@ type APIFlow struct {
 	// Timing fields
 	SysInitTime time.Time `json:"sys_init_time,omitempty"`
 	// TCP details
-	TCPAckNum    uint32 `json:"tcp_ack_num,omitempty"`
+	TCPAckNum     uint32 `json:"tcp_ack_num,omitempty"`
 	TCPWindowSize uint16 `json:"tcp_window_size,omitempty"`
 }
 
@@ -403,7 +403,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 		if gateway == "0.0.0.0" {
 			gateway = ""
 		}
-		
+
 		flows = append(flows, APIFlow{
 			Timestamp:   f.Timestamp,
 			SrcAddr:     model.SafeIPString(f.SrcAddr),
@@ -424,16 +424,16 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 			// IPv6 fields
 			IPv6FlowLabel: f.IPv6FlowLabel,
 			// Network addressing fields
-			SrcMask:    f.SrcMask,
-			DstMask:    f.DstMask,
+			SrcMask:     f.SrcMask,
+			DstMask:     f.DstMask,
 			IsMulticast: f.IsMulticast,
 			// ICMP fields
 			ICMPType: f.ICMPType,
 			ICMPCode: f.ICMPCode,
 			// IP header fields
-			IPTotalLength: f.IPTotalLength,
+			IPTotalLength:  f.IPTotalLength,
 			IPHeaderLength: f.IPHeaderLength,
-			TTL:        f.TTL,
+			TTL:            f.TTL,
 			// UDP fields
 			UDPLength: f.UDPLength,
 			// IGMP fields
@@ -443,7 +443,7 @@ func (s *Server) handleAPIFlows(w http.ResponseWriter, r *http.Request) {
 			// Timing fields
 			SysInitTime: f.SysInitTime,
 			// TCP details
-			TCPAckNum:    f.TCPAckNum,
+			TCPAckNum:     f.TCPAckNum,
 			TCPWindowSize: f.TCPWindowSize,
 		})
 	}

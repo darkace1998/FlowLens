@@ -908,34 +908,34 @@ type FlowRow struct {
 	EtherType   string
 	TCPFlags    string
 	// NAT fields
-	NatSrcAddr   string
-	NatDstAddr   string
-	NatSrcPort   uint16
-	NatDstPort   uint16
-	NatEvents    string
+	NatSrcAddr string
+	NatDstAddr string
+	NatSrcPort uint16
+	NatDstPort uint16
+	NatEvents  string
 	// IPv6 fields
 	IPv6FlowLabel string
 	// Network addressing fields
-	SrcMask      uint8
-	DstMask      uint8
-	IsMulticast  string
+	SrcMask     uint8
+	DstMask     uint8
+	IsMulticast string
 	// ICMP fields
-	ICMPType     string
-	ICMPCode     string
+	ICMPType string
+	ICMPCode string
 	// IP header fields
-	IPTotalLength uint16
+	IPTotalLength  uint16
 	IPHeaderLength uint8
-	TTL          uint8
+	TTL            uint8
 	// UDP fields
-	UDPLength    uint16
+	UDPLength uint16
 	// IGMP fields
-	IGMPType     string
+	IGMPType string
 	// Routing fields
-	Gateway      string
+	Gateway string
 	// Timing fields
-	SysInitTime  string
+	SysInitTime string
 	// TCP details
-	TCPAckNum    uint32
+	TCPAckNum     uint32
 	TCPWindowSize uint16
 }
 
@@ -1202,25 +1202,25 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		if natDstAddr == "0.0.0.0" {
 			natDstAddr = "—"
 		}
-		
+
 		// Format Gateway
 		gateway := model.SafeIPString(f.Gateway)
 		if gateway == "0.0.0.0" {
 			gateway = "—"
 		}
-		
+
 		// Format SysInitTime
 		sysInitTime := "—"
 		if !f.SysInitTime.IsZero() {
 			sysInitTime = f.SysInitTime.Format("15:04:05")
 		}
-		
+
 		// Format IsMulticast
 		isMulticast := "—"
 		if f.IsMulticast {
 			isMulticast = "Yes"
 		}
-		
+
 		pageFlows = append(pageFlows, FlowRow{
 			Timestamp:   f.Timestamp.Format("15:04:05"),
 			SrcAddr:     srcAddr,
@@ -1253,34 +1253,34 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			EtherType:   model.FormatEtherType(f.EtherType),
 			TCPFlags:    model.FormatTCPFlags(f.TCPFlags),
 			// NAT fields
-			NatSrcAddr:   natSrcAddr,
-			NatDstAddr:   natDstAddr,
-			NatSrcPort:   f.NatSrcPort,
-			NatDstPort:   f.NatDstPort,
-			NatEvents:    model.FormatNATEvents(f.NatEvents),
+			NatSrcAddr: natSrcAddr,
+			NatDstAddr: natDstAddr,
+			NatSrcPort: f.NatSrcPort,
+			NatDstPort: f.NatDstPort,
+			NatEvents:  model.FormatNATEvents(f.NatEvents),
 			// IPv6 fields
 			IPv6FlowLabel: formatIPv6FlowLabel(f.IPv6FlowLabel),
 			// Network addressing fields
-			SrcMask:      f.SrcMask,
-			DstMask:      f.DstMask,
-			IsMulticast:  isMulticast,
+			SrcMask:     f.SrcMask,
+			DstMask:     f.DstMask,
+			IsMulticast: isMulticast,
 			// ICMP fields
-			ICMPType:     model.FormatICMPType(f.ICMPType),
-			ICMPCode:     model.FormatICMPCode(f.ICMPType, f.ICMPCode),
+			ICMPType: model.FormatICMPType(f.ICMPType),
+			ICMPCode: model.FormatICMPCode(f.ICMPType, f.ICMPCode),
 			// IP header fields
-			IPTotalLength: f.IPTotalLength,
+			IPTotalLength:  f.IPTotalLength,
 			IPHeaderLength: f.IPHeaderLength,
-			TTL:          f.TTL,
+			TTL:            f.TTL,
 			// UDP fields
-			UDPLength:    f.UDPLength,
+			UDPLength: f.UDPLength,
 			// IGMP fields
-			IGMPType:     model.FormatIGMPType(f.IGMPType),
+			IGMPType: model.FormatIGMPType(f.IGMPType),
 			// Routing fields
-			Gateway:      gateway,
+			Gateway: gateway,
 			// Timing fields
-			SysInitTime:  sysInitTime,
+			SysInitTime: sysInitTime,
 			// TCP details
-			TCPAckNum:    f.TCPAckNum,
+			TCPAckNum:     f.TCPAckNum,
 			TCPWindowSize: f.TCPWindowSize,
 		})
 	}
