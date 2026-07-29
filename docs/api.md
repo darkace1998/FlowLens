@@ -148,7 +148,7 @@ Query params:
 | `src_mac` | string | Source MAC address filter |
 | `dst_mac` | string | Destination MAC address filter |
 | `vlan` | int | VLAN ID filter |
-| `ether_type` | string | EtherType filter (e.g., `IPv4`, `IPv6`) |
+| `ether_type` | string | EtherType filter (e.g., `0x0800` or `2048`) |
 | `exporter` | string | Exporter IP filter |
 | `rtt_min` | int | Minimum RTT filter (microseconds) |
 | `rtt_max` | int | Maximum RTT filter (microseconds) |
