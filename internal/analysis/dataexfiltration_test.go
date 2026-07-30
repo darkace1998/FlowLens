@@ -111,7 +111,7 @@ func TestDataExfiltrationDetector_MultipleHosts(t *testing.T) {
 	rb := storage.NewRingBuffer(100)
 
 	// Traffic from multiple internal hosts to various external destinations
-	flows := []model.Flow{}
+	flows := make([]model.Flow, 0, 15)
 	for i := 0; i < 15; i++ {
 		src := fmt.Sprintf("10.0.0.%d", i+1)
 		dst := fmt.Sprintf("8.8.8.%d", i+1)
