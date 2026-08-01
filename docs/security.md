@@ -54,6 +54,6 @@ Apply equivalent rules for IPFIX (`4739`) and sFlow (`6343`).
 
 ## Runtime Hardening
 
-- Use `collector.rate_limit` to reduce abuse from noisy or malicious exporters
+- Use `collector.rate_limit` to reduce abuse from noisy or malicious source IPs (note: this limits by source IP, not exporter IP)
 - Run behind a reverse proxy for TLS, auth layering, and request controls
 - Keep storage retention bounded to avoid uncontrolled disk growth
