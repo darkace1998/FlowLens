@@ -165,6 +165,7 @@ func main() {
 		analysis.LandAttackDetector{},
 		analysis.LateralMovementDetector{},
 		analysis.MassEmailDetector{},
+		analysis.ElephantFlowDetector{},
 	)
 	engine.Start()
 

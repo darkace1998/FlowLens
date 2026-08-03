@@ -70,18 +70,18 @@ const (
 	ipfixFieldVlanId           = 58 // vlanId — 2 bytes
 	ipfixFieldDestMacAddress   = 80 // destinationMacAddress — 6 bytes
 	// Additional fields from the issue request
-	ipfixFieldIsMulticast       = 213 // isMulticast (IANA IE 213)
-	ipfixFieldICMPType          = 32 // icmpType (IANA IE 32)
-	ipfixFieldICMPCode          = 33 // icmpCode (IANA IE 33)
-	ipfixFieldIPTotalLength     = 34 // ipTotalLength (IANA IE 34)
-	ipfixFieldIPHeaderLength    = 35 // ipHeaderLength (IANA IE 35)
-	ipfixFieldTTL              = 63 // ipTimeToLive (IANA IE 63)
-	ipfixFieldUDPTotalLength    = 36 // udpLength (IANA IE 36)
-	ipfixFieldIGMPType          = 37 // igmpType (IANA IE 37)
-	ipfixFieldSystemInitTime    = 160 // systemInitTimeMilliseconds (IANA IE 160)
-	ipfixFieldTCPAckNum         = 18 // tcpAckNumber (IANA IE 18)
-	ipfixFieldTCPWindowSize     = 19 // tcpWindowSize (IANA IE 19)
-	ipfixFieldIPv6FlowLabel     = 31 // ipv6FlowLabel (IANA IE 31)
+	ipfixFieldIsMulticast    = 213 // isMulticast (IANA IE 213)
+	ipfixFieldICMPType       = 32  // icmpType (IANA IE 32)
+	ipfixFieldICMPCode       = 33  // icmpCode (IANA IE 33)
+	ipfixFieldIPTotalLength  = 34  // ipTotalLength (IANA IE 34)
+	ipfixFieldIPHeaderLength = 35  // ipHeaderLength (IANA IE 35)
+	ipfixFieldTTL            = 63  // ipTimeToLive (IANA IE 63)
+	ipfixFieldUDPTotalLength = 36  // udpLength (IANA IE 36)
+	ipfixFieldIGMPType       = 37  // igmpType (IANA IE 37)
+	ipfixFieldSystemInitTime = 160 // systemInitTimeMilliseconds (IANA IE 160)
+	ipfixFieldTCPAckNum      = 18  // tcpAckNumber (IANA IE 18)
+	ipfixFieldTCPWindowSize  = 19  // tcpWindowSize (IANA IE 19)
+	ipfixFieldIPv6FlowLabel  = 31  // ipv6FlowLabel (IANA IE 31)
 )
 
 // ipfixHeaderSize is the size of the IPFIX message header in bytes (RFC 7011 §3.1).

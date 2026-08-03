@@ -34,6 +34,7 @@ FlowLens is configured through YAML. Start from `configs/flowlens.yaml`.
 | `analysis` | `mos_critical_threshold` | `3.0` | MOS below this triggers critical |
 | `analysis` | `top_talker_percent` | `25` | Bandwidth % above which top talker triggers advisory |
 | `analysis` | `long_connection_threshold` | `1h` | Threshold duration to flag long connections |
+| `analysis` | `elephant_bytes_threshold` | `104857600` | Flow bytes above which an elephant flow triggers advisory (default: 100MB) |
 | `analysis` | `webhook_url` | _(empty)_ | Advisory webhook endpoint |
 | `web` | `listen` | `:8080` | HTTP listen address |
 | `web` | `page_size` | `50` | Rows per page in flow explorer |

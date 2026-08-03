@@ -46,9 +46,9 @@ const (
 	nfv9FieldICMPType = 32 // icmpType (IPFIX IE 32)
 	nfv9FieldICMPCode = 33 // icmpCode (IPFIX IE 33)
 	// IP header fields
-	nfv9FieldIPTotalLength = 34 // ipTotalLength (IPFIX IE 34)
+	nfv9FieldIPTotalLength  = 34 // ipTotalLength (IPFIX IE 34)
 	nfv9FieldIPHeaderLength = 35 // ipHeaderLength (IPFIX IE 35)
-	nfv9FieldTTL = 63 // ipTimeToLive (IPFIX IE 63)
+	nfv9FieldTTL            = 63 // ipTimeToLive (IPFIX IE 63)
 	// UDP fields
 	nfv9FieldUDPLength = 36 // udpLength (IPFIX IE 36)
 	// IGMP fields
@@ -60,15 +60,15 @@ const (
 	// System initialization time
 	nfv9FieldSysInitTime = 160 // systemInitTimeMilliseconds (IPFIX IE 160)
 	// TCP details
-	nfv9FieldTCPAckNum = 323 // tcpAckNumber (IPFIX IE 323)
+	nfv9FieldTCPAckNum     = 323 // tcpAckNumber (IPFIX IE 323)
 	nfv9FieldTCPWindowSize = 324 // tcpWindowSize (IPFIX IE 324)
 	// NAT fields (RFC 8158 - IPFIX Information Elements for NAT Events)
 	// Note: These may also appear as Cisco enterprise-specific fields
-	nfv9FieldNatSrcAddr   = 225 // postNATSourceIPv4Address (IPFIX IE 225)
-	nfv9FieldNatDstAddr   = 226 // postNATDestinationIPv4Address (IPFIX IE 226)
-	nfv9FieldNatSrcPort   = 227 // postNAPTSourceTransportPort (IPFIX IE 227)
-	nfv9FieldNatDstPort   = 228 // postNAPTDestinationTransportPort (IPFIX IE 228)
-	nfv9FieldNatEvents    = 230 // natEvent (IPFIX IE 230)
+	nfv9FieldNatSrcAddr = 225 // postNATSourceIPv4Address (IPFIX IE 225)
+	nfv9FieldNatDstAddr = 226 // postNATDestinationIPv4Address (IPFIX IE 226)
+	nfv9FieldNatSrcPort = 227 // postNAPTSourceTransportPort (IPFIX IE 227)
+	nfv9FieldNatDstPort = 228 // postNAPTDestinationTransportPort (IPFIX IE 228)
+	nfv9FieldNatEvents  = 230 // natEvent (IPFIX IE 230)
 )
 
 // nfv9HeaderSize is the size of the NetFlow v9 packet header in bytes.

@@ -68,28 +68,28 @@ type Flow struct {
 	TCPSeqNum uint32 // TCP sequence number (used for retransmission detection)
 
 	// NAT fields (RFC 8158 for IPFIX, vendor-specific for NetFlow v9)
-	NatSrcAddr   net.IP    // Translated source IP address by NAT
-	NatDstAddr   net.IP    // Translated destination IP address by NAT
-	NatSrcPort   uint16    // Translated source port number by NAT
-	NatDstPort   uint16    // Translated destination port number by NAT
-	NatEvents    uint32    // Events related to Network Address Translation
+	NatSrcAddr net.IP // Translated source IP address by NAT
+	NatDstAddr net.IP // Translated destination IP address by NAT
+	NatSrcPort uint16 // Translated source port number by NAT
+	NatDstPort uint16 // Translated destination port number by NAT
+	NatEvents  uint32 // Events related to Network Address Translation
 
 	// IPv6-specific fields
 	IPv6FlowLabel uint32 // Label field from IPv6 header, used to classify flows
 
 	// Network addressing fields
-	SrcMask      uint8 // Network mask for source address (useful for summarization)
-	DstMask      uint8 // Network mask for destination address (useful for summarization)
-	IsMulticast  bool  // Indicates whether the flow is multicast
+	SrcMask     uint8 // Network mask for source address (useful for summarization)
+	DstMask     uint8 // Network mask for destination address (useful for summarization)
+	IsMulticast bool  // Indicates whether the flow is multicast
 
 	// ICMP protocol fields
 	ICMPType uint8 // Type of ICMP message (e.g., Echo Request, Echo Reply, Destination Unreachable)
 	ICMPCode uint8 // ICMP code for error messaging and operational information
 
 	// IP header details
-	IPTotalLength uint16 // Length of the IP packet in bytes
-	IPHeaderLength uint8 // Length of the IP header
-	TTL          uint8 // Time To Live for the packet
+	IPTotalLength  uint16 // Length of the IP packet in bytes
+	IPHeaderLength uint8  // Length of the IP header
+	TTL            uint8  // Time To Live for the packet
 
 	// UDP-specific fields
 	UDPLength uint16 // Length of the UDP payload
@@ -104,7 +104,7 @@ type Flow struct {
 	SysInitTime time.Time // System initialization time, can be used for timing analysis
 
 	// TCP details
-	TCPAckNum    uint32 // Acknowledgment number in a TCP connection
+	TCPAckNum     uint32 // Acknowledgment number in a TCP connection
 	TCPWindowSize uint16 // Window size in a TCP connection, indicating the scale of received data buffering
 }
 
@@ -650,7 +650,7 @@ func FormatNATEvents(events uint32) string {
 	if events == 0 {
 		return "—"
 	}
-	
+
 	var parts []string
 	// Common NAT event types (based on RFC 8158 and common implementations)
 	if events&0x01 != 0 {
@@ -706,7 +706,7 @@ func FormatICMPCode(t, code uint8) string {
 	if code == 0 {
 		return "—"
 	}
-	
+
 	switch t {
 	case 3: // Destination Unreachable
 		switch code {
