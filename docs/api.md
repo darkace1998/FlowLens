@@ -159,6 +159,8 @@ Query params:
 | `jitter_max` | int | Maximum jitter filter (microseconds) |
 | `mos_min` | float | Minimum MOS (Mean Opinion Score) filter |
 
+*Note: Extended `APIFlow` fields (e.g., NAT, IPv6, ICMP, and TCP details) are omitted from JSON responses when empty.*
+
 **Example Response:**
 
 ```json
