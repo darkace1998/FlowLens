@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -236,6 +238,11 @@ func setupSQLiteSchema(db *sql.DB) error {
 // enables WAL mode, creates the flows table, and starts a background
 // pruning goroutine based on the configured retention and prune interval.
 func NewSQLiteStore(path string, retention, pruneInterval time.Duration) (*SQLiteStore, error) {
+	// Create the parent directory if needed (skipped for ":memory:" and bare filenames).
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0755) // nolint:errcheck // best-effort; sql.Open reports the real error
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite: %w", err)

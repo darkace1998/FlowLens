@@ -22,8 +22,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Storage.RingBufferDuration != 10*time.Minute {
 		t.Errorf("expected RingBufferDuration 10m, got %s", cfg.Storage.RingBufferDuration)
 	}
-	if cfg.Storage.SQLitePath != "./flowlens.db" {
-		t.Errorf("expected SQLitePath ./flowlens.db, got %s", cfg.Storage.SQLitePath)
+	if cfg.Storage.SQLitePath != "./data/flowlens.db" {
+		t.Errorf("expected SQLitePath ./data/flowlens.db, got %s", cfg.Storage.SQLitePath)
 	}
 	if cfg.Storage.SQLiteRetention != 72*time.Hour {
 		t.Errorf("expected SQLiteRetention 72h, got %s", cfg.Storage.SQLiteRetention)

@@ -93,6 +93,7 @@ type ipfixTemplateField struct {
 	Length        uint16
 	EnterpriseNum uint32
 	IsEnterprise  bool
+	Variable      bool // true when Length == 65535 (variable-length field, 1- or 3-byte length prefix)
 }
 
 // ipfixTemplate holds a cached IPFIX template.
@@ -211,8 +212,9 @@ func parseIPFIXTemplates(data []byte, obsDomainID uint32, cache *IPFIXTemplateCa
 			offset += 4
 
 			field := ipfixTemplateField{
-				ID:     rawID & 0x7FFF,
-				Length: fLen,
+				ID:       rawID & 0x7FFF,
+				Length:   fLen,
+				Variable: fLen == 65535,
 			}
 
 			// Enterprise bit is the high bit of the ID field
@@ -232,6 +234,9 @@ func parseIPFIXTemplates(data []byte, obsDomainID uint32, cache *IPFIXTemplateCa
 			}
 		}
 
+		if templateID < 256 {
+			continue // reserved IDs (2=template set, 3=options template) are never data templates
+		}
 		cache.set(obsDomainID, templateID, tmpl)
 	}
 }
@@ -282,23 +287,61 @@ func decodeIPFIXDataSet(data []byte, obsDomainID uint32, templateID uint16,
 	var flows []model.Flow //nolint:prealloc // capacity depends on runtime data size
 	offset := 0
 
-	for offset+tmpl.Size <= len(data) {
+	// Decode field-by-field so variable-length fields (Length == 65535) are
+	// handled with their 1- or 3-byte length prefix instead of a fixed stride.
+	for offset < len(data) {
+		recordStart := offset
 		f := model.Flow{
 			Timestamp:  baseTime,
 			ExporterIP: exporterIP,
 		}
 		ctx := &ipfixRecordContext{}
+		complete := true
 
 		for _, field := range tmpl.Fields {
-			if offset+int(field.Length) > len(data) {
-				return flows
+			if field.Variable {
+				// Variable-length field: 1 length byte; 255 means a 2-byte
+				// length follows (3-byte header total).
+				if offset >= len(data) {
+					complete = false
+					break
+				}
+				vlen := int(data[offset])
+				offset++
+				if vlen == 255 {
+					if offset+2 > len(data) {
+						complete = false
+						break
+					}
+					vlen = int(binary.BigEndian.Uint16(data[offset : offset+2]))
+					offset += 2
+				}
+				if offset+vlen > len(data) {
+					complete = false
+					break
+				}
+				if !field.IsEnterprise {
+					applyIPFIXField(&f, field.ID, data[offset:offset+vlen], ctx)
+				}
+				offset += vlen
+			} else {
+				if offset+int(field.Length) > len(data) {
+					complete = false
+					break
+				}
+				if !field.IsEnterprise {
+					applyIPFIXField(&f, field.ID, data[offset:offset+int(field.Length)], ctx)
+				}
+				offset += int(field.Length)
 			}
+		}
 
-			fieldData := data[offset : offset+int(field.Length)]
-			if !field.IsEnterprise {
-				applyIPFIXField(&f, field.ID, fieldData, ctx)
-			}
-			offset += int(field.Length)
+		if !complete {
+			// Drop the trailing partial record and stop.
+			break
+		}
+		if offset == recordStart {
+			break // zero-progress guard against malformed templates
 		}
 
 		// Choose packet/byte counters by precedence:

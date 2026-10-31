@@ -17,7 +17,11 @@ type RingBuffer struct {
 }
 
 // NewRingBuffer creates a new ring buffer with the given maximum record capacity.
+// A non-positive capacity is clamped to a default to avoid a zero-length buffer.
 func NewRingBuffer(capacity int) *RingBuffer {
+	if capacity <= 0 {
+		capacity = 10000
+	}
 	return &RingBuffer{
 		buf:      make([]model.Flow, capacity),
 		capacity: capacity,

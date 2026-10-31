@@ -53,15 +53,15 @@ const (
 	nfv9FieldUDPLength = 36 // udpLength (IPFIX IE 36)
 	// IGMP fields
 	nfv9FieldIGMPType = 37 // igmpType (IPFIX IE 37)
-	// Multicast indicator
-	nfv9FieldIsMulticast = 58 // isMulticast (IPFIX IE 58)
+	// VLAN and multicast indicator.
+	// NOTE: v9/IPFIX field 58 is the VLAN field (IN_VLAN/ingressVlan), matching
+	// ipfix.go; 213 is the actual isMulticast element.
+	nfv9FieldInVLAN      = 58  // ingressVlan / IN_VLAN (IPFIX IE 58) — 2 bytes
+	nfv9FieldIsMulticast = 213 // isMulticast (IPFIX IE 213)
 	// Gateway (using next hop field)
 	// nfv9FieldGateway = 15 // ipv4NextHop is used as gateway - removed to avoid duplicate
 	// System initialization time
 	nfv9FieldSysInitTime = 160 // systemInitTimeMilliseconds (IPFIX IE 160)
-	// TCP details
-	nfv9FieldTCPAckNum = 323 // tcpAckNumber (IPFIX IE 323)
-	nfv9FieldTCPWindowSize = 324 // tcpWindowSize (IPFIX IE 324)
 	// NAT fields (RFC 8158 - IPFIX Information Elements for NAT Events)
 	// Note: These may also appear as Cisco enterprise-specific fields
 	nfv9FieldNatSrcAddr   = 225 // postNATSourceIPv4Address (IPFIX IE 225)
@@ -76,8 +76,9 @@ const nfv9HeaderSize = 20
 
 // nfv9TemplateField describes one field in a NetFlow v9 template record.
 type nfv9TemplateField struct {
-	Type   uint16
-	Length uint16
+	Type     uint16
+	Length   uint16
+	Variable bool // true when Length == 65535 (variable-length field, 1- or 3-byte length prefix)
 }
 
 // nfv9Template holds a cached NetFlow v9 template record.
@@ -192,11 +193,14 @@ func parseNFV9Templates(data []byte, sourceID uint32, cache *NFV9TemplateCache) 
 		for i := 0; i < fieldCount; i++ {
 			fType := binary.BigEndian.Uint16(data[offset : offset+2])
 			fLen := binary.BigEndian.Uint16(data[offset+2 : offset+4])
-			tmpl.Fields[i] = nfv9TemplateField{Type: fType, Length: fLen}
+			tmpl.Fields[i] = nfv9TemplateField{Type: fType, Length: fLen, Variable: fLen == 65535}
 			tmpl.Size += int(fLen)
 			offset += 4
 		}
 
+		if templateID < 256 {
+			continue // reserved IDs (0=template set, 1=options template) are never data templates
+		}
 		cache.set(sourceID, templateID, tmpl)
 	}
 }
@@ -220,21 +224,57 @@ func decodeNFV9DataFlowSet(data []byte, sourceID uint32, templateID uint16,
 	var flows []model.Flow //nolint:prealloc // capacity depends on runtime data size
 	offset := 0
 
-	for offset+tmpl.Size <= len(data) {
+	// Decode field-by-field so variable-length fields (Length == 65535) are
+	// handled with their 1- or 3-byte length prefix instead of a fixed stride.
+	for offset < len(data) {
+		recordStart := offset
 		f := model.Flow{
 			Timestamp:  baseTime,
 			ExporterIP: exporterIP,
 		}
 		ctx := &nfv9RecordContext{}
+		complete := true
 
 		for _, field := range tmpl.Fields {
-			if offset+int(field.Length) > len(data) {
-				return flows
+			if field.Variable {
+				// Variable-length field: 1 length byte; 255 means a 2-byte
+				// length follows (3-byte header total).
+				if offset >= len(data) {
+					complete = false
+					break
+				}
+				vlen := int(data[offset])
+				offset++
+				if vlen == 255 {
+					if offset+2 > len(data) {
+						complete = false
+						break
+					}
+					vlen = int(binary.BigEndian.Uint16(data[offset : offset+2]))
+					offset += 2
+				}
+				if offset+vlen > len(data) {
+					complete = false
+					break
+				}
+				applyNFV9Field(&f, field.Type, data[offset:offset+vlen], ctx)
+				offset += vlen
+			} else {
+				if offset+int(field.Length) > len(data) {
+					complete = false
+					break
+				}
+				applyNFV9Field(&f, field.Type, data[offset:offset+int(field.Length)], ctx)
+				offset += int(field.Length)
 			}
+		}
 
-			fieldData := data[offset : offset+int(field.Length)]
-			applyNFV9Field(&f, field.Type, fieldData, ctx)
-			offset += int(field.Length)
+		if !complete {
+			// Drop the trailing partial record and stop.
+			break
+		}
+		if offset == recordStart {
+			break // zero-progress guard against malformed templates
 		}
 
 		// Calculate duration and timestamp from switched times.
@@ -336,7 +376,11 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 		if len(data) >= 1 {
 			f.DstMask = data[0]
 		}
-	// Multicast indicator
+	// VLAN and multicast indicator
+	case nfv9FieldInVLAN:
+		if len(data) == 2 {
+			f.VLAN = binary.BigEndian.Uint16(data)
+		}
 	case nfv9FieldIsMulticast:
 		if len(data) >= 1 {
 			f.IsMulticast = data[0] != 0
@@ -384,15 +428,6 @@ func applyNFV9Field(f *model.Flow, fieldType uint16, data []byte, ctx *nfv9Recor
 		if len(data) == 8 {
 			ms := binary.BigEndian.Uint64(data)
 			f.SysInitTime = time.UnixMilli(int64(ms))
-		}
-	// TCP details
-	case nfv9FieldTCPAckNum:
-		if len(data) == 4 {
-			f.TCPAckNum = binary.BigEndian.Uint32(data)
-		}
-	case nfv9FieldTCPWindowSize:
-		if len(data) == 2 {
-			f.TCPWindowSize = binary.BigEndian.Uint16(data)
 		}
 	// NAT fields (RFC 8158)
 	case nfv9FieldNatSrcAddr:

@@ -169,6 +169,7 @@
         <span class="filter-presets-content span">
           <a href="/flows/filter-preset/load?name={{urlquery .Name}}" class="btn btn-sm preset-btn">{{.Name}}</a>
           <form action="/flows/filter-preset/delete" method="post" class="preset-form">
+            {{csrfToken}}
             <input type="hidden" name="name" value="{{.Name}}" />
             <button type="submit" class="btn btn-sm btn-danger preset-delete-btn" onclick="return confirm('Delete preset {{.Name}}?')">×</button>
           </form>
@@ -178,6 +179,7 @@
       </div>
       {{end}}
       <form action="/flows/filter-preset/save" method="post" class="save-preset-form">
+        {{csrfToken}}
         <label>
           <strong>Save Current:</strong>
           <input type="text" name="name" placeholder="Name" required style="width: 120px;" />

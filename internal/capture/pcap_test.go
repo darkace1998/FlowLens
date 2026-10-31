@@ -233,6 +233,48 @@ func TestListPcapFiles_WithFiles(t *testing.T) {
 	}
 }
 
+func TestPcapWriter_OpenNewFile_UniqueNames(t *testing.T) {
+	dir := t.TempDir()
+	pw, err := NewPcapWriter(dir, "uniq", 65535, 0, 0)
+	if err != nil {
+		t.Fatalf("NewPcapWriter: %v", err)
+	}
+	defer pw.Close()
+
+	// First rotation.
+	if err := pw.openNewFile(); err != nil {
+		t.Fatalf("openNewFile #1: %v", err)
+	}
+	name1 := pw.file.Name()
+	if _, err := pw.file.Write([]byte("first")); err != nil {
+		t.Fatalf("write to first file: %v", err)
+	}
+
+	// Immediate second rotation (same wall-clock second).
+	if err := pw.openNewFile(); err != nil {
+		t.Fatalf("openNewFile #2: %v", err)
+	}
+	name2 := pw.file.Name()
+
+	if name1 == name2 {
+		t.Fatalf("two openNewFile calls in the same second produced the same file name %q", name1)
+	}
+
+	// Both files must exist with their own contents — the first must not be
+	// truncated by os.Create reusing the same name.
+	files, err := filepath.Glob(filepath.Join(dir, "uniq_*.pcap"))
+	if err != nil || len(files) != 2 {
+		t.Fatalf("expected 2 pcap files, got %d (err=%v)", len(files), err)
+	}
+	data1, err := os.ReadFile(name1)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", name1, err)
+	}
+	if len(data1) != 24+5 { // global header + 5 payload bytes
+		t.Errorf("first file size = %d, want %d (must not be truncated)", len(data1), 24+5)
+	}
+}
+
 func TestReadPcapFlows(t *testing.T) {
 	dir := t.TempDir()
 	pw, err := NewPcapWriter(dir, "import", 65535, 0, 0)

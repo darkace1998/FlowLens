@@ -83,14 +83,14 @@ func decodeEthernet(data []byte, timestamp time.Time) (model.Flow, bool) {
 
 	offset := 14
 	var vlanID uint16
-	// Handle 802.1Q VLAN tag.
-	if etherType == 0x8100 {
-		if len(data) < 18 {
+	// Handle stacked 802.1Q / 802.1ad VLAN tags.
+	for etherType == 0x8100 || etherType == 0x88a8 {
+		if len(data) < offset+4 {
 			return model.Flow{}, false
 		}
-		vlanID = (uint16(data[14])<<8 | uint16(data[15])) & 0x0FFF
-		etherType = uint16(data[16])<<8 | uint16(data[17])
-		offset = 18
+		vlanID = (uint16(data[offset])<<8 | uint16(data[offset+1])) & 0x0FFF
+		etherType = uint16(data[offset+2])<<8 | uint16(data[offset+3])
+		offset += 4
 	}
 
 	var f model.Flow
@@ -170,11 +170,13 @@ func decodeIPv6(data []byte, timestamp time.Time) (model.Flow, bool) {
 	}
 
 	payloadLen := int(data[4])<<8 | int(data[5])
-	proto := data[6] // Next Header
 	srcIP := net.IP(make([]byte, 16))
 	dstIP := net.IP(make([]byte, 16))
 	copy(srcIP, data[8:24])
 	copy(dstIP, data[24:40])
+
+	// Walk extension headers to locate the L4 header.
+	proto, l4off, hasL4 := ipv6L4Offset(data)
 
 	f := model.Flow{
 		Timestamp: timestamp,
@@ -183,27 +185,72 @@ func decodeIPv6(data []byte, timestamp time.Time) (model.Flow, bool) {
 		Protocol:  proto,
 		Bytes:     uint64(40 + payloadLen),
 		Packets:   1,
+		TTL:       data[7], // hop limit
 	}
 
 	// Parse L4 header for ports.
-	l4Data := data[40:]
-	switch proto {
-	case 6: // TCP
-		if len(l4Data) >= 14 {
-			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
-			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
-			f.TCPSeqNum = uint32(l4Data[4])<<24 | uint32(l4Data[5])<<16 | uint32(l4Data[6])<<8 | uint32(l4Data[7])
-			f.TCPFlags = l4Data[13]
-		}
-	case 17: // UDP
-		if len(l4Data) >= 4 {
-			f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
-			f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
+	if hasL4 {
+		l4Data := data[l4off:]
+		switch proto {
+		case 6: // TCP
+			if len(l4Data) >= 14 {
+				f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
+				f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
+				f.TCPSeqNum = uint32(l4Data[4])<<24 | uint32(l4Data[5])<<16 | uint32(l4Data[6])<<8 | uint32(l4Data[7])
+				f.TCPFlags = l4Data[13]
+			}
+		case 17: // UDP
+			if len(l4Data) >= 4 {
+				f.SrcPort = uint16(l4Data[0])<<8 | uint16(l4Data[1])
+				f.DstPort = uint16(l4Data[2])<<8 | uint16(l4Data[3])
+			}
 		}
 	}
 
 	f.Classify()
 	return f, true
+}
+
+// ipv6L4Offset walks IPv6 extension headers (hop-by-hop 0, routing 43,
+// destination options 60, fragment 44, authentication header 51) with bounds
+// checks and returns the L4 protocol number and the offset of the L4 header
+// within data (which starts at the IPv6 header). ok is false when the header
+// chain is truncated or malformed.
+func ipv6L4Offset(data []byte) (proto uint8, off int, ok bool) {
+	nh := data[6]
+	off = 40
+	for {
+		switch nh {
+		case 0, 43, 60: // hop-by-hop, routing, destination options
+			if len(data) < off+2 {
+				return nh, 0, false
+			}
+			hlen := (int(data[off+1]) + 1) * 8
+			if len(data) < off+hlen {
+				return nh, 0, false
+			}
+			nh = data[off]
+			off += hlen
+		case 44: // fragment header (fixed 8 bytes)
+			if len(data) < off+8 {
+				return nh, 0, false
+			}
+			nh = data[off]
+			off += 8
+		case 51: // authentication header
+			if len(data) < off+2 {
+				return nh, 0, false
+			}
+			hlen := (int(data[off+1]) + 2) * 4
+			if len(data) < off+hlen {
+				return nh, 0, false
+			}
+			nh = data[off]
+			off += hlen
+		default:
+			return nh, off, true
+		}
+	}
 }
 
 // ProcessPacket decodes a raw Ethernet frame and sends the resulting flow to the handler.

@@ -60,6 +60,14 @@ func NewManager(cfg config.CaptureConfig) *Manager {
 
 // Start begins a new capture session on the specified device with an optional BPF filter.
 func (m *Manager) Start(device, bpf string) (string, error) {
+	// Validate the BPF filter synchronously so an invalid filter fails the
+	// request immediately instead of leaving a dead "running" session behind.
+	if bpf != "" {
+		if _, err := compileBPF(bpf); err != nil {
+			return "", fmt.Errorf("capture manager: invalid BPF filter: %w", err)
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -112,6 +120,13 @@ func (m *Manager) Start(device, bpf string) (string, error) {
 	go func() {
 		if err := m.runCapture(as); err != nil {
 			logging.Default().Error("Capture %s error: %v", id, err)
+			// Mark the session as stopped so it does not linger as "running".
+			m.mu.Lock()
+			if as.session.State == StateRunning {
+				as.session.State = StateStopped
+				as.session.StopTime = time.Now()
+			}
+			m.mu.Unlock()
 		}
 	}()
 
