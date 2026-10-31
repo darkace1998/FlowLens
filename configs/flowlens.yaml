@@ -23,7 +23,7 @@ collector:
 
 storage:
   ring_buffer_duration: 10m   # how long to keep flows in memory
-  sqlite_path: "./flowlens.db"
+  sqlite_path: "./data/flowlens.db"
   sqlite_retention: 72h       # auto-prune flows older than this
   prune_interval: 15m         # how often to run TTL cleanup
 

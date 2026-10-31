@@ -41,6 +41,17 @@ func (s *Source) startCapture(device string, snapLen int) error {
 		return fmt.Errorf("capture: set timeout: %w", err)
 	}
 
+	// Compile the optional BPF filter into a pure-Go userspace predicate.
+	var filter func([]byte) bool
+	if s.cfg.BPF != "" {
+		filt, err := compileBPF(s.cfg.BPF)
+		if err != nil {
+			_ = syscall.Close(fd) // nolint:errcheck // error ignored in cleanup path
+			return fmt.Errorf("capture: invalid BPF filter on %s: %w", device, err)
+		}
+		filter = filt
+	}
+
 	logger().Info("Capture started on %s (%s, snaplen=%d)", device, s.InterfaceName(), snapLen)
 
 	s.wg.Add(1)
@@ -69,6 +80,9 @@ func (s *Source) startCapture(device string, snapLen int) error {
 		if n > 0 {
 			pkt := make([]byte, n)
 			copy(pkt, buf[:n])
+			if filter != nil && !filter(pkt) {
+				continue
+			}
 			now := time.Now()
 			if s.rawHandler != nil {
 				s.rawHandler(pkt, now)

@@ -28,12 +28,12 @@ const (
 	sflowAddrTypeIPv6 = 2
 
 	// Ethernet header sizes.
-	ethHeaderSize     = 14 // 6 dst MAC + 6 src MAC + 2 EtherType
-	ethHeaderVLANSize = 18 // Ethernet header with 802.1Q VLAN tag
-	macAddrLen        = 6  // IEEE 802 MAC address length
+	ethHeaderSize = 14 // 6 dst MAC + 6 src MAC + 2 EtherType
+	macAddrLen    = 6  // IEEE 802 MAC address length
 
 	// EtherType values (IEEE 802.3).
 	etherTypeVLAN = 0x8100 // 802.1Q VLAN tag
+	etherTypeQinQ = 0x88A8 // 802.1ad QinQ (stacked) VLAN tag
 	etherTypeIPv4 = 0x0800
 	etherTypeIPv6 = 0x86DD
 
@@ -47,6 +47,13 @@ const (
 	// IP protocol numbers (IANA).
 	protoTCP = 6
 	protoUDP = 17
+
+	// IPv6 extension header next-header values (IANA).
+	protoIPv6HopByHop = 0  // hop-by-hop options
+	protoIPv6Routing  = 43 // routing header
+	protoIPv6Fragment = 44 // fragment header
+	protoIPv6AH       = 51 // authentication header
+	protoIPv6DestOpts = 60 // destination options
 
 	// TCP header field offsets / sizes.
 	tcpUDPPortsMinLen = 4  // Minimum bytes needed to read src+dst port
@@ -248,7 +255,15 @@ func decodeSFlowFlowSample(data []byte, exporterIP net.IP, ts time.Time, expande
 		outputIface = outputIface & sflowIfIndexMask
 	}
 
-	flows := make([]model.Flow, 0, int(numRecords))
+	// Cap the preallocation by the number of records that could actually fit
+	// in the remaining data — numRecords is attacker-controlled and must not
+	// drive a huge allocation.
+	maxRecords := (len(data) - off) / sflowSampleRecordHeaderLen
+	prealloc := maxRecords
+	if int64(numRecords) < int64(maxRecords) {
+		prealloc = int(numRecords)
+	}
+	flows := make([]model.Flow, 0, prealloc)
 
 	for r := uint32(0); r < numRecords; r++ {
 		if len(data) < off+sflowSampleRecordHeaderLen {
@@ -337,14 +352,14 @@ func decodeSFlowEthernet(data []byte, ts time.Time, frameLength uint32) (model.F
 	offset := ethHeaderSize
 
 	var vlanID uint16
-	// Handle 802.1Q VLAN tag
-	if etherType == etherTypeVLAN {
-		if len(data) < ethHeaderVLANSize {
+	// Handle 802.1Q / 802.1ad VLAN tags, including stacked (QinQ) tags.
+	for etherType == etherTypeVLAN || etherType == etherTypeQinQ {
+		if len(data) < offset+4 {
 			return model.Flow{}, false
 		}
-		vlanID = (uint16(data[14])<<8 | uint16(data[15])) & vlanIDMask
-		etherType = uint16(data[16])<<8 | uint16(data[17])
-		offset = ethHeaderVLANSize
+		vlanID = (uint16(data[offset])<<8 | uint16(data[offset+1])) & vlanIDMask
+		etherType = uint16(data[offset+2])<<8 | uint16(data[offset+3])
+		offset += 4
 	}
 
 	var f model.Flow
@@ -419,7 +434,8 @@ func decodeSFlowIPv6(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 		return model.Flow{}, false
 	}
 
-	proto := data[6] // Next Header
+	proto := data[6]  // Next Header
+	hopLimit := data[7] // Hop Limit doubles as the flow TTL
 	srcIP := make(net.IP, net.IPv6len)
 	dstIP := make(net.IP, net.IPv6len)
 	copy(srcIP, data[8:24])
@@ -432,9 +448,50 @@ func decodeSFlowIPv6(data []byte, ts time.Time, frameLength uint32) (model.Flow,
 		Protocol:  proto,
 		Bytes:     uint64(frameLength),
 		Packets:   1,
+		TTL:       hopLimit,
 	}
 
-	l4Data := data[ipv6HeaderSize:]
+	// Walk IPv6 extension headers to find the real L4 protocol and offset.
+	off := ipv6HeaderSize
+walk:
+	for {
+		switch proto {
+		case protoIPv6HopByHop, protoIPv6Routing, protoIPv6DestOpts:
+			// hdrlen = (data[off+1]+1)*8
+			if len(data) < off+2 {
+				return model.Flow{}, false
+			}
+			hdrLen := (int(data[off+1]) + 1) * 8
+			if len(data) < off+hdrLen {
+				return model.Flow{}, false
+			}
+			proto = data[off]
+			off += hdrLen
+		case protoIPv6Fragment:
+			// Fragment header is a fixed 8 bytes.
+			if len(data) < off+8 {
+				return model.Flow{}, false
+			}
+			proto = data[off]
+			off += 8
+		case protoIPv6AH:
+			// AH length = (data[off+1]+2)*4
+			if len(data) < off+2 {
+				return model.Flow{}, false
+			}
+			hdrLen := (int(data[off+1]) + 2) * 4
+			if len(data) < off+hdrLen {
+				return model.Flow{}, false
+			}
+			proto = data[off]
+			off += hdrLen
+		default:
+			break walk
+		}
+	}
+
+	f.Protocol = proto
+	l4Data := data[off:]
 	switch proto {
 	case protoTCP:
 		if len(l4Data) >= tcpFlagsMinLen {
@@ -479,7 +536,14 @@ func decodeSFlowCounterSample(data []byte, agentIP net.IP, ts time.Time, expande
 		off = sflowCounterSampleHeaderLen
 	}
 
-	counters := make([]SFlowCounterSample, 0, int(numRecords))
+	// Cap the preallocation by the number of records that could actually fit
+	// in the remaining data — numRecords is attacker-controlled.
+	maxRecords := (len(data) - off) / sflowSampleRecordHeaderLen
+	prealloc := maxRecords
+	if int64(numRecords) < int64(maxRecords) {
+		prealloc = int(numRecords)
+	}
+	counters := make([]SFlowCounterSample, 0, prealloc)
 
 	for r := uint32(0); r < numRecords; r++ {
 		if len(data) < off+sflowSampleRecordHeaderLen {
