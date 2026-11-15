@@ -133,7 +133,7 @@ func buildEtherIPv6ExtChain(srcIP, dstIP net.IP, hopLimit uint8, exts []ipv6Ext,
 	copy(ip6[8:24], srcIP.To16())
 	copy(ip6[24:40], dstIP.To16())
 
-	eth := make([]byte, ethHeaderSize)
+	eth := make([]byte, ethHeaderSize, ethHeaderSize+len(ip6)+len(payload))
 	binary.BigEndian.PutUint16(eth[12:14], etherTypeIPv6)
 
 	return append(append(eth, ip6...), payload...)

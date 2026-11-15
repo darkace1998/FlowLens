@@ -242,16 +242,16 @@ func TestPcapWriter_OpenNewFile_UniqueNames(t *testing.T) {
 	defer pw.Close()
 
 	// First rotation.
-	if err := pw.openNewFile(); err != nil {
+	if err = pw.openNewFile(); err != nil {
 		t.Fatalf("openNewFile #1: %v", err)
 	}
 	name1 := pw.file.Name()
-	if _, err := pw.file.Write([]byte("first")); err != nil {
+	if _, err = pw.file.Write([]byte("first")); err != nil {
 		t.Fatalf("write to first file: %v", err)
 	}
 
 	// Immediate second rotation (same wall-clock second).
-	if err := pw.openNewFile(); err != nil {
+	if err = pw.openNewFile(); err != nil {
 		t.Fatalf("openNewFile #2: %v", err)
 	}
 	name2 := pw.file.Name()

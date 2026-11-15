@@ -107,13 +107,11 @@ func (p *bpfParser) peek() string {
 	return ""
 }
 
-// next consumes and returns the current token (lowercased), or "" at end.
-func (p *bpfParser) next() string {
-	tok := p.peek()
-	if tok != "" {
+// next consumes the current token, if one remains.
+func (p *bpfParser) next() {
+	if p.pos < len(p.tokens) {
 		p.pos++
 	}
-	return tok
 }
 
 // nextValue consumes the next raw token as a value for a primitive.
@@ -376,17 +374,17 @@ func bpfEtherPred(etherType uint16) bpfPred {
 
 // bpfHostPred matches src and/or dst IP equal to ip.
 func bpfHostPred(dir int, ip net.IP) bpfPred {
-	match := func(fi *bpfFrameInfo, candidate net.IP) bool {
+	match := func(candidate net.IP) bool {
 		return candidate != nil && candidate.Equal(ip)
 	}
 	return func(fi *bpfFrameInfo) bool {
 		if dir == 0 {
-			return match(fi, fi.srcIP) || match(fi, fi.dstIP)
+			return match(fi.srcIP) || match(fi.dstIP)
 		}
-		if dir&bpfDirSrc != 0 && match(fi, fi.srcIP) {
+		if dir&bpfDirSrc != 0 && match(fi.srcIP) {
 			return true
 		}
-		if dir&bpfDirDst != 0 && match(fi, fi.dstIP) {
+		if dir&bpfDirDst != 0 && match(fi.dstIP) {
 			return true
 		}
 		return false
