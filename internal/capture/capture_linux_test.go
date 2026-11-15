@@ -4,6 +4,7 @@ package capture
 
 import (
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/darkace1998/FlowLens/internal/config"
@@ -27,7 +28,24 @@ func TestStartCapture_InvalidInterface(t *testing.T) {
 	}
 }
 
+// requireRawSocket skips the test when the environment cannot open AF_PACKET
+// raw sockets (e.g. unprivileged CI runners without CAP_NET_RAW).
+func requireRawSocket(t *testing.T) {
+	t.Helper()
+	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
+	if err == nil {
+		_ = syscall.Close(fd) // nolint:errcheck // probe socket, cleanup only
+		return
+	}
+	if err == syscall.EPERM || err == syscall.EACCES {
+		t.Skipf("skipping: AF_PACKET raw sockets unavailable (no CAP_NET_RAW): %v", err)
+	}
+	t.Fatalf("unexpected error probing AF_PACKET socket: %v", err)
+}
+
 func TestStartCapture_InvalidBPF(t *testing.T) {
+	requireRawSocket(t)
+
 	// "lo" always exists; the invalid filter must be rejected (and the socket
 	// closed) before the read loop starts.
 	cfg := config.InterfaceConfig{
