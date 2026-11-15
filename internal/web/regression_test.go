@@ -114,7 +114,7 @@ func TestSavePresetCapturesBodyFilters(t *testing.T) {
 		t.Fatalf("preset file not written: %v (redirect %s)", err, rec.Header().Get("Location"))
 	}
 	var presets []FilterPreset
-	if err := json.Unmarshal(data, &presets); err != nil {
+	if err = json.Unmarshal(data, &presets); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(presets) != 1 {

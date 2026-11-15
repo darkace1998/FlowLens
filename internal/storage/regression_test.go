@@ -37,7 +37,7 @@ func TestNewSQLiteStore_CreatesParentDir(t *testing.T) {
 	}
 	defer s.Close() // nolint:errcheck // test cleanup
 
-	if err := s.Insert([]model.Flow{makeTestFlow("10.9.9.9", "10.9.9.10", 1234, 80, time.Now())}); err != nil {
+	if err = s.Insert([]model.Flow{makeTestFlow("10.9.9.9", "10.9.9.10", 1234, 80, time.Now())}); err != nil {
 		t.Fatalf("Insert into fresh nested DB failed: %v", err)
 	}
 	recent, err := s.Recent(time.Hour, 10)
