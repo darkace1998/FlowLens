@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -608,57 +609,64 @@ func TestFilterFlows(t *testing.T) {
 		makeTestFlow("10.0.1.2", "192.168.1.1", 12346, 443, 6, 10000, 100),
 		makeTestFlow("172.16.0.1", "192.168.1.2", 54321, 53, 17, 200, 2),
 	}
+	qf := func(kv ...string) flowFilter {
+		q := url.Values{}
+		for i := 0; i < len(kv); i += 2 {
+			q.Set(kv[i], kv[i+1])
+		}
+		return flowFiltersFromQuery(q)
+	}
 
 	// Filter by port
-	result := filterFlows(flows, "", "", "443", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result := filterFlows(flows, qf("port", "443"))
 	if len(result) != 1 {
 		t.Errorf("filter port=443: got %d flows, want 1", len(result))
 	}
 
 	// Filter by protocol
-	result = filterFlows(flows, "", "", "", "udp", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("protocol", "udp"))
 	if len(result) != 1 {
 		t.Errorf("filter proto=udp: got %d flows, want 1", len(result))
 	}
 
 	// Filter by dst IP
-	result = filterFlows(flows, "", "192.168.1.1", "", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("dst_ip", "192.168.1.1"))
 	if len(result) != 2 {
 		t.Errorf("filter dst=192.168.1.1: got %d flows, want 2", len(result))
 	}
 
 	// No filter
-	result = filterFlows(flows, "", "", "", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf())
 	if len(result) != 3 {
 		t.Errorf("no filter: got %d flows, want 3", len(result))
 	}
 
 	// Filter by host IP (matches either src or dst)
-	result = filterFlows(flows, "", "", "", "", "192.168.1.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("ip", "192.168.1.1"))
 	if len(result) != 2 {
 		t.Errorf("filter ip=192.168.1.1: got %d flows, want 2", len(result))
 	}
 
 	// Filter by host IP that only appears as source
-	result = filterFlows(flows, "", "", "", "", "172.16.0.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("ip", "172.16.0.1"))
 	if len(result) != 1 {
 		t.Errorf("filter ip=172.16.0.1: got %d flows, want 1", len(result))
 	}
 
 	// Filter by host IP with prefix matching
-	result = filterFlows(flows, "", "", "", "", "10.0.1", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("ip", "10.0.1"))
 	if len(result) != 2 {
 		t.Errorf("filter ip=10.0.1 (prefix): got %d flows, want 2", len(result))
 	}
 
 	// Invalid port filter should fail closed.
-	result = filterFlows(flows, "", "", "not-a-port", "", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("port", "not-a-port"))
 	if len(result) != 0 {
 		t.Errorf("invalid port filter should return 0 flows, got %d", len(result))
 	}
 
 	// Invalid protocol filter should fail closed.
-	result = filterFlows(flows, "", "", "", "not-a-proto", "", "", "", "", "", 0, 0, "", 0, "", "", 0, 0, "", "", 0, 0, "", 0, 0, 0, 0, 0, 0, 0, 0)
+	result = filterFlows(flows, qf("protocol", "not-a-proto"))
 	if len(result) != 0 {
 		t.Errorf("invalid protocol filter should return 0 flows, got %d", len(result))
 	}

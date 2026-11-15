@@ -100,7 +100,7 @@ func Defaults() Config {
 		Storage: StorageConfig{
 			RingBufferDuration: 10 * time.Minute,
 			RingBufferCapacity: 10000,
-			SQLitePath:         "./flowlens.db",
+			SQLitePath:         "./data/flowlens.db",
 			SQLiteRetention:    72 * time.Hour,
 			PruneInterval:      15 * time.Minute,
 		},

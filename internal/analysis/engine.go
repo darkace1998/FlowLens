@@ -62,8 +62,9 @@ type Engine struct {
 	mu         sync.RWMutex
 	advisories []Advisory
 
-	stop chan struct{}
-	wg   sync.WaitGroup
+	stop     chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
 }
 
 // maxAdvisoryHistory is the maximum number of advisories to retain.
@@ -106,8 +107,9 @@ func (e *Engine) Start() {
 }
 
 // Stop signals the engine to stop and waits for it to finish.
+// It is idempotent: calling Stop more than once is safe.
 func (e *Engine) Stop() {
-	close(e.stop)
+	e.stopOnce.Do(func() { close(e.stop) })
 	e.wg.Wait()
 }
 
@@ -122,6 +124,18 @@ func (e *Engine) Advisories() []Advisory {
 	return result
 }
 
+// safeAnalyze runs a single analyzer, recovering from panics so that one
+// faulty detector cannot crash the whole analysis process.
+func safeAnalyze(a Analyzer, store storage.Storage, cfg config.AnalysisConfig) (results []Advisory) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Default().Error("Analysis [%s] panicked: %v", a.Name(), r)
+			results = nil
+		}
+	}()
+	return a.Analyze(store, cfg)
+}
+
 // runAll executes all registered analyzers and merges results into the
 // rolling advisory history. Previously-active advisories that are no longer
 // reported are marked as resolved rather than deleted.
@@ -129,7 +143,7 @@ func (e *Engine) runAll() {
 	// Collect new advisories from all analyzers.
 	var newAdvisories []Advisory
 	for _, a := range e.analyzers {
-		results := a.Analyze(e.store, e.cfg)
+		results := safeAnalyze(a, e.store, e.cfg)
 		if len(results) > 0 {
 			logging.Default().Info("Analysis [%s]: %d advisories", a.Name(), len(results))
 		}

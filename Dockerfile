@@ -36,7 +36,7 @@ COPY configs/flowlens.yaml /app/configs/flowlens.yaml
 # No need to copy the static/ directory at runtime.
 
 # Ensure the non-root user can write to data directories.
-RUN mkdir -p /app/captures && chown -R flowlens:flowlens /app
+RUN mkdir -p /app/data /app/captures && chown -R flowlens:flowlens /app
 
 USER flowlens
 

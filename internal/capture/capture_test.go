@@ -357,3 +357,412 @@ func TestSource_StartNoDevice(t *testing.T) {
 		t.Error("Start() should fail when device is not configured")
 	}
 }
+
+// buildICMPv4Packet constructs a minimal Ethernet+IPv4+ICMP packet for testing.
+func buildICMPv4Packet(srcIP, dstIP net.IP, payloadLen int) []byte {
+	pkt := make([]byte, 14+20+8+payloadLen) // eth + ip + icmp + payload
+	pkt[12] = 0x08
+	pkt[13] = 0x00
+
+	ip := pkt[14:]
+	ip[0] = 0x45
+	totalLen := 20 + 8 + payloadLen
+	ip[2] = byte(totalLen >> 8)
+	ip[3] = byte(totalLen)
+	ip[8] = 64
+	ip[9] = 1 // Protocol: ICMP
+	copy(ip[12:16], srcIP.To4())
+	copy(ip[16:20], dstIP.To4())
+
+	return pkt
+}
+
+// buildTCPv6Packet constructs a minimal Ethernet+IPv6+TCP packet for testing.
+func buildTCPv6Packet(srcIP, dstIP net.IP, srcPort, dstPort uint16, payloadLen int) []byte {
+	pkt := make([]byte, 14+40+20+payloadLen) // eth + ip6 + tcp + payload
+	pkt[12] = 0x86
+	pkt[13] = 0xDD
+
+	ip6 := pkt[14:]
+	ip6[0] = 0x60 // Version 6
+	payloadLenField := 20 + payloadLen
+	ip6[4] = byte(payloadLenField >> 8)
+	ip6[5] = byte(payloadLenField)
+	ip6[6] = 6  // Next Header: TCP
+	ip6[7] = 64 // Hop Limit
+	copy(ip6[8:24], srcIP.To16())
+	copy(ip6[24:40], dstIP.To16())
+
+	tcp := ip6[40:]
+	tcp[0] = byte(srcPort >> 8)
+	tcp[1] = byte(srcPort)
+	tcp[2] = byte(dstPort >> 8)
+	tcp[3] = byte(dstPort)
+	tcp[12] = 0x50
+	tcp[13] = 0x02
+
+	return pkt
+}
+
+// vlanWrap prepends an 802.1Q tag (TPID 0x8100, given VLAN ID) to an Ethernet frame.
+func vlanWrap(frame []byte, vlanID uint16) []byte {
+	tagged := make([]byte, 4+len(frame))
+	copy(tagged, frame[:12])
+	tagged[12] = 0x81
+	tagged[13] = 0x00
+	tagged[14] = byte(vlanID >> 8)
+	tagged[15] = byte(vlanID)
+	copy(tagged[16:], frame[12:])
+	return tagged
+}
+
+func TestCompileBPF_TCPPort80(t *testing.T) {
+	filt, err := compileBPF("tcp port 80")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	tcp80 := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("192.168.1.1"), 12345, 80, 10)
+	if !filt(tcp80) {
+		t.Error("expected TCP packet with dst port 80 to match \"tcp port 80\"")
+	}
+
+	tcp443 := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("192.168.1.1"), 12345, 443, 10)
+	if filt(tcp443) {
+		t.Error("TCP packet with dst port 443 should not match \"tcp port 80\"")
+	}
+
+	udp80 := buildUDPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("192.168.1.1"), 12345, 80, 10)
+	if filt(udp80) {
+		t.Error("UDP packet with dst port 80 should not match \"tcp port 80\"")
+	}
+
+	// Source port also matches.
+	tcpSrc80 := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("192.168.1.1"), 80, 12345, 10)
+	if !filt(tcpSrc80) {
+		t.Error("expected TCP packet with src port 80 to match \"tcp port 80\"")
+	}
+}
+
+func TestCompileBPF_UDPAndHost(t *testing.T) {
+	filt, err := compileBPF("udp and host 10.0.0.1")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	udpFrom := buildUDPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("8.8.8.8"), 53, 5353, 10)
+	if !filt(udpFrom) {
+		t.Error("expected UDP packet from 10.0.0.1 to match")
+	}
+
+	udpOther := buildUDPv4Packet(net.ParseIP("10.0.0.2"), net.ParseIP("8.8.8.8"), 53, 5353, 10)
+	if filt(udpOther) {
+		t.Error("UDP packet from 10.0.0.2 should not match \"udp and host 10.0.0.1\"")
+	}
+
+	tcpFrom := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("8.8.8.8"), 53, 5353, 10)
+	if filt(tcpFrom) {
+		t.Error("TCP packet from 10.0.0.1 should not match \"udp and host 10.0.0.1\"")
+	}
+}
+
+func TestCompileBPF_NotICMP(t *testing.T) {
+	filt, err := compileBPF("not icmp")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	icmp := buildICMPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 8)
+	if filt(icmp) {
+		t.Error("ICMP packet should not match \"not icmp\"")
+	}
+
+	tcp := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 1000, 80, 8)
+	if !filt(tcp) {
+		t.Error("TCP packet should match \"not icmp\"")
+	}
+}
+
+func TestCompileBPF_Net(t *testing.T) {
+	filt, err := compileBPF("net 10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	inNet := buildTCPv4Packet(net.ParseIP("10.20.30.40"), net.ParseIP("192.168.1.1"), 1, 2, 0)
+	if !filt(inNet) {
+		t.Error("expected packet from 10.20.30.40 to match \"net 10.0.0.0/8\"")
+	}
+
+	outNet := buildTCPv4Packet(net.ParseIP("11.0.0.1"), net.ParseIP("192.168.1.1"), 1, 2, 0)
+	if filt(outNet) {
+		t.Error("packet from 11.0.0.1 should not match \"net 10.0.0.0/8\"")
+	}
+}
+
+func TestCompileBPF_SrcHostAndDstPort(t *testing.T) {
+	filt, err := compileBPF("src host 192.168.1.1 and dst port 443")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	match := buildTCPv4Packet(net.ParseIP("192.168.1.1"), net.ParseIP("10.0.0.1"), 5000, 443, 0)
+	if !filt(match) {
+		t.Error("expected src 192.168.1.1 dst port 443 to match")
+	}
+
+	wrongPort := buildTCPv4Packet(net.ParseIP("192.168.1.1"), net.ParseIP("10.0.0.1"), 5000, 80, 0)
+	if filt(wrongPort) {
+		t.Error("dst port 80 should not match \"src host 192.168.1.1 and dst port 443\"")
+	}
+
+	wrongSrc := buildTCPv4Packet(net.ParseIP("192.168.1.2"), net.ParseIP("10.0.0.1"), 5000, 443, 0)
+	if filt(wrongSrc) {
+		t.Error("src 192.168.1.2 should not match \"src host 192.168.1.1 and dst port 443\"")
+	}
+}
+
+func TestCompileBPF_GreaterLess(t *testing.T) {
+	greater, err := compileBPF("greater 100")
+	if err != nil {
+		t.Fatalf("compileBPF greater: %v", err)
+	}
+	less, err := compileBPF("less 100")
+	if err != nil {
+		t.Fatalf("compileBPF less: %v", err)
+	}
+
+	big := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 1, 2, 100) // 154 bytes
+	small := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 1, 2, 10) // 64 bytes
+
+	if !greater(big) {
+		t.Error("154-byte frame should match \"greater 100\"")
+	}
+	if greater(small) {
+		t.Error("64-byte frame should not match \"greater 100\"")
+	}
+	if !less(small) {
+		t.Error("64-byte frame should match \"less 100\"")
+	}
+	if less(big) {
+		t.Error("154-byte frame should not match \"less 100\"")
+	}
+}
+
+func TestCompileBPF_ParensOrAnd(t *testing.T) {
+	filt, err := compileBPF("(tcp port 80 or udp port 53) and host 10.0.0.1")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	tcp80 := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("8.8.8.8"), 1, 80, 0)
+	udp53 := buildUDPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("8.8.8.8"), 1, 53, 0)
+	tcp443 := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("8.8.8.8"), 1, 443, 0)
+	tcp80Other := buildTCPv4Packet(net.ParseIP("10.0.0.9"), net.ParseIP("8.8.8.8"), 1, 80, 0)
+
+	if !filt(tcp80) || !filt(udp53) {
+		t.Error("tcp/80 and udp/53 from 10.0.0.1 should match")
+	}
+	if filt(tcp443) {
+		t.Error("tcp/443 should not match")
+	}
+	if filt(tcp80Other) {
+		t.Error("tcp/80 from 10.0.0.9 should not match (host qualifier)")
+	}
+}
+
+func TestCompileBPF_VLANTagged(t *testing.T) {
+	filt, err := compileBPF("tcp port 80")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	inner := buildTCPv4Packet(net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.2"), 1, 80, 10)
+	tagged := vlanWrap(vlanWrap(inner, 20), 10) // stacked Q-in-Q tags
+	if !filt(tagged) {
+		t.Error("VLAN-tagged TCP port 80 packet should match \"tcp port 80\"")
+	}
+}
+
+func TestCompileBPF_IPv6(t *testing.T) {
+	filt, err := compileBPF("tcp port 443")
+	if err != nil {
+		t.Fatalf("compileBPF: %v", err)
+	}
+
+	pkt := buildTCPv6Packet(net.ParseIP("2001:db8::1"), net.ParseIP("2001:db8::2"), 8080, 443, 10)
+	if !filt(pkt) {
+		t.Error("IPv6 TCP packet with dst port 443 should match \"tcp port 443\"")
+	}
+
+	udp := buildTCPv6Packet(net.ParseIP("2001:db8::1"), net.ParseIP("2001:db8::2"), 8080, 443, 10)
+	udp[14+6] = 17 // UDP next header
+	if filt(udp) {
+		t.Error("IPv6 UDP packet should not match \"tcp port 443\"")
+	}
+}
+
+func TestCompileBPF_Invalid(t *testing.T) {
+	exprs := []string{
+		"",
+		"tcp port",           // missing port value
+		"host",               // missing host value
+		"(tcp",               // unbalanced paren
+		"tcp)",               // unbalanced paren
+		"port abc",           // non-numeric port
+		"foo bar",            // unsupported token
+		"net 10.0.0.0/33",    // prefix too large for IPv4
+		"host 999.1.1.1",     // invalid IP
+		"tcp udp port 80",    // multiple protocol qualifiers
+		"greater",            // missing length value
+		"not",                // dangling not
+		"arp host 10.0.0.1",  // arp cannot combine with host
+	}
+	for _, expr := range exprs {
+		if _, err := compileBPF(expr); err == nil {
+			t.Errorf("compileBPF(%q) should return an error, got nil", expr)
+		}
+	}
+}
+
+func TestDecodeEthernet_StackedVLAN(t *testing.T) {
+	srcIP := net.ParseIP("10.0.0.1")
+	dstIP := net.ParseIP("10.0.0.2")
+
+	// Q-in-Q: outer 802.1ad tag (0x88a8, VLAN 20), inner 802.1Q tag (0x8100, VLAN 10).
+	pkt := make([]byte, 14+4+4+20+20) // eth + 2 tags + ip + tcp
+	copy(pkt[0:6], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	copy(pkt[6:12], []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55})
+	pkt[12] = 0x88
+	pkt[13] = 0xa8
+	pkt[14] = 0x00
+	pkt[15] = 0x14 // outer TCI → VLAN 20
+	pkt[16] = 0x81
+	pkt[17] = 0x00
+	pkt[18] = 0x00
+	pkt[19] = 0x0A // inner TCI → VLAN 10
+	pkt[20] = 0x08
+	pkt[21] = 0x00 // inner EtherType: IPv4
+
+	ip := pkt[22:]
+	ip[0] = 0x45
+	totalLen := 20 + 20
+	ip[2] = byte(totalLen >> 8)
+	ip[3] = byte(totalLen)
+	ip[8] = 64
+	ip[9] = 6 // TCP
+	copy(ip[12:16], srcIP.To4())
+	copy(ip[16:20], dstIP.To4())
+
+	tcp := ip[20:]
+	tcp[0] = 0x30
+	tcp[1] = 0x39 // SrcPort = 12345
+	tcp[2] = 0x00
+	tcp[3] = 0x50 // DstPort = 80
+	tcp[12] = 0x50
+	tcp[13] = 0x02
+
+	f, ok := decodeEthernet(pkt, time.Now())
+	if !ok {
+		t.Fatal("decodeEthernet should handle stacked VLAN tags")
+	}
+	if f.VLAN != 10 {
+		t.Errorf("VLAN = %d, want 10 (innermost tag)", f.VLAN)
+	}
+	if f.EtherType != 0x0800 {
+		t.Errorf("EtherType = 0x%04X, want 0x0800 (IPv4)", f.EtherType)
+	}
+	if f.SrcPort != 12345 || f.DstPort != 80 {
+		t.Errorf("ports = %d/%d, want 12345/80", f.SrcPort, f.DstPort)
+	}
+	if f.Protocol != 6 {
+		t.Errorf("Protocol = %d, want 6 (TCP)", f.Protocol)
+	}
+}
+
+func TestDecodeEthernet_VLANTruncated(t *testing.T) {
+	// EtherType says 802.1Q but the tag is cut off.
+	pkt := make([]byte, 16)
+	pkt[12] = 0x81
+	pkt[13] = 0x00
+
+	if _, ok := decodeEthernet(pkt, time.Now()); ok {
+		t.Error("decodeEthernet should return false for a truncated VLAN tag")
+	}
+}
+
+func TestDecodeIPv6_ExtHeaderAndTTL(t *testing.T) {
+	// IPv6 + hop-by-hop extension header (8 bytes) + TCP.
+	pkt := make([]byte, 14+40+8+20)
+	pkt[12] = 0x86
+	pkt[13] = 0xDD
+
+	ip6 := pkt[14:]
+	ip6[0] = 0x60
+	payloadLen := 8 + 20
+	ip6[4] = byte(payloadLen >> 8)
+	ip6[5] = byte(payloadLen)
+	ip6[6] = 0  // Next Header: hop-by-hop options
+	ip6[7] = 64 // Hop Limit
+	// Src IPv6: 2001:db8::1
+	copy(ip6[8:24], net.ParseIP("2001:db8::1").To16())
+	// Dst IPv6: 2001:db8::2
+	copy(ip6[24:40], net.ParseIP("2001:db8::2").To16())
+
+	// Hop-by-hop header: next header = TCP, hdr ext len = 0 (8 bytes total).
+	ext := ip6[40:]
+	ext[0] = 6
+	ext[1] = 0
+
+	// TCP header after the extension header.
+	tcp := ip6[48:]
+	tcp[0] = 0x1F
+	tcp[1] = 0x90 // SrcPort = 8080
+	tcp[2] = 0x01
+	tcp[3] = 0xBB // DstPort = 443
+	tcp[12] = 0x50
+	tcp[13] = 0x10 // ACK
+
+	f, ok := decodeEthernet(pkt, time.Now())
+	if !ok {
+		t.Fatal("decodeEthernet should handle IPv6 packets with extension headers")
+	}
+	if f.Protocol != 6 {
+		t.Errorf("Protocol = %d, want 6 (TCP after ext header walk)", f.Protocol)
+	}
+	if f.SrcPort != 8080 || f.DstPort != 443 {
+		t.Errorf("ports = %d/%d, want 8080/443", f.SrcPort, f.DstPort)
+	}
+	if f.TCPFlags != 0x10 {
+		t.Errorf("TCPFlags = 0x%02x, want 0x10 (ACK)", f.TCPFlags)
+	}
+	if f.TTL != 64 {
+		t.Errorf("TTL = %d, want 64 (hop limit)", f.TTL)
+	}
+}
+
+func TestDecodeIPv6_TruncatedExtHeader(t *testing.T) {
+	// Hop-by-hop header claims 8 bytes but the frame ends early: must not panic,
+	// and the flow is still decoded (without L4 ports).
+	pkt := make([]byte, 14+40+2)
+	pkt[12] = 0x86
+	pkt[13] = 0xDD
+	ip6 := pkt[14:]
+	ip6[0] = 0x60
+	ip6[6] = 0 // hop-by-hop
+	ip6[7] = 32
+	ext := ip6[40:]
+	ext[0] = 6
+	ext[1] = 0
+
+	f, ok := decodeEthernet(pkt, time.Now())
+	if !ok {
+		t.Fatal("decodeEthernet should still decode a truncated ext-header packet")
+	}
+	if f.SrcPort != 0 || f.DstPort != 0 {
+		t.Errorf("ports = %d/%d, want 0/0 when L4 is unreachable", f.SrcPort, f.DstPort)
+	}
+	if f.TTL != 32 {
+		t.Errorf("TTL = %d, want 32", f.TTL)
+	}
+}

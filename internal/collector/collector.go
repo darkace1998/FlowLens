@@ -28,11 +28,15 @@ type Collector struct {
 	nfv9Cache      *NFV9TemplateCache
 	ipfixCache     *IPFIXTemplateCache
 	limiter        *rateLimiter
-	done           chan struct{} // closed by Stop to halt background goroutines
+	done           chan struct{}  // closed by Stop to halt background goroutines
+	wg             sync.WaitGroup // tracks running read loops so Stop can wait for them
 }
 
 // New creates a new Collector with the given config and flow handler.
 func New(cfg config.CollectorConfig, handler FlowHandler) *Collector {
+	if cfg.BufferSize <= 0 {
+		cfg.BufferSize = 65535 // a non-positive buffer would make every read fail
+	}
 	return &Collector{
 		cfg:        cfg,
 		handler:    handler,
@@ -138,28 +142,22 @@ func (c *Collector) Start() error {
 	c.mu.RUnlock()
 
 	// Run a read loop for each connection; block until all finish.
-	var wg sync.WaitGroup
 	for _, conn := range conns {
-		wg.Add(1)
-		go func(conn *net.UDPConn) {
-			defer wg.Done()
-			c.readLoop(conn)
-		}(conn)
+		c.wg.Add(1)
+		go c.readLoop(conn)
 	}
 	for _, conn := range sflowConns {
-		wg.Add(1)
-		go func(conn *net.UDPConn) {
-			defer wg.Done()
-			c.sflowReadLoop(conn)
-		}(conn)
+		c.wg.Add(1)
+		go c.sflowReadLoop(conn)
 	}
-	wg.Wait()
+	c.wg.Wait()
 
 	return nil
 }
 
 // readLoop reads and processes packets from a single UDP connection.
 func (c *Collector) readLoop(conn *net.UDPConn) {
+	defer c.wg.Done()
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
@@ -196,6 +194,7 @@ func (c *Collector) readLoop(conn *net.UDPConn) {
 
 // sflowReadLoop reads and processes sFlow packets from a dedicated UDP connection.
 func (c *Collector) sflowReadLoop(conn *net.UDPConn) {
+	defer c.wg.Done()
 	buf := make([]byte, c.cfg.BufferSize)
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
@@ -253,19 +252,23 @@ func (c *Collector) decodePacket(data []byte, exporterIP net.IP) ([]model.Flow, 
 }
 
 // Stop closes all UDP connections and stops background goroutines,
-// causing Start to return.
+// causing Start to return. It blocks until no read loop can still invoke
+// a handler, so it is safe to call after Stop has already returned once.
 func (c *Collector) Stop() {
 	// Signal the rate-limiter cleanup goroutine to exit.
 	c.stopOnce.Do(func() { close(c.done) })
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	for _, conn := range c.conns {
 		_ = conn.Close() // nolint:errcheck // error ignored on shutdown
 	}
 	for _, conn := range c.sflowConns {
 		_ = conn.Close() // nolint:errcheck // error ignored on shutdown
 	}
+	c.mu.Unlock()
+
+	// Wait (outside the mutex) until all read loops have exited.
+	c.wg.Wait()
 }
 
 // Addr returns the local address of the first listener,

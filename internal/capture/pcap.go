@@ -72,7 +72,9 @@ func (pw *PcapWriter) openNewFile() error {
 		_ = pw.file.Close() // nolint:errcheck // error ignored on rotation
 	}
 
-	ts := time.Now().Format("20060102-150405")
+	// Nanosecond resolution so two rotations in the same second get distinct
+	// file names (os.Create would otherwise truncate the previous file).
+	ts := time.Now().Format("20060102-150405.000000000")
 	name := fmt.Sprintf("%s_%s.pcap", pw.prefix, ts)
 	path := filepath.Join(pw.dir, name)
 
